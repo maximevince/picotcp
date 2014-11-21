@@ -1,23 +1,25 @@
-picoTCP
-
----------------
+# picoTCP
 
 Welcome to the one and only <font color=ff00f0>picoTCP repository</font>. 
 
-picoTCP is a TCP/IP stack designed for embedded systems, and developed by *[TASS Belgium NV](http://www.tass.be)*
+picoTCP is a TCP/IP stack designed for embedded systems, and developed by *[TASS Belgium NV](http://www.tass.be)*.
+For more information, visit [the project's website](http://www.picotcp.com).
 
+### Features
+* full stack: IP, TCP, UDP, ICMP, IGMP, (m)DNS, DHCP, SNTP and many more
+* IPV6 compliant
+* flash fooprint as minimal as **10KB**
+* less than **16KB** of RAM required
+* great performance
+
+### License
 This code is released under the terms of GNU GPL v2 only. Some rights reserved.
 Other licenses may apply at the sole discretion of the copyright holders.
 
+### Getting started
 The getting started guide can be found on the GitHub wiki (https://github.com/tass-belgium/picotcp/wiki)
 
-For more information, visit [the project's website](http://www.picotcp.com)
-
-
----------------
-
-Continuous integration
-
+### Continuous integration
 Jenkins Functional tests: 
 [![Jenkins autotest](http://162.13.84.104:8080/buildStatus/icon?job=PicoTCP_dev_autotest/)](http://162.13.84.104:8080/job/PicoTCP_dev_autotest)
 

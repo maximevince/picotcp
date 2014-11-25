@@ -8,7 +8,7 @@ For more information, visit [the project's website](http://www.picotcp.com).
 ### Features
 * full stack: IP, TCP, UDP, ICMP, IGMP, (m)DNS, DHCP, SNTP and many more
 * IPV6 compliant
-* flash fooprint as minimal as **10KB**
+* flash fooptrint as minimal as **10KB**
 * less than **16KB** of RAM required
 * great performance
 

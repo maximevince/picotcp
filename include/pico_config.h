@@ -53,7 +53,7 @@
 # include "arch/pico_stm32_gc.h"
 #elif defined STELLARIS
 # include "arch/pico_stellaris.h"
-#elif defined LPC
+#elif defined LPC || defined LPC17XX
 # include "arch/pico_lpc1768.h"
 #elif defined LPC43XX
 # include "arch/pico_lpc43xx.h"

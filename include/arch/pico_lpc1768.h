@@ -11,6 +11,8 @@
 #include <string.h>
 #include "pico_constants.h"
 
+extern volatile uint32_t tassTick;
+
 #ifdef PICO_SUPPORT_RTOS
 #   define PICO_SUPPORT_MUTEX
 extern void *pico_mutex_init(void);

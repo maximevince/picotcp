@@ -14,7 +14,7 @@
 #define dbg(...)
 
 
-extern volatile uint32_t tassTick;
+extern volatile unsigned int tassTick;
 
 #ifdef PICO_SUPPORT_RTOS
     #define PICO_SUPPORT_MUTEX

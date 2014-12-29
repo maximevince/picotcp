@@ -88,14 +88,12 @@ struct pico_dns_answer
     char *rdata;
 };
 
-//TODO remove
 PACKED_STRUCT_DEF pico_dns_query_suffix
 {
     uint16_t qtype;
     uint16_t qclass;
 };
 
-//TODO remove
 PACKED_STRUCT_DEF pico_dns_answer_suffix
 {
     uint16_t qtype;

@@ -1072,7 +1072,7 @@ int pico_mdns_getname(const char *ip, void (*callback)(char *url, void *arg), vo
     return pico_mdns_getname_generic(ip, callback, arg, PICO_PROTO_IPV4);
 }
 
-int pico_mdns_getservicename(const char *url, void (*callback)(char *ip, void *arg), void *arg)
+int pico_mdns_getsin(const char *url, void (*callback)(char *ip, void *arg), void *arg)
 {
     char *service = NULL;
     char domain[] = ".local";

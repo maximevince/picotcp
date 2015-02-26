@@ -58,15 +58,15 @@ void mdns_getaddr_callback(char *str, void *arg)
 
 void mdns_init_callback(char *str, void *arg)
 {
-    char *peername = (char *)arg;
-    printf("Init callback called, str: %s\n", str);
-    if(!peername) {
-        printf("No system name supplied!\n");
-        exit(-1);
-    }
-
-    if(pico_mdns_getaddr(peername, &mdns_getaddr_callback, peername) != 0)
-        printf("Getaddr returned with error!\n");
+//    char *peername = (char *)arg;
+//    printf("Init callback called, str: %s\n", str);
+//    if(!peername) {
+//        printf("No system name supplied!\n");
+//        exit(-1);
+//    }
+//
+//    if(pico_mdns_getaddr(peername, &mdns_getaddr_callback, peername) != 0)
+//        printf("Getaddr returned with error!\n");
 }
 
 void app_mdns(char *arg)

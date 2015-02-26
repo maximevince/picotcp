@@ -342,6 +342,7 @@ START_TEST(tc_pico_mdns_namelen_uncomp)
 {
     char name[] = "\3www\4tass\2be\0";
     char name_comp[] = "\3www\4tass\2be\xc0\x02";  /* two bytes ofset from start of buf */
+    char name_comp2[] = "\xc0\x00";
     char buf[] = "00\5index\0";
     unsigned int ret = 0;
 
@@ -352,6 +353,10 @@ START_TEST(tc_pico_mdns_namelen_uncomp)
     /* name with compression */
     ret = pico_mdns_namelen_uncomp(name_comp, buf);
     fail_unless(ret == 18, "Namelength is wrong!\n");
+    
+    /* name with compression, but with name as 'buf' */
+    ret = pico_mdns_namelen_uncomp(name_comp2, name);
+    fail_unless(ret == 6, "Namelength is wrong!\n");
 }
 END_TEST
 START_TEST(tc_pico_mdns_expand_name_comp)

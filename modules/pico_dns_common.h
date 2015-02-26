@@ -20,7 +20,6 @@
 #define PICO_DNS_TYPE_PTR 12
 #define PICO_DNS_TYPE_ANY 255
 
-
 /* QCLASS values */
 #define PICO_DNS_CLASS_IN 1
 
@@ -67,10 +66,28 @@ PACKED_STRUCT_DEF pico_dns_header
     uint16_t arcount;
 };
 
+
 PACKED_STRUCT_DEF pico_dns_query_suffix
 {
     uint16_t qtype;
     uint16_t qclass;
+};
+
+PACKED_STRUCT_DEF pico_dns_question
+{
+    char *qname;                            /* pointer to qname */
+    struct pico_dns_query_suffix *qsuffix;  /* qtype & qclass */
+    uint8_t qname_length;                   /* length of the qname-field in bytes */
+    struct pico_dns_question *next;         /* possibility to create a list */
+};
+
+PACKED_STRUCT_DEF pico_dns_res_record
+{
+    char *rname;                            /* pointer to rname */
+    struct pico_dns_answer_suffix *rsuffix  /* rtype, rclass, rttl, rdlength */
+    uint8_t *rdata;                         /* pointer to rdata */
+    uint8_t rname_length;                   /* length of the rname-field in bytes */
+    struct pico_dns_res_record *next;       /* possibility to create a list */
 };
 
 PACKED_STRUCT_DEF pico_dns_answer_suffix
@@ -88,7 +105,7 @@ enum pico_dns_arpa
     PICO_DNS_NO_ARPA,
 };
 
-void pico_dns_fill_header(struct pico_dns_header *hdr, uint16_t qdcount, uint16_t ancount);
+void pico_dns_fill_header(struct pico_dns_header *hdr, uint16_t qdcount, uint16_t ancount, uint16_t authcount, uint16_t addcount);
 uint16_t pico_dns_client_strlen(const char *url);
 int pico_dns_name_to_dns_notation(char *ptr);
 int pico_dns_notation_to_name(char *ptr);

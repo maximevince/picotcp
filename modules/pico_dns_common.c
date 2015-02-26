@@ -16,20 +16,20 @@
 #include "pico_dns_client.h"
 #include "pico_tree.h"
 
-void pico_dns_fill_header(struct pico_dns_header *hdr, uint16_t qdcount, uint16_t ancount)
+void pico_dns_fill_header(struct pico_dns_header *hdr, uint16_t qdcount, uint16_t ancount, uint16_t nscount, uint16_t arcount)
 {
-
     /* hdr->id should be filled by caller */
-
+    
+    /* If there are questions in the packet ... */
     if(qdcount > 0) {
         hdr->qr = PICO_DNS_QR_QUERY;
         hdr->aa = PICO_DNS_AA_NO_AUTHORITY;
-    }
-    else {
+    } else {
         hdr->qr = PICO_DNS_QR_RESPONSE;
         hdr->aa = PICO_DNS_AA_IS_AUTHORITY;
     }
 
+    /*  */
     hdr->opcode = PICO_DNS_OPCODE_QUERY;
     hdr->tc = PICO_DNS_TC_NO_TRUNCATION;
     hdr->rd = PICO_DNS_RD_NO_DESIRE;
@@ -38,8 +38,8 @@ void pico_dns_fill_header(struct pico_dns_header *hdr, uint16_t qdcount, uint16_
     hdr->rcode = PICO_DNS_RCODE_NO_ERROR;
     hdr->qdcount = short_be(qdcount);
     hdr->ancount = short_be(ancount);
-    hdr->nscount = short_be(0);
-    hdr->arcount = short_be(0);
+    hdr->nscount = short_be(nscount);
+    hdr->arcount = short_be(arcount);
 }
 
 /* determine len of string */

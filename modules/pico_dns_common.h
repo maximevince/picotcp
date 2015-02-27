@@ -52,42 +52,26 @@
 PACKED_STRUCT_DEF pico_dns_header
 {
     uint16_t id;
-    uint8_t rd : 1;     /* recursion desired  */
-    uint8_t tc : 1;     /* truncation  */
-    uint8_t aa : 1;     /* authoritative answer  */
-    uint8_t opcode : 4; /* opcode  */
-    uint8_t qr : 1;     /* query  */
-    uint8_t rcode : 4;  /* response code */
-    uint8_t z : 3;      /* zero */
-    uint8_t ra : 1;     /* recursion available  */
-    uint16_t qdcount;
-    uint16_t ancount;
-    uint16_t nscount;
-    uint16_t arcount;
+    uint8_t rd : 1;     // recursion desired
+    uint8_t tc : 1;     // truncation
+    uint8_t aa : 1;     // authoritative answer
+    uint8_t opcode : 4; // opcode
+    uint8_t qr : 1;     // query
+    uint8_t rcode : 4;  // response code
+    uint8_t z : 3;      // zero
+    uint8_t ra : 1;     // recursion available
+    uint16_t qdcount;   // Question count
+    uint16_t ancount;   // Answer count
+    uint16_t nscount;   // Authority count
+    uint16_t arcount;   // Additional count
 };
 
+typedef struct pico_dns_header pico_dns_packet;
 
 PACKED_STRUCT_DEF pico_dns_query_suffix
 {
     uint16_t qtype;
     uint16_t qclass;
-};
-
-PACKED_STRUCT_DEF pico_dns_question
-{
-    char *qname;                            /* pointer to qname */
-    struct pico_dns_query_suffix *qsuffix;  /* qtype & qclass */
-    uint8_t qname_length;                   /* length of the qname-field in bytes */
-    struct pico_dns_question *next;         /* possibility to create a list */
-};
-
-PACKED_STRUCT_DEF pico_dns_res_record
-{
-    char *rname;                            /* pointer to rname */
-    struct pico_dns_answer_suffix *rsuffix  /* rtype, rclass, rttl, rdlength */
-    uint8_t *rdata;                         /* pointer to rdata */
-    uint8_t rname_length;                   /* length of the rname-field in bytes */
-    struct pico_dns_res_record *next;       /* possibility to create a list */
 };
 
 PACKED_STRUCT_DEF pico_dns_answer_suffix
@@ -98,6 +82,25 @@ PACKED_STRUCT_DEF pico_dns_answer_suffix
     uint16_t rdlength;
 };
 
+/* To store a DNS question in code-style format */
+struct pico_dns_question
+{
+    char *qname;                            // qname-string
+    struct pico_dns_query_suffix *qsuffix;  // qtype & qclass
+    uint8_t qname_length;                   // length of the qname-field in bytes
+    struct pico_dns_question *next;         // possibility to create a list
+};
+
+/* To store a DNS resource record in code-style format */
+struct pico_dns_res_record
+{
+    char *rname;                            // pointer to rname
+    struct pico_dns_answer_suffix *rsuffix; // rtype, rclass, rttl, rdlength
+    uint8_t *rdata;                         // pointer to rdata
+    uint8_t rname_length;                   // length of the rname-field in bytes
+    struct pico_dns_res_record *next;       // possibility to create a list
+};
+
 enum pico_dns_arpa
 {
     PICO_DNS_ARPA4,
@@ -105,6 +108,9 @@ enum pico_dns_arpa
     PICO_DNS_NO_ARPA,
 };
 
+/* **************************************************************************
+ *  Fills the header section of a DNS packet with correct flags and
+ * **************************************************************************/
 void pico_dns_fill_header(struct pico_dns_header *hdr, uint16_t qdcount, uint16_t ancount, uint16_t authcount, uint16_t addcount);
 uint16_t pico_dns_client_strlen(const char *url);
 int pico_dns_name_to_dns_notation(char *ptr);

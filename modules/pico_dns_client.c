@@ -234,7 +234,7 @@ static int pico_dns_client_query_header(struct pico_dns_header *hdr)
         return -1;
 
     hdr->id = short_be(id);
-    pico_dns_fill_header(hdr, 1, 0); /* 1 question, 0 answers */
+    pico_dns_fill_header(hdr, 1, 0, 0, 0); /* 1 question, 0 answers */
 
     return 0;
 }

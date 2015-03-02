@@ -44,8 +44,11 @@
 #define PICO_DNS_RCODE_ENOIMP 4
 #define PICO_DNS_RCODE_EREFUSED 5
 
+#define PICO_ARPA_IPV4_SUFFIX ".in-addr.arpa"
+
 #ifdef PICO_SUPPORT_IPV6
 #define STRLEN_PTR_IP6 63
+#define PICO_ARPA_IPV6_SUFFIX ".IP6.ARPA"
 #endif
 
 enum pico_dns_arpa
@@ -97,7 +100,7 @@ struct pico_dns_question
     char *qname;
     struct pico_dns_question_suffix *qsuffix;
     //---------------- META ----------------//
-    uint8_t qname_length;
+    uint16_t qname_length;
     struct pico_dns_question *next;
 };
 
@@ -108,95 +111,84 @@ struct pico_dns_res_record
     struct pico_dns_res_record_suffix *rsuffix;
     uint8_t *rdata;
     //---------------- META ----------------//
-    uint8_t rname_length;
+    uint16_t rname_length;
     struct pico_dns_res_record *next;
 };
 
 // MARK: DNS PACKET FUNCTIONS
 
 /* **************************************************************************
- *
  *  Fills the header section of a DNS packet with correct flags and section-
  *  counts.
- *
  * **************************************************************************/
 void pico_dns_fill_packet_header( struct pico_dns_header *hdr, uint16_t qdcount, uint16_t ancount, uint16_t authcount, uint16_t addcount );
 
 // MARK: QUESTION FUNCTIONS
 
 /* **************************************************************************
- *
  *  Fills the question fixed-sized flags & fields accordingly.
- *
  * **************************************************************************/
-void pico_dns_question_fill_suffix( struct pico_dns_question_suffix *suf, uint16_t type, uint16_t qclass );
+void pico_dns_question_fill_qsuffix( struct pico_dns_question_suffix *suf, uint16_t type, uint16_t qclass );
+
+/* **************************************************************************
+ * Creates a standalone DNS question for given 'url'. Fills the 'len'-argument
+ * with the total length of the question.
+ * **************************************************************************/
+struct pico_dns_question *pico_dns_question_create( const char *url, uint16_t *len, uint8_t proto, uint16_t qtype, uint16_t qclass );
 
 // MARK: QUERY FUNCTIONS
 
 /* **************************************************************************
- *
  * Creates a DNS packet meant for querying. Currently only questions can be
  * inserted in the packet.
  *
  * TODO: Allow resource records to be added to Authority & Answer Section
  *          - Answer Section: To implement Known-Answer Suppression
  *          - Authority Section: To implement probe queries and tiebreaking
- *
  * **************************************************************************/
-static pico_dns_packet *pico_mdns_dns_query_create( struct pico_dns_question *question_list, uint16_t *len );
-
+pico_dns_packet *pico_dns_query_create( struct pico_dns_question *question_list, uint16_t *len );
 
 // MARK: RESOURCE RECORD FUNCTIONS
 
 /* **************************************************************************
- *
  *  Fills the resource record fixed-sized flags & fields accordingly.
- *
  * **************************************************************************/
 void pico_dns_rr_fill_suffix( struct pico_dns_res_record_suffix *suf, uint16_t rtype, uint16_t rclass, uint32_t rttl, uint16_t rdlength );
 
 /* **************************************************************************
- *
  * Creates a standalone DNS resource record for given 'url'. Fills the
  * 'len'-argument with the total length of the res_record.
- *
  * **************************************************************************/
 struct pico_dns_res_record *pico_dns_rr_create( const char *url, void *_rdata, uint16_t *len, uint16_t rtype, uint16_t rclass, uint16_t rttl );
 
 /* **************************************************************************
- *
- *  Free's the memory for a certain dns resource record
- *
+ *  Deletes & free's the memory for a certain dns resource record
  * **************************************************************************/
 int pico_dns_rr_delete( struct pico_dns_res_record **rr );
 
 /* **************************************************************************
- *
  *  Returns the size summed up of all the resource records contained in a
  *  linked list. Fills [count] with the number of records in the list.
- *
  * **************************************************************************/
 uint16_t pico_dns_rr_list_size( struct pico_dns_res_record *list_begin, uint8_t *count );
 
 /* **************************************************************************
- *
  *  Copies the contents a resource record [res_record] to a single flat
  *  location in [destination]. [destination] pointer will point to address
  *  right after this flat resource record on success.
- *
  * **************************************************************************/
 int pico_dns_rr_copy_flat( struct pico_dns_res_record *res_record, uint8_t *destination );
 
 // MARK: ANSWER FUNCTIONS
 
 /* **************************************************************************
- *
  *  Creates a DNS Answer packet with given resource records to put in the 
  *  Resource Record Sections. If a NULL-pointer is provided for a certain
  *  list, no records will be added to the packet for that section.
- *
  * **************************************************************************/
-pico_dns_packet *pico_dns_create_answer( struct pico_dns_res_record *answer_list, struct pico_dns_res_record *authority_list, struct pico_dns_res_record *additional_list, uint16_t *len );
+pico_dns_packet *pico_dns_answer_create( struct pico_dns_res_record *answer_list, struct pico_dns_res_record *authority_list, struct pico_dns_res_record *additional_list, uint16_t *len );
+
+// MARK: NAME & IP FUNCTIONS
 
 /* **************************************************************************
  *  Determines the length of a string
@@ -204,35 +196,29 @@ pico_dns_packet *pico_dns_create_answer( struct pico_dns_res_record *answer_list
 uint16_t pico_dns_client_strlen( const char *url );
 
 /* **************************************************************************
- *
  *  Converts a URL at location url + 1 to a FQDN in the form 3www6google3com0
  *  f.e. www.google.be => 3www6google2be0
  *  Size of ptr[] has to +2u more than the URL itself.
- *
  * **************************************************************************/
 int pico_dns_name_to_dns_notation( char *url );
 
 /* **************************************************************************
- *
  *  Converts a FQDN at location fqdn to an URL in the form .www.google.com
  *  f.e. 3www6google2be0 => .www.google.be
- *
  * **************************************************************************/
 int pico_dns_notation_to_name( char *fqdn );
 
 /* **************************************************************************
- *
  *  Mirrors and IP-address in ptr to an ARPA-format
  *  f.e. 192.168.0.1 => 1.0.168.192
- *
  * **************************************************************************/
 int8_t pico_dns_mirror_addr( char *ptr );
 
 /* **************************************************************************
  *
- *
- *
  * **************************************************************************/
 void pico_dns_ipv6_set_ptr( const char *ip, char *dst );
+
+void pico_dns_print_packet( struct pico_dns_header *packet, uint16_t len );
 
 #endif /* _INCLUDE_PICO_DNS_COMMON */

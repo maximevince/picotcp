@@ -27,7 +27,7 @@
  *  counts.
  *
  * **************************************************************************/
-void pico_dns_fill_packet_header(struct pico_dns_header *hdr, uint16_t qdcount, uint16_t ancount, uint16_t nscount, uint16_t arcount)
+void pico_dns_fill_packet_header( struct pico_dns_header *hdr, uint16_t qdcount, uint16_t ancount, uint16_t nscount, uint16_t arcount )
 {
     /* hdr->id should be filled by caller */
     
@@ -63,8 +63,7 @@ void pico_dns_fill_packet_header(struct pico_dns_header *hdr, uint16_t qdcount, 
  * **************************************************************************/
 static int pico_dns_fill_packet_rr_sections( pico_dns_packet *packet, struct pico_dns_res_record *answer_list, struct pico_dns_res_record *authority_list, struct pico_dns_res_record *additional_list )
 {
-    struct pico_dns_res_record *iterator = NULL; // Put iterator at the beginning of list
-    struct pico_dns_res_record *previous = NULL; // Pointer to previous resource record in list when iterating
+    struct pico_dns_res_record *iterator = NULL;
     uint8_t *destination = NULL;
     
     if (!packet) {
@@ -76,7 +75,7 @@ static int pico_dns_fill_packet_rr_sections( pico_dns_packet *packet, struct pic
     iterator = answer_list;
     
     /* Initialise the destination pointers before iterating */
-    destination = (char *) packet + sizeof(struct pico_dns_header);
+    destination = (uint8_t *)packet + sizeof(struct pico_dns_header);
     
     /* Keep iterating over the list until the end */
     while (iterator) {
@@ -85,10 +84,8 @@ static int pico_dns_fill_packet_rr_sections( pico_dns_packet *packet, struct pic
             dns_dbg("Could not copy resource record with rname '%s' into Answer Section!\n", iterator->rname);
             return -1;
         }
-        /* Move to the next resource record, and free space */
-        previous = iterator;
+        /* Move to the next resource record */
         iterator = iterator->next;
-        //pico_dns_dns_rr_delete(&previous);
     }
     
     /* Next, the authority records */
@@ -99,10 +96,8 @@ static int pico_dns_fill_packet_rr_sections( pico_dns_packet *packet, struct pic
             dns_dbg("Could not copy resource record with rname '%s' into Authority Section!\n", iterator->rname);
             return -1;
         }
-        /* Move to the next resource record, and free space */
-        previous = iterator;
+        /* Move to the next resource record */
         iterator = iterator->next;
-        //pico_dns_dns_rr_delete(&previous);
     }
     
     /* And last but not least, the additional records */
@@ -113,10 +108,8 @@ static int pico_dns_fill_packet_rr_sections( pico_dns_packet *packet, struct pic
             dns_dbg("Could not copy resource record with rname '%s' into Authority Section!\n", iterator->rname);
             return -1;
         }
-        /* Move to the next resource record, and free space */
-        previous = iterator;
+        /* Move to the next resource record */
         iterator = iterator->next;
-        //pico_dns_dns_rr_delete(&previous);
     }
     
     return 0;
@@ -175,7 +168,7 @@ static int pico_mdns_dns_fill_packet_question_section( pico_dns_packet *packet, 
  *  Fills the question fixed-sized flags & fields accordingly.
  *
  * **************************************************************************/
-void pico_dns_question_fill_suffix(struct pico_dns_question_suffix *suf, uint16_t type, uint16_t qclass)
+void pico_dns_question_fill_qsuffix( struct pico_dns_question_suffix *suf, uint16_t type, uint16_t qclass )
 {
     suf->qtype = short_be(type);
     suf->qclass = short_be(qclass);
@@ -189,7 +182,7 @@ void pico_dns_question_fill_suffix(struct pico_dns_question_suffix *suf, uint16_
  * on [proto], whether this param is PICO_PROTO_IPV4 or PICO_PROTO_IPV6.
  *
  * **************************************************************************/
-static void pico_dns_fill_qname( char *qname, const char *url, uint16_t qtype, uint16_t proto )
+static void pico_dns_question_fill_qname( char *qname, const char *url, uint16_t qtype, uint16_t proto )
 {
     /* If reverse IPv4 address resolving is requested, convert to IPv4 arpa-format */
     if(qtype == PICO_DNS_TYPE_PTR && proto == PICO_PROTO_IPV4) {
@@ -219,7 +212,7 @@ static void pico_dns_fill_qname( char *qname, const char *url, uint16_t qtype, u
  * PICO_DNS_TYPE_PTR, depending on [proto].
  *
  * **************************************************************************/
-static uint16_t pico_dns_get_qname_len( const char *url, uint16_t *arpalen, uint16_t qtype, uint16_t proto )
+static uint16_t pico_dns_question_get_qname_len( const char *url, uint16_t *arpalen, uint16_t qtype, uint16_t proto )
 {
     uint16_t slen;
     
@@ -252,10 +245,10 @@ static uint16_t pico_dns_get_qname_len( const char *url, uint16_t *arpalen, uint
  * with the total length of the question.
  *
  * **************************************************************************/
-static struct pico_dns_question *pico_dns_question_create( const char *url, uint16_t *len, uint8_t proto, uint16_t qtype, uint16_t rclass )
+struct pico_dns_question *pico_dns_question_create( const char *url, uint16_t *len, uint8_t proto, uint16_t qtype, uint16_t qclass )
 {
     struct pico_dns_question *question = NULL;  /* Question pointer to return */
-    uint16_t slen, arpalen;                       /* Some lenghts */
+    uint16_t slen, arpalen;                     /* Some lenghts */
     
     /* Check if valid arguments are provided */
     if (!url || !len) {
@@ -268,7 +261,7 @@ static struct pico_dns_question *pico_dns_question_create( const char *url, uint
     }
     
     /* Determine the length of the URL as if it where a qname */
-    slen = pico_mdns_get_qname_len(url, &arpalen, qtype, proto);
+    slen = pico_dns_question_get_qname_len(url, &arpalen, qtype, proto);
     
     /* Allocate space for the question and the subfields */
     question = PICO_ZALLOC(sizeof(struct pico_dns_question));
@@ -289,10 +282,10 @@ static struct pico_dns_question *pico_dns_question_create( const char *url, uint
     question->next = NULL;
     
     /* Fill in the qname field */
-    pico_dns_fill_qname(question->qname, url, qtype, proto);
+    pico_dns_question_fill_qname(question->qname, url, qtype, proto);
     
     /* Fill in the question suffix */
-    pico_dns_fill_question_suffix(question->qsuffix, rtype, rclass);
+    pico_dns_question_fill_qsuffix(question->qsuffix, qtype, qclass);
     
     return question;
 }
@@ -303,10 +296,6 @@ static struct pico_dns_question *pico_dns_question_create( const char *url, uint
  *
  * Creates a DNS packet meant for querying. Currently only questions can be
  * inserted in the packet.
- *
- * TODO: Allow resource records to be added to Authority & Answer Section
- *          - Answer Section: To implement Known-Answer Suppression
- *          - Authority Section: To implement probe queries and tiebreaking
  *
  * **************************************************************************/
 pico_dns_packet *pico_dns_query_create( struct pico_dns_question *question_list, uint16_t *len )
@@ -321,7 +310,7 @@ pico_dns_packet *pico_dns_query_create( struct pico_dns_question *question_list,
     /* Determine the length that the Question Section needs to be */
     while (qiterator != NULL) {
         qdcount++;
-        *len = (uint16_t)(*len + qiterator->qname_length + sizeof(struct pico_dns_question_suffix));
+        *len = (uint16_t)((uint16_t)(*len + qiterator->qname_length) + (sizeof(struct pico_dns_question_suffix)));
         qiterator = qiterator->next;
     }
     
@@ -334,12 +323,12 @@ pico_dns_packet *pico_dns_query_create( struct pico_dns_question *question_list,
     
     /* Fill the Question Section with questions */
     if (pico_mdns_dns_fill_packet_question_section(packet, question_list)) {
-        mdns_dbg("Could not fill Question Section correctly!\n");
+        dns_dbg("Could not fill Question Section correctly!\n");
         return NULL;
     }
     
     /* Fill the DNS packet header */
-    pico_mdns_fill_packet_header(packet, qdcount, 0, 0, 0);
+    pico_dns_fill_packet_header(packet, qdcount, 0, 0, 0);
     
     return packet;
 }
@@ -490,7 +479,7 @@ int pico_dns_rr_copy_flat( struct pico_dns_res_record *res_record, uint8_t *dest
     dest_rdata = ((uint8_t *)dest_rsuffix + sizeof(struct pico_dns_res_record_suffix));
     
     /* Copy the rname of the resource record into the flat location */
-    memcpy(dest_rname, res_record->rname, res_record->rname_length);
+    strcpy(dest_rname, res_record->rname);
     
     /* Copy the question suffix fields */
     dest_rsuffix->rtype = res_record->rsuffix->rtype;
@@ -516,9 +505,9 @@ int pico_dns_rr_copy_flat( struct pico_dns_res_record *res_record, uint8_t *dest
  *  list, no records will be added to the packet for that section.
  *
  * **************************************************************************/
-pico_dns_packet *pico_dns_create_answer( struct pico_dns_res_record *answer_list, struct pico_dns_res_record *authority_list, struct pico_dns_res_record *additional_list, uint16_t *len )
+pico_dns_packet *pico_dns_answer_create( struct pico_dns_res_record *answer_list, struct pico_dns_res_record *authority_list, struct pico_dns_res_record *additional_list, uint16_t *len )
 {
-    struct pico_dns_packet *packet = NULL;  // Pointer to DNS packet in memory
+    pico_dns_packet *packet = NULL;         // Pointer to DNS packet in memory
     uint8_t ancount, authcount, addcount;   // Section-counts
     
     /* The length start with the size of the header */
@@ -542,6 +531,8 @@ pico_dns_packet *pico_dns_create_answer( struct pico_dns_res_record *answer_list
         dns_dbg("Could not fill Resource Record Sections correctly!\n");
         return NULL;
     }
+    
+    pico_dns_print_packet(packet, *len);
     
     /* Fill the DNS packet header */
     pico_dns_fill_packet_header(packet, 0, ancount, authcount, addcount);
@@ -684,3 +675,31 @@ void pico_dns_ipv6_set_ptr(const char *ip, char *dst)
     }
 }
 #endif
+
+/* Just prints a DNS packet with given length in [len] */
+void pico_dns_print_packet( struct pico_dns_header *packet, uint16_t len )
+{
+    int i, j, k; /* Iterators */
+    int lines_8_wide;
+    int leftover;
+    unsigned char *buf = (unsigned char *)packet;
+    
+    lines_8_wide = len / 8;
+    leftover = len % 8;
+    dns_dbg("______________________________\n");
+    dns_dbg("DNS PACKET (RAW) size '%d': \n", len);
+    for (j = 0; j < lines_8_wide; j++) {
+        for (i = 0; i < 8; i++) {
+            k = (8 * j) + i;
+            dns_dbg("%02X ", (unsigned char)buf[k]);
+            if (i == 3) dns_dbg(" ");
+        }
+        dns_dbg("\n");
+    }
+    for (i = 0; i < leftover; i++) {
+        k = (8 * j) + i;
+        dns_dbg("%02X ", (unsigned char)buf[k]);
+        if (i == 3) dns_dbg(" ");
+    }
+    dns_dbg("\n______________________________\n");
+}

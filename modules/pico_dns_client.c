@@ -643,10 +643,10 @@ static int pico_dns_client_getaddr_init(const char *url, uint16_t proto, void (*
 
 #ifdef PICO_SUPPORT_IPV6
     if (proto == PICO_PROTO_IPV6) {
-        pico_dns_question_fill_suffix(qsuffix, PICO_DNS_TYPE_AAAA, PICO_DNS_CLASS_IN);
+        pico_dns_question_fill_qsuffix(qsuffix, PICO_DNS_TYPE_AAAA, PICO_DNS_CLASS_IN);
     } else
 #endif
-    pico_dns_question_fill_suffix(qsuffix, PICO_DNS_TYPE_A, PICO_DNS_CLASS_IN);
+    pico_dns_question_fill_qsuffix(qsuffix, PICO_DNS_TYPE_A, PICO_DNS_CLASS_IN);
 
     q = pico_dns_client_add_query(header, len, qsuffix, callback, arg);
     if (!q) {
@@ -687,7 +687,7 @@ static int pico_dns_getname_univ(const char *ip, void (*callback)(char *, void *
     if(pico_dns_create_message(&header, &qsuffix, arpa, ip, &lblen, &len) != 0)
         return -1;
 
-    pico_dns_question_fill_suffix(qsuffix, PICO_DNS_TYPE_PTR, PICO_DNS_CLASS_IN);
+    pico_dns_question_fill_qsuffix(qsuffix, PICO_DNS_TYPE_PTR, PICO_DNS_CLASS_IN);
     q = pico_dns_client_add_query(header, len, qsuffix, callback, arg);
     if (!q) {
         PICO_FREE(header);

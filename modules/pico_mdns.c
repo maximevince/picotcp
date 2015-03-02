@@ -74,21 +74,6 @@ static uint16_t mdns_port = 5353u;
 /* only one hostname can be claimed at the time */
 static char *mdns_global_host;
 
-/* ------------ FUNCTION PROTOTYPES ----------- */
-// MARK: PROTOS COOKIE UTILITIES
-static int pico_mdns_qname_to_url( const char *qname, char **url_addr );
-static int pico_mdns_url_to_qname( const char *url, char **qname_addr );
-static int pico_mdns_del_cookie( char *url, uint16_t qtype );
-static struct pico_mdns_cookie *pico_mdns_find_cookie( const char *url, uint16_t qtype );
-static struct pico_mdns_cookie *pico_mdns_add_cookie( struct pico_dns_header *dns_packet, uint16_t len, uint8_t flags, uint8_t count, void (*callback)(char *str, void *arg), void *arg );
-// MARK: PROTOS ASYNCHRONOUS MDNS RECEPTION
-static int pico_mdns_reply_query(uint16_t qtype, struct pico_ip4 peer, char *name);
-static int pico_check_query_name(char *url);
-static int pico_mdns_handle_query(char *name, struct pico_dns_question_suffix *suf, struct pico_ip4 peer);
-static int pico_mdns_recv(void *buf, int buflen, struct pico_ip4 peer);
-static void pico_mdns_wakeup(uint16_t ev, struct pico_socket *s);
-/* -------------------------------------------- */
-
 /* **************************************************************************
  * Compare-function for two cache entries to give to the tree
  * **************************************************************************/
@@ -149,47 +134,12 @@ PICO_TREE_DECLARE(QTable, mdns_cmp);
 
 // MARK: MDNS PACKET UTILITIES
 
-/* Just prints a DNS packet with given length in [len] */
-static void pico_mdns_print_dns_packet(struct pico_dns_header *packet, uint16_t len)
-{
-    int i, j, k; /* Iterators */
-    int lines_8_wide;
-    int leftover;
-    unsigned char *buf = (unsigned char *)packet;
-    
-    lines_8_wide = len / 8;
-    leftover = len % 8;
-    mdns_dbg("______________________________\n");
-    mdns_dbg("DNS PACKET (RAW) size '%d': \n", len);
-    for (j = 0; j < lines_8_wide; j++) {
-        for (i = 0; i < 8; i++) {
-            k = (8 * j) + i;
-            mdns_dbg("%02X ", (unsigned char)buf[k]);
-            if (i == 3) mdns_dbg(" ");
-        }
-        mdns_dbg("\n");
-    }
-    for (i = 0; i < leftover; i++) {
-        k = (8 * j) + i;
-        mdns_dbg("%02X ", (unsigned char)buf[k]);
-        if (i == 3) mdns_dbg(" ");
-    }
-    mdns_dbg("\n______________________________\n");
-}
-
 /* Sends an mdns packet on the global socket*/
-static int pico_mdns_send_packet(struct pico_dns_header *hdr, uint16_t len)
+static int pico_mdns_send_packet(pico_dns_packet *packet, uint16_t len)
 {
     struct pico_ip4 dst;
     pico_string_to_ipv4(PICO_MDNS_DEST_ADDR4, &dst.addr);
-    return pico_socket_sendto(mdns_sock, hdr, (int)len, &dst, short_be(mdns_port));
-}
-
-/* Fill in the DNS header following the mDNS header format */
-static void pico_mdns_fill_packet_header(struct pico_dns_header *hdr, uint16_t qdcount, uint16_t ancount, uint16_t authcount, uint16_t addcount)
-{
-    hdr->id = short_be(0);
-    pico_dns_fill_packet_header(hdr, qdcount, ancount, authcount, addcount);
+    return pico_socket_sendto(mdns_sock, packet, (int)len, &dst, short_be(mdns_port));
 }
 
 /* Returns the compressed length of the compressed name without NULL terminator */
@@ -288,10 +238,126 @@ static char *pico_mdns_expand_name_comp(char *url, char *buf)
     return str;
 }
 
+
+/* **************************************************************************
+ *  Create an URL in *[url_addr] from any qname given in [qname]. [url_addr]
+ *  needs to be an addres to a NULL-pointer. *[url_addr] will be allocated
+ *  1 byte smaller in size than [qname] or 2 bytes smaller than the
+ *  string-length. Use PICO_FREE() to deallocate the memory for this pointer.
+ *
+ *  f.e. *  4tass5local0 -> tass.local
+ *       *  11112102107in-addr4arpa0 -> 1.1.10.10.in-addr.arpa
+ * **************************************************************************/
+static int pico_mdns_qname_to_url( const char *qname, char **url_addr )
+{
+    char *temp = NULL;  // Temporary string
+    
+    /* Check if qname or url_addr is not a NULL-pointer */
+    if (!qname || !url_addr) {
+        pico_err = PICO_ERR_EINVAL;
+        return -1;
+    }
+    
+    /* Check if qname is a NULL-pointer */
+    if (!*url_addr) {
+        /* Provide space for the url */
+        *url_addr = PICO_ZALLOC(strlen(qname) - 2u);
+        if (!*url_addr) {
+            pico_err = PICO_ERR_ENOMEM;
+            return - 1;
+        }
+    }
+    else {
+        mdns_dbg("Provide an address to a NULL pointer for [qname_addr].\n");
+        pico_err = PICO_ERR_EINVAL;
+        return -1;
+    }
+    
+    /* Provide space for a temporary string to work with */
+    temp = PICO_ZALLOC(strlen(qname) + 1u);
+    if (!temp) {
+        pico_err = PICO_ERR_ENOMEM;
+        return -1;
+    }
+    
+    /* Convert qname to an URL*/
+    strcpy(temp, qname);
+    pico_dns_notation_to_name(temp);
+    strcpy(*url_addr, temp + 1);
+    
+    /* We don't need temp anymore, free memory */
+    PICO_FREE(temp);
+    
+    return 0;
+}
+
+/* **************************************************************************
+ *
+ * Create a qname in *[qname_addr] from any url given in [url]. [qname_addr]
+ * needs to be an address to a NULL-pointer. *[qname_addr] will be allocated
+ * 1 byte larger in size than [url] or 2 bytes larger than the
+ * string-length. use PICO_FREE() to deallocate the memory for this pointer.
+ *
+ * f.e. *  tass.local -> 4tass5local0
+ *      *  1.1.10.10.in-addr.arpa -> 11112102107in-addr4arpa0
+ *
+ * **************************************************************************/
+static int pico_mdns_url_to_qname( const char *url, char **qname_addr )
+{
+    /* Check if url or qname_addr is not a NULL-pointer */
+    if (!url || !qname_addr) {
+        pico_err = PICO_ERR_EINVAL;
+        return -1;
+    }
+    
+    /* Check if qname is a NULL-pointer */
+    if (!*qname_addr) {
+        /* Provide space for the qname */
+        *qname_addr = PICO_ZALLOC(strlen(url) + 2u);
+        if (!*qname_addr) {
+            pico_err = PICO_ERR_ENOMEM;
+            return - 1;
+        }
+    }
+    else {
+        mdns_dbg("Provide an address to a NULL pointer for [qname_addr].\n");
+        pico_err = PICO_ERR_EINVAL;
+        return -1;
+    }
+    
+    /* Copy in the URL (+1 to leave space for leading '.') */
+    strcpy(*qname_addr + 1, url);
+    
+    /* Change to DNS notation */
+    pico_dns_name_to_dns_notation(*qname_addr);
+    
+    return 0;
+}
+
+#ifdef PICO_SUPPORT_IPV6
+//static struct pico_ip6 *pico_get_ip6_from_ip4(struct pico_ip4 *ipv4_addr)
+//{
+//    struct pico_device *dev = NULL;
+//    struct pico_ipv6_link *link = NULL;
+//    if((dev = pico_ipv4_link_find(ipv4_addr)) == NULL) {
+//        mdns_dbg("Could not find device!\n");
+//        return NULL;
+//    }
+//    
+//    if((link = pico_ipv6_link_by_dev(dev)) == NULL) {
+//        mdns_dbg("Could not find link!\n");
+//        return NULL;
+//    }
+//    
+//    return &link->address;
+//}
+#endif
+
 // MARK: QUESTION UTILITIES
 
 static struct pico_dns_question *pico_mdns_question_create( const char *url, uint16_t *len, uint8_t proto, uint16_t qtype, uint8_t flags )
 {
+    /* Some variables */
     uint16_t _qtype = 0;
     uint16_t qclass = 0;
     uint16_t qclass_MSB = 0;
@@ -324,45 +390,27 @@ static struct pico_dns_question *pico_mdns_question_create( const char *url, uin
 
 /* **************************************************************************
  *
- * Creates a DNS packet meant for querying. Currently only questions can be
- * inserted in the packet.
+ *  Creates a DNS packet meant for querying. Currently only questions can be
+ *  inserted in the packet.
  *
- * TODO: Allow resource records to be added to Authority & Answer Section
+ *  TODO: Allow resource records to be added to Authority & Answer Section
  *          - Answer Section: To implement Known-Answer Suppression
  *          - Authority Section: To implement probe queries and tiebreaking
  *
  * **************************************************************************/
-static pico_dns_packet *pico_mdns_dns_query_create( struct pico_dns_question *question_list, uint16_t *len )
+static pico_dns_packet *pico_mdns_query_create( struct pico_dns_question *question_list, uint16_t *len )
 {
-    pico_dns_packet *packet = NULL;                         /* Pointer to DNS packet in memory */
-    struct pico_dns_question *qiterator = question_list;    /* Put iterator at the beginning of list */
-    uint8_t qdcount;                                        /* Question-count */
+    pico_dns_packet *packet = NULL;
     
-    /* The length starts with the size of the header */
-    *len = (uint16_t) sizeof(struct pico_dns_header);
-    
-    /* Determine the length that the Question Section needs to be */
-    while (qiterator != NULL) {
-        qdcount++;
-        *len = (uint16_t)(*len + qiterator->qname_length + sizeof(struct pico_dns_question_suffix));
-        qiterator = qiterator->next;
-    }
-    
-    /* Provide space for the entire packet */
-    packet = PICO_ZALLOC(*len);
+    /* Create an answer as you would with plain DNS */
+    packet = pico_dns_query_create(question_list, len);
     if (!packet) {
-        pico_err = PICO_ERR_ENOMEM;
+        mdns_dbg("Could not create DNS query!\n");
         return NULL;
     }
     
-    /* Fill the Question Section with questions */
-    if (pico_mdns_dns_fill_question_section(packet, question_list)) {
-        mdns_dbg("Could not fill Question Section correctly!\n");
-        return NULL;
-    }
-    
-    /* Fill the DNS packet header */
-    pico_mdns_fill_packet_header(packet, qdcount, 0, 0, 0);
+    /* Set the id of the DNS packet to 0 */
+    packet->id = 0;
     
     return packet;
 }
@@ -375,14 +423,14 @@ static pico_dns_packet *pico_mdns_dns_query_create( struct pico_dns_question *qu
  *  with the MSB of the rclass field being set accordingly.
  *
  * **************************************************************************/
-static struct pico_dns_res_record *pico_mdns_rr_create( const char *url, void *_rdata, uint16_t *len, uint16_t rtype, uint16_t rttl, uint8_t flags)
+static struct pico_dns_res_record *pico_mdns_rr_create( const char *url, void *_rdata, uint16_t *len, uint16_t rtype, uint16_t rttl, uint8_t flags )
 {
     uint16_t rclass_MSB;
     uint16_t rclass;
     
     /* Set the MSB of the rclass field according to the mDNS format */
     rclass = (uint16_t) PICO_DNS_CLASS_IN;
-    rclass_MSB = (uint16_t) IS_CACHE_FLUSH_FLAG_SET(flags);
+    rclass_MSB = (uint16_t)(IS_CACHE_FLUSH_FLAG_SET(flags));
     rclass |= rclass_MSB;
     
     /* Create a resource record as you would with plain DNS */
@@ -397,12 +445,12 @@ static struct pico_dns_res_record *pico_mdns_rr_create( const char *url, void *_
  *  with the identifier of the DNS packet being 0.
  *
  * **************************************************************************/
-static pico_dns_packet *pico_mdns_create_answer( struct pico_dns_res_record *answer_list, struct pico_dns_res_record *authority_list, struct pico_dns_res_record *additional_list, uint16_t *len )
+static pico_dns_packet *pico_mdns_answer_create( struct pico_dns_res_record *answer_list, struct pico_dns_res_record *authority_list, struct pico_dns_res_record *additional_list, uint16_t *len )
 {
     pico_dns_packet *packet = NULL;
     
     /* Create an answer as you would with plain DNS */
-    packet = pico_dns_create_answer(answer_list, authority_list, additional_list, len);
+    packet = pico_dns_answer_create(answer_list, authority_list, additional_list, len);
     if (!packet) {
         mdns_dbg("Could not create DNS answer!\n");
         return NULL;
@@ -558,158 +606,10 @@ static int pico_mdns_cache_add_rr(char *url, struct pico_dns_res_record_suffix *
     return 0;
 }
 
-
-/* Callback for the timeout timer of a query cookie */
-static void pico_mdns_timeout(pico_time now, void *_arg)
-{
-    /* Query cookie is passed in the arg pointer */
-    struct pico_mdns_cookie *ck = (struct pico_mdns_cookie *)_arg;
-    
-    char url[256] = { 0 };  //
-    IGNORE_PARAMETER(now);  //
-    
-    if(ck->callback)
-        ck->callback(NULL, ck->arg);
-    
-    strcpy(url, ck->qname);
-    
-    pico_dns_notation_to_name(url);
-    pico_mdns_del_cookie(url+1, ck->qtype);
-    
-    /* TODO: If the request was for a reconfirmation of a record, flush the corresponding record after the timeout */
-}
-
-// MARK: COOKIE UTILITIES
-
 /* **************************************************************************
- *
- * Create an URL in *[url_addr] from any qname given in [qname]. [url_addr]
- * needs to be an addres to a NULL-pointer. *[url_addr] will be allocated 
- * 1 byte smaller in size than [qname] or 2 bytes smaller than the
- * string-length. Use PICO_FREE() to deallocate the memory for this pointer.
- *
- * f.e. *  4tass5local0 -> tass.local
- *      *  11112102107in-addr4arpa0 -> 1.1.10.10.in-addr.arpa
- *
- * **************************************************************************/
-static int pico_mdns_qname_to_url( const char *qname, char **url_addr )
-{
-    char *temp = NULL;  // Temporary string
-    
-    /* Check if qname or url_addr is not a NULL-pointer */
-    if (!qname || !url_addr) {
-        pico_err = PICO_ERR_EINVAL;
-        return -1;
-    }
-    
-    /* Check if qname is a NULL-pointer */
-    if (!*url_addr) {
-        /* Provide space for the url */
-        *url_addr = PICO_ZALLOC(strlen(qname) - 2u);
-        if (!*url_addr) {
-            pico_err = PICO_ERR_ENOMEM;
-            return - 1;
-        }
-    }
-    else {
-        mdns_dbg("Provide an address to a NULL pointer for [qname_addr].\n");
-        pico_err = PICO_ERR_EINVAL;
-        return -1;
-    }
-    
-    /* Provide space for a temporary string to work with */
-    temp = PICO_ZALLOC(strlen(qname) + 1u);
-    if (!temp) {
-        pico_err = PICO_ERR_ENOMEM;
-        return -1;
-    }
-    
-    /* Convert qname to an URL*/
-    strcpy(temp, qname);
-    pico_dns_notation_to_name(temp);
-    strcpy(*url_addr, temp + 1);
-    
-    /* We don't need temp anymore, free memory */
-    PICO_FREE(temp);
-    
-    return 0;
-}
-
-/* **************************************************************************
- *
- * Create a qname in *[qname_addr] from any url given in [url]. [qname_addr]
- * needs to be an address to a NULL-pointer. *[qname_addr] will be allocated 
- * 1 byte larger in size than [url] or 2 bytes larger than the
- * string-length. use PICO_FREE() to deallocate the memory for this pointer.
- *
- * f.e. *  tass.local -> 4tass5local0
- *      *  1.1.10.10.in-addr.arpa -> 11112102107in-addr4arpa0
- *
- * **************************************************************************/
-static int pico_mdns_url_to_qname( const char *url, char **qname_addr )
-{
-    /* Check if url or qname_addr is not a NULL-pointer */
-    if (!url || !qname_addr) {
-        pico_err = PICO_ERR_EINVAL;
-        return -1;
-    }
-    
-    /* Check if qname is a NULL-pointer */
-    if (!*qname_addr) {
-        /* Provide space for the qname */
-        *qname_addr = PICO_ZALLOC(strlen(url) + 2u);
-        if (!*qname_addr) {
-            pico_err = PICO_ERR_ENOMEM;
-            return - 1;
-        }
-    }
-    else {
-        mdns_dbg("Provide an address to a NULL pointer for [qname_addr].\n");
-        pico_err = PICO_ERR_EINVAL;
-        return -1;
-    }
-    
-    /* Copy in the URL (+1 to leave space for leading '.') */
-    strcpy(*qname_addr + 1, url);
-    
-    /* Change to DNS notation */
-    pico_dns_name_to_dns_notation(*qname_addr);
-    
-    return 0;
-}
-
-/* **************************************************************************
- *
- * Delets for a certain query-cookie in the global cookie-tree given an [url]
- * and [qtype]. Qclass does not apply since all we use is qclass 'IN' or 1,
- * anyway.
- *
- * **************************************************************************/
-static int pico_mdns_del_cookie( char *url, uint16_t qtype )
-{
-    /* First, find the cookie in the global tree */
-    struct pico_mdns_cookie *found = pico_mdns_find_cookie(url, qtype);
-    if (!found) {
-        mdns_dbg("Could not find cookie '%s' to delete\n", url);
-        return -1;
-    }
-    
-    /* Delete and free memory for the cookie */
-    pico_tree_delete(&QTable, found);
-    PICO_FREE(found->header);
-    PICO_FREE(found);
-    
-    mdns_dbg("Cookie deleted succesfully!\n");
-    
-    return 0;
-}
-
-/* **************************************************************************
- *
- * Looks for a certain query-cookie in the global cookie-tree given an [url]
- * and [qtype]. Qclass does not apply since all we use is qclass 'IN' or 1,
- * anyway.
- *
+ *  Looks for a certain query-cookie in the global cookie-tree given an [url]
+ *  and [qtype]. Qclass does not apply since all we use is qclass 'IN' or 1,
+ *  anyway.
  * **************************************************************************/
 static struct pico_mdns_cookie *pico_mdns_find_cookie( const char *url, uint16_t qtype )
 {
@@ -739,6 +639,50 @@ static struct pico_mdns_cookie *pico_mdns_find_cookie( const char *url, uint16_t
     PICO_FREE(qname);
     
     return found;
+}
+
+/* **************************************************************************
+ *  Deletes for a certain query-cookie in the global cookie-tree given an [url]
+ *  and [qtype]. Qclass does not apply since all we use is qclass 'IN' or 1,
+ *  anyway.
+ * **************************************************************************/
+static int pico_mdns_del_cookie( char *url, uint16_t qtype )
+{
+    /* First, find the cookie in the global tree */
+    struct pico_mdns_cookie *found = pico_mdns_find_cookie(url, qtype);
+    if (!found) {
+        mdns_dbg("Could not find cookie '%s' to delete\n", url);
+        return -1;
+    }
+    
+    /* Delete and free memory for the cookie */
+    pico_tree_delete(&QTable, found);
+    PICO_FREE(found->header);
+    PICO_FREE(found);
+    
+    mdns_dbg("Cookie deleted succesfully!\n");
+    
+    return 0;
+}
+
+/* Callback for the timeout timer of a query cookie */
+static void pico_mdns_timeout(pico_time now, void *_arg)
+{
+    /* Query cookie is passed in the arg pointer */
+    struct pico_mdns_cookie *ck = (struct pico_mdns_cookie *)_arg;
+    
+    char url[256] = { 0 };  //
+    IGNORE_PARAMETER(now);  //
+    
+    if(ck->callback)
+        ck->callback(NULL, ck->arg);
+    
+    strcpy(url, ck->qname);
+    
+    pico_dns_notation_to_name(url);
+    pico_mdns_del_cookie(url+1, ck->qtype);
+    
+    /* TODO: If the request was for a reconfirmation of a record, flush the corresponding record after the timeout */
 }
 
 /* **************************************************************************
@@ -796,25 +740,6 @@ static struct pico_mdns_cookie *pico_mdns_add_cookie( struct pico_dns_header *dn
     
     return ck;
 }
-
-#ifdef PICO_SUPPORT_IPV6
-static struct pico_ip6 *pico_get_ip6_from_ip4(struct pico_ip4 *ipv4_addr)
-{
-    struct pico_device *dev = NULL;
-    struct pico_ipv6_link *link = NULL;
-    if((dev = pico_ipv4_link_find(ipv4_addr)) == NULL) {
-        mdns_dbg("Could not find device!\n");
-        return NULL;
-    }
-    
-    if((link = pico_ipv6_link_by_dev(dev)) == NULL) {
-        mdns_dbg("Could not find link!\n");
-        return NULL;
-    }
-    
-    return &link->address;
-}
-#endif
 
 // MARK: ASYNCHRONOUS MDNS RECEPTION
 
@@ -884,81 +809,89 @@ static int pico_mdns_handle_answer(char *url, struct pico_dns_res_record_suffix 
 }
 
 /* Create a query answer according to the qtype (ANY, A, AAAA or PTR) of a certain IP address */
-static struct pico_dns_header *pico_mdns_query_create_answer(union pico_address *local_addr, uint16_t qtype, unsigned int *len, char *name)
-{
-    // TODO: If type is ANY include all records corresponding to the name
-    // TODO: Include negative responses for records this hosts knows they don't exist
-    
-    if(qtype == PICO_DNS_TYPE_A || qtype == PICO_DNS_TYPE_ANY) {
-        //return pico_mdns_create_answer(mdns_global_host, len, PICO_DNS_TYPE_A, local_addr);
-    }
-#ifdef PICO_SUPPORT_IPV6
-    if(qtype == PICO_DNS_TYPE_AAAA || qtype == PICO_DNS_TYPE_ANY) {
-        struct pico_ip6 *ip6 = pico_get_ip6_from_ip4(&local_addr->ip4);
-        //return pico_mdns_create_answer(mdns_global_host, len, PICO_DNS_TYPE_AAAA, ip6);
-    }
-#endif
-    /* reply to PTR records */
-    if(qtype == PICO_DNS_TYPE_PTR) {
-        char host_conv[255] = { 0 };
-        mdns_dbg("Replying on PTR query...\n");
-        strcpy(host_conv + 1, mdns_global_host);
-        pico_dns_name_to_dns_notation(host_conv);
-        //return pico_mdns_create_answer(name, len, qtype, host_conv);
-    }
-    
-    mdns_dbg("Unknown qtype!\n");
-    
-    return NULL;
-}
+//static struct pico_dns_header *pico_mdns_query_create_answer(union pico_address *local_addr, uint16_t qtype, uint16_t *len, char *name)
+//{
+//    // TODO: If type is ANY include all records corresponding to the name
+//    // TODO: Include negative responses for records this hosts knows they don't exist
+//
+//    IGNORE_PARAMETER(local_addr);
+//    IGNORE_PARAMETER(qtype);
+//    IGNORE_PARAMETER(len);
+//    IGNORE_PARAMETER(name);
+//    
+//    if(qtype == PICO_DNS_TYPE_A || qtype == PICO_DNS_TYPE_ANY) {
+//        return pico_mdns_answer_create(mdns_global_host, len, PICO_DNS_TYPE_A, local_addr);
+//    }
+//#ifdef PICO_SUPPORT_IPV6
+//    if(qtype == PICO_DNS_TYPE_AAAA || qtype == PICO_DNS_TYPE_ANY) {
+//        struct pico_ip6 *ip6 = pico_get_ip6_from_ip4(&local_addr->ip4);
+//        return pico_mdns_answer_create(mdns_global_host, len, PICO_DNS_TYPE_AAAA, ip6);
+//    }
+//#endif
+//    /* reply to PTR records */
+//    if(qtype == PICO_DNS_TYPE_PTR) {
+//        char host_conv[255] = { 0 };
+//        mdns_dbg("Replying on PTR query...\n");
+//        strcpy(host_conv + 1, mdns_global_host);
+//        pico_dns_name_to_dns_notation(host_conv);
+//        return pico_mdns_answer_create(name, len, qtype, host_conv);
+//    }
+//    
+//    mdns_dbg("Unknown qtype!\n");
+//
+//    return NULL;
+//}
 
 /* Reply on a single query */
 static int pico_mdns_reply_query(uint16_t qtype, struct pico_ip4 peer, char *name)
 {
-    /* Pointer to DNS packet */
-    struct pico_dns_header *header = NULL;
+    IGNORE_PARAMETER(qtype);
+    IGNORE_PARAMETER(peer);
+    IGNORE_PARAMETER(name);
     
-    /* To store either an IPv4 or an IPv6 */
-    union pico_address *local_addr = NULL;
-    
-    unsigned int len; // Temporary storage of the length of the reply
-    
-    // TODO: Check for authority sections / probing queries
-    // TODO: Check for unicast response bit
-    
-    /* RFC:
-     *  If a responder receives a query addressed to the mDNS IPv4 link-local multicast address,
-     *  from a source address not apparently on the same subnet as the
-     *  responder, then, even if the query indicates that a unicast
-     *  response is preferred, the responder SHOULD elect to respond by multicast
-     *  anyway, since it can reasonably predict that a unicast response with
-     *  an apparently non-local source address will probably be ignored.
-     */
-    local_addr = (union pico_address *) pico_ipv4_source_find(&peer);
-    if (!local_addr) {
-        // TODO: Forced Response via multicast
-        pico_err = PICO_ERR_EHOSTUNREACH;
-        mdns_dbg("Peer not on same subnet!\n");
-        return -1;
-    }
-
-    /* Creates an answer for the host's IP, depending on the qtype */
-    // MARK: MUST contain all records for qtype ANY
-    header = pico_mdns_query_create_answer(local_addr, qtype, &len, name);
-    if (!header) {
-        mdns_dbg("Error occured while creating an answer (pico_err:%d)!\n", pico_err);
-        return -1;
-    }
-    
-    /* Send a response on the wire */
-    if(pico_mdns_send_packet(header, len) != (int)len) {
-        mdns_dbg("Send error occurred!\n");
-        return -1;
-    }
+//    /* Pointer to DNS packet */
+//    struct pico_dns_header *header = NULL;
+//    
+//    /* To store either an IPv4 or an IPv6 */
+//    union pico_address *local_addr = NULL;
+//    
+//    uint16_t len; // Temporary storage of the length of the reply
+//    
+//    // TODO: Check for authority sections / probing queries
+//    // TODO: Check for unicast response bit
+//    
+//    /* RFC:
+//     *  If a responder receives a query addressed to the mDNS IPv4 link-local multicast address,
+//     *  from a source address not apparently on the same subnet as the
+//     *  responder, then, even if the query indicates that a unicast
+//     *  response is preferred, the responder SHOULD elect to respond by multicast
+//     *  anyway, since it can reasonably predict that a unicast response with
+//     *  an apparently non-local source address will probably be ignored.
+//     */
+//    local_addr = (union pico_address *) pico_ipv4_source_find(&peer);
+//    if (!local_addr) {
+//        // TODO: Forced Response via multicast
+//        pico_err = PICO_ERR_EHOSTUNREACH;
+//        mdns_dbg("Peer not on same subnet!\n");
+//        return -1;
+//    }
+//
+//    /* Creates an answer for the host's IP, depending on the qtype */
+//    // MARK: MUST contain all records for qtype ANY
+//    header = pico_mdns_query_create_answer(local_addr, qtype, &len, name);
+//    if (!header) {
+//        mdns_dbg("Error occured while creating an answer (pico_err:%d)!\n", pico_err);
+//        return -1;
+//    }
+//    
+//    /* Send a response on the wire */
+//    if(pico_mdns_send_packet(header, len) != (int)len) {
+//        mdns_dbg("Send error occurred!\n");
+//        return -1;
+//    }
     
     return 0;
 }
-
 
 /* Compare if the received query name is the same as the name currently assigned to this host */
 static int pico_check_query_name(char *url)
@@ -1167,6 +1100,11 @@ static int pico_mdns_getaddr_generic(const char *url, void (*callback)(char *ip,
 {
     struct pico_dns_header *header = NULL;
     uint16_t len = 0;
+    
+    IGNORE_PARAMETER(callback);
+    IGNORE_PARAMETER(arg);
+    IGNORE_PARAMETER(proto);
+    
     if (!url) {
         pico_err = PICO_ERR_EINVAL;
         return -1;
@@ -1195,6 +1133,11 @@ static int pico_mdns_getname_generic(const char *ip, void (*callback)(char *url,
 {
     struct pico_dns_header *header = NULL;
     uint16_t len = 0;
+    
+    IGNORE_PARAMETER(callback);
+    IGNORE_PARAMETER(arg);
+    IGNORE_PARAMETER(proto);
+    
     if (!ip) {
         pico_err = PICO_ERR_EINVAL;
         return -1;
@@ -1283,14 +1226,16 @@ static int pico_mdns_send_packet_announcement(void)
         return -1;
     
     /* Create an resource record to put in the announcement */
-    announcement = pico_mdns_rr_create(mdns_global_host, &mdns_sock->local_addr, &len, PICO_DNS_TYPE_A, 120, (PICO_MDNS_FLAG_CACHE_FLUSH));
+    announcement = pico_mdns_rr_create(mdns_global_host, &mdns_sock->local_addr, &len, PICO_DNS_TYPE_ANY, 120, (PICO_MDNS_FLAG_CACHE_FLUSH));
     if (!announcement) {
         mdns_dbg("ERROR: mdns_create_query returned NULL\n");
         return -1;
     }
+    
+    mdns_dbg("Announcement with rname: %s, rtype: %d and rclass: %d\n", announcement->rname, short_be(announcement->rsuffix->rtype), short_be(announcement->rsuffix->rclass));
 
     /* Create an mDNS answer */
-    packet = pico_mdns_create_answer(announcement, NULL, NULL, &len);
+    packet = pico_mdns_answer_create(announcement, NULL, NULL, &len);
     if(!packet) {
         mdns_dbg("Could not create answer!\n");
         return -1;
@@ -1413,10 +1358,10 @@ static int pico_mdns_probe(char *hostname, void (*cb_initialised)(char *str, voi
      *  To a defending host to respond immediately via unicast, instead of potentially
      *  having to wait before replying via multicast.
      */
-    struct pico_dns_question *probe_question = pico_mdns_dns_question_create(hostname, &qlen, PICO_PROTO_IPV4, PICO_DNS_TYPE_ANY, (PICO_MDNS_FLAG_PROBE | PICO_MDNS_FLAG_UNICAST_RES));
+    struct pico_dns_question *probe_question = pico_mdns_question_create(hostname, &qlen, PICO_PROTO_IPV4, PICO_DNS_TYPE_ANY, (PICO_MDNS_FLAG_PROBE | PICO_MDNS_FLAG_UNICAST_RES));
     
     /* Fill a DNS packet with the probe question */
-    packet = pico_mdns_dns_query_create(probe_question, &len);
+    packet = pico_mdns_query_create(probe_question, &len);
     if (!packet) {
         mdns_dbg("ERROR: mdns_create_query returned NULL\n");
         return -1;

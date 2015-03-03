@@ -202,21 +202,19 @@ static struct pico_dns_question *pico_mdns_question_create( const char *url, uin
 // MARK: MDNS QUERY UTILITIES
 
 /* **************************************************************************
- *
  *  Creates a DNS packet meant for querying. Currently only questions can be
  *  inserted in the packet.
  *
  *  TODO: Allow resource records to be added to Authority & Answer Section
  *          - Answer Section: To implement Known-Answer Suppression
  *          - Authority Section: To implement probe queries and tiebreaking
- *
  * **************************************************************************/
-static pico_dns_packet *pico_mdns_query_create( struct pico_dns_question *question_list, uint16_t *len )
+static pico_dns_packet *pico_mdns_query_create( struct pico_dns_question *question_list, struct pico_dns_res_record *answer_list, struct pico_dns_res_record *authority_list, struct pico_dns_res_record *additional_list, uint16_t *len )
 {
     pico_dns_packet *packet = NULL;
     
     /* Create an answer as you would with plain DNS */
-    packet = pico_dns_query_create(question_list, NULL, NULL, NULL, len);
+    packet = pico_dns_query_create(question_list, answer_list, authority_list, additional_list, len);
     if (!packet) {
         mdns_dbg("Could not create DNS query!\n");
         return NULL;
@@ -1032,8 +1030,6 @@ static int pico_mdns_send_packet_announcement(void)
         mdns_dbg("ERROR: mdns_create_query returned NULL\n");
         return -1;
     }
-    
-    mdns_dbg("Announcement with rname: %s, rtype: %d and rclass: %d\n", announcement->rname, short_be(announcement->rsuffix->rtype), short_be(announcement->rsuffix->rclass));
 
     /* Create an mDNS answer */
     packet = pico_mdns_answer_create(announcement, NULL, NULL, &len);
@@ -1157,7 +1153,7 @@ static int pico_mdns_probe(char *hostname, void (*cb_initialised)(char *str, voi
     struct pico_dns_question *probe_question = pico_mdns_question_create(hostname, &qlen, PICO_PROTO_IPV4, PICO_DNS_TYPE_ANY, (PICO_MDNS_FLAG_PROBE | PICO_MDNS_FLAG_UNICAST_RES));
     
     /* Fill a DNS packet with the probe question */
-    packet = pico_mdns_query_create(probe_question, &len);
+    packet = pico_mdns_query_create(probe_question, NULL, NULL, NULL, &len);
     if (!packet) {
         mdns_dbg("ERROR: mdns_create_query returned NULL\n");
         return -1;

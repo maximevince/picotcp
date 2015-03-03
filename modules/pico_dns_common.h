@@ -136,6 +136,12 @@ void pico_dns_question_fill_qsuffix( struct pico_dns_question_suffix *suf, uint1
  * **************************************************************************/
 struct pico_dns_question *pico_dns_question_create( const char *url, uint16_t *len, uint8_t proto, uint16_t qtype, uint16_t qclass );
 
+/* **************************************************************************
+ *  Returns the size summed up of all the questions contained in a
+ *  linked list. Fills [count] with the number of questions in the list.
+ * **************************************************************************/
+uint16_t pico_dns_question_list_size( struct pico_dns_question *list_begin, uint8_t *count );
+
 // MARK: QUERY FUNCTIONS
 
 /* **************************************************************************

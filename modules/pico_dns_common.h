@@ -141,19 +141,10 @@ struct pico_dns_question *pico_dns_question_create( const char *url, uint16_t *l
 /* **************************************************************************
  * Creates a DNS packet meant for querying. Currently only questions can be
  * inserted in the packet.
- *
- * TODO: Allow resource records to be added to Authority & Answer Section
- *          - Answer Section: To implement Known-Answer Suppression
- *          - Authority Section: To implement probe queries and tiebreaking
  * **************************************************************************/
-pico_dns_packet *pico_dns_query_create( struct pico_dns_question *question_list, uint16_t *len );
+pico_dns_packet *pico_dns_query_create( struct pico_dns_question *question_list, struct pico_dns_res_record *answer_list, struct pico_dns_res_record *authority_list, struct pico_dns_res_record *additional_list, uint16_t *len );
 
 // MARK: RESOURCE RECORD FUNCTIONS
-
-/* **************************************************************************
- *  Fills the resource record fixed-sized flags & fields accordingly.
- * **************************************************************************/
-void pico_dns_rr_fill_suffix( struct pico_dns_res_record_suffix *suf, uint16_t rtype, uint16_t rclass, uint32_t rttl, uint16_t rdlength );
 
 /* **************************************************************************
  * Creates a standalone DNS resource record for given 'url'. Fills the
@@ -172,13 +163,6 @@ int pico_dns_rr_delete( struct pico_dns_res_record **rr );
  * **************************************************************************/
 uint16_t pico_dns_rr_list_size( struct pico_dns_res_record *list_begin, uint8_t *count );
 
-/* **************************************************************************
- *  Copies the contents a resource record [res_record] to a single flat
- *  location in [destination]. [destination] pointer will point to address
- *  right after this flat resource record on success.
- * **************************************************************************/
-int pico_dns_rr_copy_flat( struct pico_dns_res_record *res_record, uint8_t *destination );
-
 // MARK: ANSWER FUNCTIONS
 
 /* **************************************************************************
@@ -189,6 +173,47 @@ int pico_dns_rr_copy_flat( struct pico_dns_res_record *res_record, uint8_t *dest
 pico_dns_packet *pico_dns_answer_create( struct pico_dns_res_record *answer_list, struct pico_dns_res_record *authority_list, struct pico_dns_res_record *additional_list, uint16_t *len );
 
 // MARK: NAME & IP FUNCTIONS
+
+/* **************************************************************************
+ *  Returns the length of an FQDN in a DNS-packet as if DNS name compression
+ *  would be applied to the packet
+ * **************************************************************************/
+uint16_t pico_dns_namelen_comp( char *name );
+
+/* **************************************************************************
+ *  Returns the length of an FQDN. If DNS name compression is applied in the
+ *  DNS packet, this will be the length as if the compressed name would be 
+ *  decompressed.
+ * **************************************************************************/
+uint16_t pico_dns_namelen_uncomp( char *name, pico_dns_packet *packet );
+
+/* **************************************************************************
+ *  Returns the uncompressed FQDN when DNS name compression is applied in the
+ *  DNS packet.
+ * **************************************************************************/
+char *pico_dns_expand_name_comp( char *name, pico_dns_packet *packet );
+
+/* **************************************************************************
+ *  Create an URL in *[url_addr] from any qname given in [qname]. [url_addr]
+ *  needs to be an addres to a NULL-pointer. Returns a string
+ *  1 byte smaller in size than [qname] or 2 bytes smaller than the
+ *  string-length. Use PICO_FREE() to deallocate the memory for this pointer.
+ *
+ *  f.e. *  4tass5local0 -> tass.local
+ *       *  11112102107in-addr4arpa0 -> 1.1.10.10.in-addr.arpa
+ * **************************************************************************/
+char *pico_dns_qname_to_url( const char *qname );
+
+/* **************************************************************************
+ * Create a qname in *[qname_addr] from any url given in [url]. [qname_addr]
+ * needs to be an address to a NULL-pointer. Returns a string
+ * 1 byte larger in size than [url] or 2 bytes larger than the
+ * string-length. use PICO_FREE() to deallocate the memory for this pointer.
+ *
+ * f.e. -  tass.local -> 4tass5local0
+ *      -  1.1.10.10.in-addr.arpa -> 11112102107in-addr4arpa0
+ * **************************************************************************/
+char *pico_dns_url_to_qname( const char *url );
 
 /* **************************************************************************
  *  Determines the length of a string
@@ -219,6 +244,10 @@ int8_t pico_dns_mirror_addr( char *ptr );
  * **************************************************************************/
 void pico_dns_ipv6_set_ptr( const char *ip, char *dst );
 
+/* **************************************************************************
+ *  TEMP: Just prints a DNS packet with given length in [len].
+ *  For debugging purposes...
+ * **************************************************************************/
 void pico_dns_print_packet( struct pico_dns_header *packet, uint16_t len );
 
 #endif /* _INCLUDE_PICO_DNS_COMMON */

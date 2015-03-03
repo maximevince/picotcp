@@ -9,6 +9,7 @@ rm -f /tmp/pico-mem-report-*
 ./build/test/modunit_tcp.elf || exit 1
 ./build/test/modunit_dev_loop.elf || exit 1
 ./build/test/modunit_dns_client.elf || exit 1
+./build/test/modunit_dns_common.elf || exit 1
 ./build/test/modunit_sntp_client.elf || exit 1
 ./build/test/modunit_ipv6_nd.elf || exit 1
 ./build/test/modunit_mdns.elf || exit 1

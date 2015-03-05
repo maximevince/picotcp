@@ -1,5 +1,7 @@
 #include "utils.h"
 #include <pico_mdns.h>
+#include <pico_ipv4.h>
+#include <pico_addressing.h>
 
 /*** START MDNS ***/
 
@@ -69,11 +71,12 @@ void mdns_init_callback(char *str, void *arg)
 //        printf("Getaddr returned with error!\n");
 }
 
-void app_mdns(char *arg)
+void app_mdns(char *arg, struct pico_ipv4_link *link)
 {
     char *hostname, *peername;
     char *nxt = arg;
-
+    pico_mdns_res_record_list *records = NULL;
+    
     if (!nxt)
         exit(255);
 
@@ -91,11 +94,38 @@ void app_mdns(char *arg)
     if(!peername) {
         exit(255);
     }
-
+    
+    if (!link) {
+        printf("Link not found!\n");
+        exit(255);
+    }
+    
     printf("Starting to claim name: %s, system name: %s\n", hostname, peername);
-    if(pico_mdns_init(hostname, &mdns_init_callback, peername) != 0)
-        printf("Init returned with error\n");
-
+    
+    if (pico_mdns_init(0, &mdns_init_callback, peername) != 0) {
+        printf("Initialisation returned with Error!\n");
+        exit(255);
+    }
+    printf("mDNS module initialised\n");
+    
+    /* Create a resource record you want to register */
+    if (pico_mdns_res_record_create(&records, hostname, (void*)(&(link->address)), PICO_DNS_TYPE_A, 120, PICO_MDNS_RES_RECORD_UNIQUE) != 0) {
+        printf("Could not create mDNS resource record!\n");
+        exit(255);
+    }
+    
+    /* Check if records is not still empty */
+    if (!records) {
+        printf("Creating a mDNS resource record returned NULL!\n");
+    }
+    
+    /* Try to claim it */
+    if (pico_mdns_claim(records, &mdns_init_callback, peername) != 0) {
+        printf("Could not claim mDNS resource record!\n");
+        exit(255);
+    }
+    printf("mDNS resource record claimed\n");
+    
     while(1) {
         pico_stack_tick();
         usleep(2000);

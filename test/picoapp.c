@@ -55,7 +55,7 @@ void app_mcastreceive(char *args);
 void app_ping(char *args);
 void app_dhcp_server(char *args);
 void app_dhcp_client(char *args);
-void app_mdns(char *args);
+void app_mdns(char *arg, struct pico_ipv4_link *link);
 void app_sntp(char *args);
 void app_tftp(char *args);
 void app_slaacv4(char *args);
@@ -341,9 +341,10 @@ int main(int argc, char **argv)
                     nxt = cpy_arg(&loss_out, nxt);
                     if (!nxt) break;
                 } else {
-
                     nxt = cpy_arg(&addr6, nxt);
                     if (!nxt) break;
+                    
+                    printf("addr6: %s\n", addr6);
 
                     nxt = cpy_arg(&nm6, nxt);
                     if (!nxt) break;
@@ -375,7 +376,6 @@ int main(int argc, char **argv)
             printf("Vde created.\n");
 
             if (!IPV6_MODE) {
-
                 pico_string_to_ipv4(addr, &ipaddr.addr);
                 pico_string_to_ipv4(nm, &netmask.addr);
                 pico_ipv4_link_add(dev, ipaddr, netmask);
@@ -399,7 +399,6 @@ int main(int argc, char **argv)
                 }
                 pico_ipv6_dev_routing_enable(dev);
             }
-
 #endif
             if (loss_in && (strlen(loss_in) > 0)) {
                 i_pc = (uint32_t)atoi(loss_in);
@@ -568,7 +567,7 @@ int main(int argc, char **argv)
 #ifndef PICO_SUPPORT_MDNS
                 return 0;
 #else
-                app_mdns(args);
+                app_mdns(args, pico_ipv4_link_by_dev(dev));
 #endif
 #ifdef PICO_SUPPORT_SNTP_CLIENT
             }else IF_APPNAME("sntp") {

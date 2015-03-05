@@ -13,40 +13,66 @@
 #include "pico_ipv4.h"
 #include "pico_ipv6.h"
 #include "pico_mdns.h"
-#include "pico_dns_common.h"
 #include "pico_tree.h"
 
 #ifdef PICO_SUPPORT_MDNS
 
+/* Debugging */
 //#define mdns_dbg(...) do {} while(0)
 #define mdns_dbg dbg
 
 #define PICO_MDNS_QUERY_TIMEOUT (10000) /* Ten seconds */
 #define PICO_MDNS_RR_TTL_TICK (1000)    /* One second */
 
-#define PICO_MDNS_CACHE_FLUSH_BIT 0x8000u
-#define PICO_MDNS_NO_CACHE_FLUSH_BIT 0x0000u
-#define PICO_MDNS_UNICAST_RESPONSE_BIT 0x8000u
-#define PICO_MDNS_NO_UNICAST_RESPONSE_BIT 0x0000u
+/* mDNS MTU size */
+#define PICO_MDNS_MTU 1400u
 
-/* Query flags */
-#define PICO_MDNS_FLAG_PROBE 0x01u
-#define PICO_MDNS_FLAG_NO_PROBE 0x00u
-#define PICO_MDNS_FLAG_UNICAST_RES 0x02u
-#define PICO_MDNS_FLAG_MULTICAST_RES 0x00u
-
-/* Response flags */
-#define PICO_MDNS_FLAG_CACHE_FLUSH 0x04u
-#define PICO_MDNS_FLAG_NO_CACHE_FLUSH 0x00u
-
+/* Constant strings */
 #define PICO_ARPA_IPV4_SUFFIX ".in-addr.arpa"
 #define PICO_ARPA_IPV6_SUFFIX ".IP6.ARPA"
+#define PICO_OK_STRING ((char *)"OK")
+#define PICO_NOK_STRING ((char *)"NOK")
+#define PICO_SOK_STRING ((char *)"SOK")
 
-#define IS_PROBE_FLAG_SET(x) (((x) & PICO_MDNS_FLAG_UNICAST_RES) ?  PICO_MDNS_FLAG_PROBE : PICO_MDNS_FLAG_NO_PROBE)
-#define IS_UNICAST_FLAG_SET(x) (((x) & PICO_MDNS_FLAG_PROBE) ? PICO_MDNS_UNICAST_RESPONSE_BIT : PICO_MDNS_NO_UNICAST_RESPONSE_BIT)
-#define IS_CACHE_FLUSH_FLAG_SET(x) (((x) & PICO_MDNS_FLAG_CACHE_FLUSH) ? PICO_MDNS_CACHE_FLUSH_BIT : PICO_MDNS_NO_CACHE_FLUSH_BIT)
+/* Question flags */
+#define PICO_MDNS_QUESTION_FLAG_PROBE 0x01u
+#define PICO_MDNS_QUESTION_FLAG_NO_PROBE 0x00u
+#define PICO_MDNS_QUESTION_FLAG_UNICAST_RES 0x02u
+#define PICO_MDNS_QUESTION_FLAG_MULTICAST_RES 0x00u
+
+#define IS_QUESTION_PROBE_FLAG_SET(x) (((x) & PICO_MDNS_QUESTION_FLAG_UNICAST_RES) ? 1 : 0 )
+#define IS_QUESTION_UNICAST_FLAG_SET(x) (((x) & PICO_MDNS_QUESTION_FLAG_PROBE) ? 1 : 0 )
+#define IS_QUESTION_MULTICAST_FLAG_SET(x) (((x) & PICO_MDNS_QUESTION_FLAG_PROBE) ? 0 : 1 )
+
+
+/* Resource Record flags */
+#define PICO_MDNS_RES_RECORD_PROBED 0x40u
+#define PICO_MDNS_RES_RECORD_CLAIMED 0x80u
+
+#define IS_RES_RECORD_FLAG_CLAIM_SHARED_SET(x) (((x) & PICO_MDNS_RES_RECORD_SHARED) ? 1 : 0)
+#define IS_RES_RECORD_FLAG_CLAIM_UNIQUE_SET(x) (((x) & PICO_MDNS_RES_RECORD_SHARED) ? 0 : 1)
+#define IS_RES_RECORD_FLAG_PROBED_SET(x) (((x) & PICO_MDNS_RES_RECORD_PROBED) ? 1 : 0)
+#define IS_RES_RECORD_FLAG_CLAIMED_SET(x) (((x) & PICO_MDNS_RES_RECORD_CLAIMED) ? 1 : 0)
+
+/* Set and Clear MSB of BE short */
+#define PICO_MDNS_SET_MSB_BE(x) (x = x | (uint16_t)(0x0080u))
+#define PICO_MDNS_CLR_MSB_BE(x) (x = x & (uint16_t)(0xff7fu))
+
+#define PICO_MDNS_SET_FLAG(x, b) (x = ((x) | (uint8_t)(b)))
+#define PICO_MDNS_CLR_FLAG(x, b) (x = ((x) & (~((uint8_t)(b)))
 
 static struct pico_ip4 inaddr_any = { 0 };
+
+/* Global socket and port for all mdns communication */
+static struct pico_socket *mdns_sock_ipv4 = NULL;
+
+/* RFC:
+ *  fully compliant mDNS Querier MUST send its Multicast DNS queries from
+ *  UDP source port 5353, and MUST listen for Multicast DNS replies sent
+ *  to UDP destination port 5353 at the mDNS link-local multicast address
+ *  (224.0.0.251 and/or its IPv6 equivalent FF02::FB)
+ */
+static uint16_t mdns_port = 5353u;
 
 /* struct containing status of a query */
 struct pico_mdns_cookie
@@ -71,13 +97,6 @@ struct pico_mdns_cache_rr
     char *rdata;                            // Resource Record Data
     struct pico_timer *timer;               // For Timer events
 };
-
-/* Global socket and port for all mdns communication */
-static struct pico_socket *mdns_sock = NULL;
-static uint16_t mdns_port = 5353u;
-
-/* only one hostname can be claimed at the time */
-static char *mdns_global_host;
 
 /* **************************************************************************
  * Compare-function for two cache entries to give to the tree
@@ -131,57 +150,92 @@ static int mdns_cmp(void *ka, void *kb)
     return 0;
 }
 
+/* **************************************************************************
+ * Compare-function for two mDNS resource records to give to a tree
+ * **************************************************************************/
+static int mdns_res_record_cmp( void *rra, void *rrb )
+{
+    struct pico_mdns_res_record *a = (struct pico_mdns_res_record *)rra;
+    struct pico_mdns_res_record *b = (struct pico_mdns_res_record *)rrb;
+    uint32_t ha = 0, hb = 0;
+    
+    /* Lexicraphically qtype first */
+    if (a->record->rsuffix->rtype < b->record->rsuffix->rtype)
+        return -1;
+    if (a->record->rsuffix->rtype > b->record->rsuffix->rtype)
+        return 1;
+    
+    /* Then hash strings to compare */
+    ha = pico_hash(a->record->rname, (uint32_t)strlen(a->record->rname));
+    hb = pico_hash(b->record->rname, (uint32_t)strlen(b->record->rname));
+    
+    /* Compare hashes */
+    if (ha < hb)
+        return -1;
+    if (hb < ha)
+        return 1;
+    
+    return 0;
+}
+
 /* Cache records for the mDNS hosts in the network */
 PICO_TREE_DECLARE(CacheTable, mdns_cache_cmp);
 
 /* Tree containing query-cookies */
 PICO_TREE_DECLARE(QTable, mdns_cmp);
 
+/* Tree contain records I want to claim */
+PICO_TREE_DECLARE(MyRecordsTable, mdns_res_record_cmp);
+
 // MARK: MDNS PACKET UTILITIES
 
 /* Sends an mdns packet on the global socket*/
 static int pico_mdns_send_packet(pico_dns_packet *packet, uint16_t len)
 {
-    struct pico_ip4 dst;
-    pico_string_to_ipv4(PICO_MDNS_DEST_ADDR4, &dst.addr);
-    return pico_socket_sendto(mdns_sock, packet, (int)len, &dst, short_be(mdns_port));
+    struct pico_ip4 dst4;
+    
+    /* Send packet to IPv4 socket */
+    pico_string_to_ipv4(PICO_MDNS_DEST_ADDR4, &dst4.addr);
+    return pico_socket_sendto(mdns_sock_ipv4, packet, (int)len, &dst4, short_be(mdns_port));
 }
 
 #ifdef PICO_SUPPORT_IPV6
-//static struct pico_ip6 *pico_get_ip6_from_ip4(struct pico_ip4 *ipv4_addr)
-//{
-//    struct pico_device *dev = NULL;
-//    struct pico_ipv6_link *link = NULL;
-//    if((dev = pico_ipv4_link_find(ipv4_addr)) == NULL) {
-//        mdns_dbg("Could not find device!\n");
-//        return NULL;
-//    }
-//    
-//    if((link = pico_ipv6_link_by_dev(dev)) == NULL) {
-//        mdns_dbg("Could not find link!\n");
-//        return NULL;
-//    }
-//    
-//    return &link->address;
-//}
+static struct pico_ip6 *pico_get_ip6_from_ip4(struct pico_ip4 *ipv4_addr)
+{
+    struct pico_device *dev = NULL;
+    struct pico_ipv6_link *link = NULL;
+    if((dev = pico_ipv4_link_find(ipv4_addr)) == NULL) {
+        mdns_dbg("Could not find device!\n");
+        return NULL;
+    }
+    
+    if((link = pico_ipv6_link_by_dev(dev)) == NULL) {
+        mdns_dbg("Could not find link!\n");
+        return NULL;
+    }
+    
+    return &link->address;
+}
 #endif
 
 // MARK: QUESTION UTILITIES
 
 static struct pico_dns_question *pico_mdns_question_create( const char *url, uint16_t *len, uint8_t proto, uint16_t qtype, uint8_t flags )
 {
-    /* Some variables */
-    uint16_t _qtype = 0;
-    uint16_t qclass = 0;
-    uint16_t qclass_MSB = 0;
+    uint16_t _qtype = 0;                            // qtype
+    uint16_t qclass = short_be(PICO_DNS_CLASS_IN);  // qclass
     
     /* Set the MSB of the qclass field according to the mDNS format */
-    qclass = (uint16_t) PICO_DNS_CLASS_IN;
-    qclass_MSB = (uint16_t) IS_UNICAST_FLAG_SET(flags);
-    qclass |= qclass_MSB;
+    if (IS_QUESTION_UNICAST_FLAG_SET(flags))
+        PICO_MDNS_SET_MSB_BE(qclass);
+    else
+        PICO_MDNS_CLR_MSB_BE(qclass);
+    
+    /* Make the class LE again */
+    qclass = short_be(qclass);
     
     /* Fill in the question suffix */
-    if (IS_PROBE_FLAG_SET(flags)) {
+    if (IS_QUESTION_PROBE_FLAG_SET(flags)) {
         /* RFC:
          *  All probe queries SHOULD be done using the desired resource
          *  record name and class (usually class 1, "Internet"), and
@@ -189,8 +243,6 @@ static struct pico_dns_question *pico_mdns_question_create( const char *url, uin
          *  types of records with that name.
          */
         _qtype = PICO_DNS_TYPE_ANY;
-    } else if (qtype == PICO_DNS_TYPE_PTR) {
-        _qtype = PICO_DNS_TYPE_PTR;
     } else {
         _qtype = qtype;
     }
@@ -232,18 +284,74 @@ static pico_dns_packet *pico_mdns_query_create( struct pico_dns_question *questi
  *  Create a resource record for the mDNS resource record format, that is
  *  with the MSB of the rclass field being set accordingly.
  * **************************************************************************/
-static struct pico_dns_res_record *pico_mdns_rr_create( const char *url, void *_rdata, uint16_t *len, uint16_t rtype, uint16_t rttl, uint8_t flags )
+static struct pico_dns_res_record *pico_mdns_rr_create( const char *url,
+                                                        void *_rdata,
+                                                        uint16_t *len,
+                                                        uint16_t rtype,
+                                                        uint16_t rttl,
+                                                        uint8_t flags )
 {
-    uint16_t rclass_MSB;
-    uint16_t rclass;
+    uint16_t rclass = short_be(PICO_DNS_CLASS_IN);  // rclass
     
     /* Set the MSB of the rclass field according to the mDNS format */
-    rclass = (uint16_t) PICO_DNS_CLASS_IN;
-    rclass_MSB = (uint16_t)(IS_CACHE_FLUSH_FLAG_SET(flags));
-    rclass |= rclass_MSB;
+    if (IS_RES_RECORD_FLAG_CLAIM_UNIQUE_SET(flags))
+        PICO_MDNS_SET_MSB_BE(rclass);
+    else
+        PICO_MDNS_CLR_MSB_BE(rclass);
+    
+    /* Make the class LE again */
+    rclass = short_be(rclass);
     
     /* Create a resource record as you would with plain DNS */
     return pico_dns_rr_create(url, _rdata, len, rtype, rclass, rttl);
+}
+
+/* **************************************************************************
+ *  Creates a new mDNS resource record for which you want to have the
+ *  authority, and adds it to the end of the [records] list. If a NULL-
+ *  pointer is provided a new list will be created. Fills up len with the
+ *  size of the DNS record
+ * **************************************************************************/
+int pico_mdns_res_record_create( pico_mdns_res_record_list **records,
+                                const char *url,
+                                void *_rdata,
+                                uint16_t rtype,
+                                uint16_t rttl,
+                                uint8_t flags )
+{
+    struct pico_mdns_res_record **iterator = NULL;  // Iterator for the list
+    uint16_t len = 0;
+    
+    /* Put iterator at beginning of list */
+    iterator = records;
+    
+    /* Move to the end of the list */
+    while (*iterator) {
+        (*iterator) = (*iterator)->next;
+    }
+    
+    /* Provide space for the new mDNS resource record */
+    *iterator = PICO_ZALLOC(sizeof(struct pico_mdns_res_record));
+    if (!(*iterator)) {
+        mdns_dbg("Could not provide space for the mDNS resource record");
+        pico_err = PICO_ERR_ENOMEM;
+        return -1;
+    }
+
+    /* Create a new record at the end of the lisst */
+    (*iterator)->record = pico_mdns_rr_create(url, _rdata, &len, rtype, rttl, flags);
+    
+    if (!(*iterator)->record) {
+        mdns_dbg("Creating mDNS resource record failed!\n");
+        return -1;
+    }
+    
+    /* Initialise fields */
+    (*iterator)->timer = NULL;
+    (*iterator)->next = NULL;
+    (*iterator)->flags = flags;
+    
+    return 0;
 }
 
 // MARK: ANSWER UTILITIES
@@ -534,7 +642,7 @@ static struct pico_mdns_cookie *pico_mdns_add_cookie( pico_dns_packet *dns_packe
      *  its TTL may indicate that it is not yet due to expire, that record
      *  SHOULD be promptly flushed from cache.
      */
-    if(IS_PROBE_FLAG_SET(flags))
+    if(IS_QUESTION_PROBE_FLAG_SET(flags))
         ck->timer = pico_timer_add(PICO_MDNS_QUERY_TIMEOUT, pico_mdns_timeout, ck);
     
     return ck;
@@ -548,7 +656,7 @@ static int pico_mdns_handle_answer(char *url, struct pico_dns_res_record_suffix 
     struct pico_mdns_cookie *ck = NULL;     // Temporary storage of query cookie
     
     /* Remove cache flush bit if set MARK: But why? */
-    suf->rclass &= short_be((uint16_t) ~PICO_MDNS_CACHE_FLUSH_BIT);
+    suf->rclass &= short_be((uint16_t) ~0x8000);
     
     /* Print some context */
     mdns_dbg("Answer for record %s was received:\n", url);
@@ -570,9 +678,9 @@ static int pico_mdns_handle_answer(char *url, struct pico_dns_res_record_suffix 
     mdns_dbg("Found a corresponding cookie!\n");
     
     /* if we are probing, set probe to zero so the probe timer stops the next time it goes off */
-    if (IS_PROBE_FLAG_SET(ck->flags)) {
+    if (IS_QUESTION_PROBE_FLAG_SET(ck->flags)) {
         mdns_dbg("Probe set to zero\n");
-        ck->flags &= PICO_MDNS_FLAG_NO_PROBE;
+        ck->flags &= PICO_MDNS_QUESTION_FLAG_NO_PROBE;
         return 0;
     }
     
@@ -695,24 +803,25 @@ static int pico_mdns_reply_query(uint16_t qtype, struct pico_ip4 peer, char *nam
 /* Compare if the received query name is the same as the name currently assigned to this host */
 static int pico_check_query_name(char *url)
 {
-    char addr[29] = { 0 };
+    IGNORE_PARAMETER(url);
+//    char addr[29] = { 0 };
     
-    /* Check if query is a normal query for this hostname*/
-    if(strcmp(url, mdns_global_host) == 0)
-        return 1;
-    
-    /* Convert 192.168.1.1 decimal to '192.168.1.1'-string */
-    pico_ipv4_to_string(addr, mdns_sock->local_addr.ip4.addr);
-    
-    /* Mirror 192.168.1.1 to 1.1.168.192 */
-    pico_dns_mirror_addr(addr);
-    
-    /* Add a arpa-suffix */
-    memcpy(addr + strlen(addr), ".in-addr.arpa", 13);
-    
-    /* Check if request name is reverse query for this hostname */
-    if(strcmp(url, addr) == 0)
-        return 1;
+//    /* Check if query is a normal query for this hostname*/
+//    if(strcmp(url, mdns_global_host) == 0)
+//        return 1;
+//    
+//    /* Convert 192.168.1.1 decimal to '192.168.1.1'-string */
+//    pico_ipv4_to_string(addr, mdns_sock_ipv4->local_addr.ip4.addr);
+//    
+//    /* Mirror 192.168.1.1 to 1.1.168.192 */
+//    pico_dns_mirror_addr(addr);
+//    
+//    /* Add a arpa-suffix */
+//    memcpy(addr + strlen(addr), ".in-addr.arpa", 13);
+//    
+//    /* Check if request name is reverse query for this hostname */
+//    if(strcmp(url, addr) == 0)
+//        return 1;
     
     return 0;
 }
@@ -720,35 +829,38 @@ static int pico_check_query_name(char *url)
 /* Handle a single incoming query */
 static int pico_mdns_handle_query(char *name, struct pico_dns_question_suffix *suf, struct pico_ip4 peer)
 {
-    struct pico_mdns_cookie *ck = NULL; // Temporary storage of query cookie
-    
-    /* Remove cache flush bit if set MARK: but why? */
-    suf->qclass &= short_be((uint16_t) ~PICO_MDNS_CACHE_FLUSH_BIT);
-    
-    mdns_dbg("Query type: %u, class: %u\n", short_be(suf->qtype), short_be(suf->qclass));
-    
-    /* Check if host has assigned itself a name already */
-    if(mdns_global_host) {
-        
-        /* Check if queried name is the same as currently assigned name */
-        // TODO: Check for all the records with that name and for wich this host has authority (Not only A and PTR)
-        if(pico_check_query_name(name)) {
-            /* Query is either a normal query or a reverse resolution query for this host */
-            pico_mdns_reply_query(short_be(suf->qtype), peer, name);
-        } else {
-            /* Query is not meant for this host */
-            /* TODO: Passive Observation Of Failures (POOF) */
-            mdns_dbg("Received request for unknown hostname %s (my hostname: %s)\n", name, mdns_global_host);
-        }
-    } else {
-        /* Find a corresponding query currently being queried */
-        ck = pico_mdns_find_cookie(name, short_be(suf->qtype));
-        if(ck && ck->count < 3) {
-            /* TODO: Simultaneous Probe Tiebreaking */
-        } else {
-            mdns_dbg("Received query before init\n");
-        }
-    }
+    IGNORE_PARAMETER(name);
+    IGNORE_PARAMETER(suf);
+    IGNORE_PARAMETER(peer);
+//    struct pico_mdns_cookie *ck = NULL; // Temporary storage of query cookie
+//    
+//    /* Remove cache flush bit if set MARK: but why? */
+//    suf->qclass &= short_be((uint16_t) ~0x8000);
+//    
+//    mdns_dbg("Query type: %u, class: %u\n", short_be(suf->qtype), short_be(suf->qclass));
+//    
+//    /* Check if host has assigned itself a name already */
+//    if(mdns_global_host) {
+//        
+//        /* Check if queried name is the same as currently assigned name */
+//        // TODO: Check for all the records with that name and for wich this host has authority (Not only A and PTR)
+//        if(pico_check_query_name(name)) {
+//            /* Query is either a normal query or a reverse resolution query for this host */
+//            pico_mdns_reply_query(short_be(suf->qtype), peer, name);
+//        } else {
+//            /* Query is not meant for this host */
+//            /* TODO: Passive Observation Of Failures (POOF) */
+//            mdns_dbg("Received request for unknown hostname %s (my hostname: %s)\n", name, mdns_global_host);
+//        }
+//    } else {
+//        /* Find a corresponding query currently being queried */
+//        ck = pico_mdns_find_cookie(name, short_be(suf->qtype));
+//        if(ck && ck->count < 3) {
+//            /* TODO: Simultaneous Probe Tiebreaking */
+//        } else {
+//            mdns_dbg("Received query before init\n");
+//        }
+//    }
     
     return 0;
 }
@@ -836,37 +948,30 @@ static int pico_mdns_recv(void *buf, int buflen, struct pico_ip4 peer)
     return 0;
 }
 
-/* Callback for UDP socket events */
-// MARK: SHOULD be called 'pico_mdns_event'
-static void pico_mdns_wakeup(uint16_t ev, struct pico_socket *s)
+/* Callback for UDP IPv4 socket events */
+static void pico_mdns_event4( uint16_t ev, struct pico_socket *s )
 {
     // MARK: Why MTU 1400 and not 1500?
-    char recvbuf[1400];
-    
-    int pico_read = 0;
-    struct pico_ip4 peer = { 0 };
-    uint16_t port = 0;
-    char host[30];
+    char recvbuf[PICO_MDNS_MTU] = { 0 }; // MTU of 1400
+    struct pico_ip4 peer = { 0 };        // Peer who sent the data
+    int pico_read = 0;                   // Count of readed bytes
+    uint16_t port = 0;                   // Source port
+    char host[30];                       // IP-address string
     
     /* process read event, data available */
     if (ev == PICO_SOCK_EV_RD) {
         mdns_dbg("READ EVENT!\n");
         /* Receive while data is available in socket buffer */
-        while((pico_read = pico_socket_recvfrom(s, recvbuf, 1400, &peer, &port)) > 0) {
-            /* If pico_socket_setoption is implemented, this check is not needed */
+        while((pico_read = pico_socket_recvfrom(s, recvbuf, PICO_MDNS_MTU, &peer, &port)) > 0) {
             pico_ipv4_to_string(host, peer.addr);
             mdns_dbg("Received data from %s:%u\n", host, short_be(port));
             /* Handle the MDNS data received */
             pico_mdns_recv(recvbuf, pico_read, peer);
         }
-    }
-    /* Socket is closed */
-    else if(ev == PICO_SOCK_EV_CLOSE) {
+    } else if (ev == PICO_SOCK_EV_CLOSE) {
         mdns_dbg("Socket is closed. Bailing out.\n");
         return;
-    }
-    /* Process error event, socket error occured */
-    else if(ev == PICO_SOCK_EV_ERR) {
+    } else {
         mdns_dbg("Socket Error received. Bailing out.\n");
         return;
     }
@@ -909,12 +1014,12 @@ static int pico_mdns_getaddr_generic(const char *url, void (*callback)(char *ip,
         return -1;
     }
     
-    if(!mdns_sock) {
+    if(!mdns_sock_ipv4) {
         mdns_dbg("mDNS socket not yet populated. Did you call pico_mdns_init()?\n");
         return -1;
     }
     
-    //header = pico_mdns_create_query(url, &len, proto, PICO_DNS_TYPE_PTR, PICO_MDNS_FLAG_NO_PROBE);
+    //header = pico_mdns_create_query(url, &len, proto, PICO_DNS_TYPE_PTR, PICO_MDNS_QUESTION_FLAG_NO_PROBE);
     if(!header || !len) {
         mdns_dbg("ERROR: mdns_create_query returned NULL\n");
         return -1;
@@ -942,12 +1047,12 @@ static int pico_mdns_getname_generic(const char *ip, void (*callback)(char *url,
         return -1;
     }
     
-    if(!mdns_sock) {
+    if(!mdns_sock_ipv4) {
         mdns_dbg("Mdns socket not yet populated. Did you call pico_mdns_init()?\n");
         return -1;
     }
     
-    //header = pico_mdns_create_query(ip, &len, proto, PICO_DNS_TYPE_PTR, PICO_MDNS_FLAG_NO_PROBE);
+    //header = pico_mdns_create_query(ip, &len, proto, PICO_DNS_TYPE_PTR, PICO_MDNS_QUESTION_FLAG_NO_PROBE);
     if(!header || !len) {
         mdns_dbg("ERROR: mdns_create_query returned NULL\n");
         return -1;
@@ -1014,35 +1119,31 @@ int pico_mdns_getname6(const char *ip, void (*callback)(char *url, void *arg), v
 /* Utility function to send an announcement on the wire */
 static int pico_mdns_send_packet_announcement(void)
 {
-    /* mDNS headers are just the same as plain legacy DNS headers */
-    struct pico_dns_header *packet = NULL;
-    struct pico_dns_res_record *announcement = NULL;
-    
-    uint16_t len = 0; // Temporary storage of packet length
-    
-    /* If global hostname isn't set */
-    if(!mdns_global_host)
-        return -1;
-    
-    /* Create an resource record to put in the announcement */
-    announcement = pico_mdns_rr_create(mdns_global_host, &mdns_sock->local_addr, &len, PICO_DNS_TYPE_A, 120, (PICO_MDNS_FLAG_CACHE_FLUSH));
-    if (!announcement) {
-        mdns_dbg("ERROR: mdns_create_query returned NULL\n");
-        return -1;
-    }
-
-    /* Create an mDNS answer */
-    packet = pico_mdns_answer_create(announcement, NULL, NULL, &len);
-    if(!packet) {
-        mdns_dbg("Could not create answer!\n");
-        return -1;
-    }
-    
-    /* Send the mDNS answer unsollicited via multicast */
-    if(pico_mdns_send_packet(packet, len) != (int)len) {
-        mdns_dbg("send error occured!\n");
-        return -1;
-    }
+//    /* mDNS headers are just the same as plain legacy DNS headers */
+//    struct pico_dns_header *packet = NULL;
+//    struct pico_dns_res_record *announcement = NULL;
+//    
+//    uint16_t len = 0; // Temporary storage of packet length
+//    
+//    /* Create an resource record to put in the announcement */
+//    announcement = pico_mdns_rr_create(mdns_global_host, &mdns_sock_ipv4->local_addr, &len, PICO_DNS_TYPE_A, 120, (PICO_MDNS_RES_RECORD_UNIQUE));
+//    if (!announcement) {
+//        mdns_dbg("ERROR: mdns_create_query returned NULL\n");
+//        return -1;
+//    }
+//
+//    /* Create an mDNS answer */
+//    packet = pico_mdns_answer_create(announcement, NULL, NULL, &len);
+//    if(!packet) {
+//        mdns_dbg("Could not create answer!\n");
+//        return -1;
+//    }
+//    
+//    /* Send the mDNS answer unsollicited via multicast */
+//    if(pico_mdns_send_packet(packet, len) != (int)len) {
+//        mdns_dbg("send error occured!\n");
+//        return -1;
+//    }
     
     return 0;
 }
@@ -1058,17 +1159,19 @@ static void pico_mdns_announce_timer(pico_time now, void *arg)
 }
 
 /* announce the local hostname to the network */
-static int pico_mdns_announce(void)
+static int pico_mdns_announce( pico_mdns_res_record_list *records )
 {
-    /* Send a first unsollicited announcement */
-    if (pico_mdns_send_packet_announcement() < 0)
-        return -1;
+    IGNORE_PARAMETER(records);
     
-    /* RFC:
-     *  The Multicast DNS responder MUST send at least two unsolicited
-     *  responses, one second apart.
-     */
-    pico_timer_add(1000, pico_mdns_announce_timer, NULL);
+//    /* Send a first unsollicited announcement */
+//    if (pico_mdns_send_packet_announcement() < 0)
+//        return -1;
+//    
+//    /* RFC:
+//     *  The Multicast DNS responder MUST send at least two unsolicited
+//     *  responses, one second apart.
+//     */
+//    pico_timer_add(1000, pico_mdns_announce_timer, NULL);
     
     return 0;
 }
@@ -1095,7 +1198,7 @@ static void pico_mdns_probe_timer(pico_time now, void *arg)
     }
 
     /* If probe flag is reset */
-    if(!IS_PROBE_FLAG_SET(ck->flags)) {
+    if(!IS_QUESTION_PROBE_FLAG_SET(ck->flags)) {
         mdns_dbg("Hostname already in use!\n");
         ck->callback(NULL, ck->arg);
         return;
@@ -1103,16 +1206,15 @@ static void pico_mdns_probe_timer(pico_time now, void *arg)
     
     /* After 3 successful probing attempts */
     if(ck->count == 0) {
-        mdns_global_host = PICO_ZALLOC(strlen(ck->qname) - 1);
-        if (!mdns_global_host) {
-            pico_err = PICO_ERR_ENOMEM;
-            return;
-        }
+//        mdns_global_host = PICO_ZALLOC(strlen(ck->qname) - 1);
+//        if (!mdns_global_host) {
+//            pico_err = PICO_ERR_ENOMEM;
+//            return;
+//        }
         strcpy(temp, ck->qname);
         pico_dns_notation_to_name(temp);
-        strcpy(mdns_global_host, temp + 1);
-        mdns_dbg("Count is zero! Claimed %s\n", mdns_global_host);
-        pico_mdns_announce();
+        mdns_dbg("Count is zero! Claimed %s\n", temp);
+        //pico_mdns_announce();
     
         ck->callback(ok, ck->arg);
         pico_mdns_del_cookie(ck->qname, ck->qtype);
@@ -1137,33 +1239,134 @@ static void pico_mdns_probe_timer(pico_time now, void *arg)
     pico_timer_add(250, pico_mdns_probe_timer, ck);
 }
 
-/* Checks whether the given name is in use */
-static int pico_mdns_probe(char *hostname, void (*cb_initialised)(char *str, void *arg), void *arg)
+static struct pico_dns_question *pico_mdns_probe_list_find_probe( struct pico_dns_question *probe_list,
+                                                                  char *qname )
 {
-    pico_dns_packet *packet = NULL;  /* mDNS headers are just the same as plain legacy DNS headers */
-    struct pico_mdns_cookie *cookie = NULL; /* Query cookie to pass to the time callback */
-    uint16_t qlen = 0;                        /* Temporary storage of question length */
-    uint16_t len = 0;                         /* Temporary storage of packet length */
+    struct pico_dns_question *iterator = NULL;
+    struct pico_dns_question *found = NULL;
     
-    /* RFC:
-     *  Probe querys SHOULD be sent with as "QU" questions with the unicast-response bit set.
-     *  To a defending host to respond immediately via unicast, instead of potentially
-     *  having to wait before replying via multicast.
-     */
-    struct pico_dns_question *probe_question = pico_mdns_question_create(hostname, &qlen, PICO_PROTO_IPV4, PICO_DNS_TYPE_ANY, (PICO_MDNS_FLAG_PROBE | PICO_MDNS_FLAG_UNICAST_RES));
+    while (iterator) {
+        if (strcmp(iterator->qname, qname) == 0) found = iterator;
+    }
     
-    /* Fill a DNS packet with the probe question */
-    packet = pico_mdns_query_create(probe_question, NULL, NULL, NULL, &len);
-    if (!packet) {
-        mdns_dbg("ERROR: mdns_create_query returned NULL\n");
+    return found;
+}
+
+/*  */
+static struct pico_dns_question *pico_mdns_probe_list_create( pico_mdns_res_record_list *records,
+                                                             struct pico_dns_res_record **authority_list,
+                                                             struct pico_dns_res_record **additional_list)
+{
+    struct pico_mdns_res_record *iterator = NULL;
+    struct pico_dns_question *probe_list = NULL;
+    struct pico_dns_question **qiterator = NULL;
+    struct pico_dns_res_record **authiterator = NULL;
+    uint16_t qlen = 0;
+    uint16_t rlen = 0;
+    
+    IGNORE_PARAMETER(additional_list);
+    
+    iterator = records;
+    
+    while (iterator) {
+        if (IS_RES_RECORD_FLAG_CLAIM_UNIQUE_SET(iterator->flags)) {
+            /* Put question iterator at beginning of question list */
+            qiterator = &probe_list;
+            
+            /* Put authority iterator at beginning of authority list */
+            authiterator = authority_list;
+            
+            /* Iterate until the end of question list */
+            while (*qiterator && *authiterator) {
+                *qiterator = (*qiterator)->next;
+                *authiterator = (*authiterator)->next;
+            }
+            
+            /* If there is not already a probe query for this name in the list */
+            if (!pico_mdns_probe_list_find_probe(probe_list, iterator->record->rname))
+            {
+                /* Create a new question at the end of the list */
+                /* RFC:
+                 *  Probe querys SHOULD be sent with as "QU" questions with the unicast-response bit set.
+                 *  To a defending host to respond immediately via unicast, instead of potentially
+                 *  having to wait before replying via multicast.
+                 */
+                *qiterator = pico_mdns_question_create(pico_dns_qname_to_url(iterator->record->rname),
+                                                       &qlen,
+                                                       PICO_PROTO_IPV4,
+                                                       PICO_DNS_TYPE_ANY,
+                                                       (PICO_MDNS_QUESTION_FLAG_PROBE | PICO_MDNS_QUESTION_FLAG_UNICAST_RES));
+            }
+        
+            /* Add an authority record to the end of the list */
+            *authiterator = iterator->record;
+            
+            /* Don't want a cache flush in the authority section */
+            PICO_MDNS_CLR_MSB_BE((*authiterator)->rsuffix->rclass);
+        } else {
+            /* You don't need to probe Shared Records */
+            PICO_MDNS_SET_FLAG(iterator->flags, PICO_MDNS_RES_RECORD_PROBED);
+        }
+        
+        /* Move to next mDNS resource record */
+        iterator = iterator->next;
+    }
+    
+    return probe_list;
+}
+
+/* **************************************************************************
+ *  Claim several mDNS resource records at once.
+ * **************************************************************************/
+int pico_mdns_claim( pico_mdns_res_record_list *records,
+                    void (*cb_claimed)(char *str, void *arg),
+                    void *arg )
+{
+    struct pico_dns_question *probe_list = NULL;        /* Questions to put in probe query */
+    struct pico_dns_res_record *authority_list = NULL;  /* Authority records to put in probe query */
+    struct pico_mdns_cookie *cookie = NULL;             /* */
+    pico_dns_packet *packet = NULL;
+    uint16_t len = 0;
+    char *OK = PICO_OK_STRING, *NOK = PICO_NOK_STRING, *SOK = PICO_SOK_STRING;
+    
+    /* Check if arguments are passed correctly */
+    if (!records || !cb_claimed) {
+        mdns_dbg("NULL pointers passed to 'pico_mdns_claim()'!\n");
+        pico_err = PICO_ERR_EINVAL;
         return -1;
     }
     
+    /* Check if module is initialised */
+    if (!mdns_sock_ipv4) {
+        mdns_dbg("mDNS socket not initialised, did you call 'pico_mdns_init()'?\n");
+        pico_err = PICO_ERR_EINVAL;
+        return -1;
+    }
+    
+    /* Update the rr's and create a probe list */
+    probe_list = pico_mdns_probe_list_create(records, &authority_list, NULL);
+    if (!probe_list || !authority_list) {
+        mdns_dbg("ERROR: mdns_probe_list_create returned NULL!\n");
+    }
+    
+    
+    
+    /* Create a multiquestion query with authority records */
+    packet = pico_mdns_query_create(probe_list, NULL, authority_list, NULL, &len);
+    if (!packet) {
+        mdns_dbg("ERROR: mdns_query_create returned NULL!\n");
+    }
+    
     /* Add a cookie to the global tree so we don't have to create the query everytime */
-    cookie = pico_mdns_add_cookie(packet, len, (PICO_MDNS_FLAG_PROBE | PICO_MDNS_FLAG_UNICAST_RES), 3, cb_initialised, arg);
+    cookie = pico_mdns_add_cookie(packet,
+                                  len,
+                                  (PICO_MDNS_QUESTION_FLAG_PROBE | PICO_MDNS_QUESTION_FLAG_UNICAST_RES),
+                                  3,
+                                  cb_claimed,
+                                  arg);
     if (!cookie) {
         mdns_dbg("ERROR: mdns_add_cookie returned NULL\n");
-        return 1;
+        return -1;
     }
     
     /* RFC:
@@ -1175,23 +1378,27 @@ static int pico_mdns_probe(char *hostname, void (*cb_initialised)(char *str, voi
     return 0;
 }
 
-/* Opens the socket, probes for the usename and calls back the user when a host name is set up */
-int pico_mdns_init(char *hostname, void (*cb_initialised)(char *str, void *arg), void *arg)
+/* **************************************************************************
+ *  Initialises the global mDNS socket. Calls cb_initialised when succeeded.
+ *  [flags] is for future use. f.e. Opening a IPv4 multicast socket or an
+ *  IPv6 one or both.
+ * **************************************************************************/
+int pico_mdns_init( uint8_t flags,
+                    void (*cb_initialised)(char *str, void *arg),
+                    void *arg )
 {
-    /* Request struct for multicast socket */
-    struct pico_ip_mreq mreq;
+    struct pico_ip_mreq mreq4;
+    char *OK = PICO_OK_STRING, *NOK = PICO_NOK_STRING, *SOK = PICO_SOK_STRING;
+    uint16_t proto4 = PICO_PROTO_IPV4;
+    uint16_t port = 0;
+    uint16_t loop = 0;   // Loopback = 0
+    uint16_t ttl = 255;  // IP TTL SHOULD = 255
     
-    uint16_t proto = PICO_PROTO_IPV4, port;
+    /* For now */
+    IGNORE_PARAMETER(flags);
     
-    int loop = 0;   // LOOPBACK = 0
-    int ttl = 255;  // IP TTL SHOULD = 255
-    
-    /* Check hostname parameter */
-    if(!hostname) {
-        mdns_dbg("No hostname given!\n");
-        pico_err = PICO_ERR_EINVAL;
-        return -1;
-    }
+    /* Initialise port */
+    port = short_be(mdns_port);
     
     /* Check callbcak parameter */
     if(!cb_initialised) {
@@ -1200,30 +1407,30 @@ int pico_mdns_init(char *hostname, void (*cb_initialised)(char *str, void *arg),
         return -1;
     }
     
-    /* Open global mDNS socket */
-    mdns_sock = pico_socket_open(proto, PICO_PROTO_UDP, &pico_mdns_wakeup);
-    if(!mdns_sock) {
-        mdns_dbg("Open returned empty socket\n");
+    /* Open global IPv4 mDNS socket */
+    mdns_sock_ipv4 = pico_socket_open(proto4, PICO_PROTO_UDP, &pico_mdns_event4);
+    if(!mdns_sock_ipv4) {
+        mdns_dbg("Open returned empty IPv4 socket\n");
         return -1;
     }
     
-    /* Set multicast group-address to 224.0.0.251 IPv4 */
-    if(pico_string_to_ipv4(PICO_MDNS_DEST_ADDR4, &mreq.mcast_group_addr.addr) != 0) {
-        mdns_dbg("String to ipv4 error\n");
+    /* Convert the mDNS IPv4 destination address to struct */
+    if(pico_string_to_ipv4(PICO_MDNS_DEST_ADDR4, &mreq4.mcast_group_addr.addr) != 0) {
+        mdns_dbg("String to IPv4 error\n");
         return -1;
     }
     
     /* Receive data on any network interface */
-    mreq.mcast_link_addr = inaddr_any;
+    mreq4.mcast_link_addr = inaddr_any;
     
     /* Don't want the multicast data to be looped back to the host */
-    if(pico_socket_setoption(mdns_sock, PICO_IP_MULTICAST_LOOP, &loop) < 0) {
+    if(pico_socket_setoption(mdns_sock_ipv4, PICO_IP_MULTICAST_LOOP, &loop) < 0) {
         mdns_dbg("socket_setoption PICO_IP_MULTICAST_LOOP failed\n");
         return -1;
     }
     
     /* Tell the kernel we're interested in this particular multicast group */
-    if(pico_socket_setoption(mdns_sock, PICO_IP_ADD_MEMBERSHIP, &mreq) < 0) {
+    if(pico_socket_setoption(mdns_sock_ipv4, PICO_IP_ADD_MEMBERSHIP, &mreq4) < 0) {
         mdns_dbg("socket_setoption PICO_IP_ADD_MEMBERSHIP failed\n");
         return -1;
     }
@@ -1232,27 +1439,19 @@ int pico_mdns_init(char *hostname, void (*cb_initialised)(char *str, void *arg),
      *  All multicast responses (including answers sent via unicast) SHOULD
      *  be send with IP TTL set to 255 for backward-compatibility reasons
      */
-    if(pico_socket_setoption(mdns_sock, PICO_IP_MULTICAST_TTL, &ttl) < 0) {
+    if(pico_socket_setoption(mdns_sock_ipv4, PICO_IP_MULTICAST_TTL, &ttl) < 0) {
         mdns_dbg("socket_setoption PICO_IP_MULTICAST_TTL failed\n");
         return -1;
     }
     
-    /* RFC:
-     *  fully compliant mDNS Querier MUST send its Multicast DNS queries from
-     *  UDP source port 5353, and MUST listen for Multicast DNS replies sent
-     *  to UDP destination port 5353 at the mDNS link-local multicast address
-     *  (224.0.0.251 and/or its IPv6 equivalent FF02::FB)
-     */
-    port = short_be(mdns_port);
-    if (pico_socket_bind(mdns_sock, &inaddr_any, &port) != 0) {
+    /* Bind to mDNS port */
+    if (pico_socket_bind(mdns_sock_ipv4, &inaddr_any, &port) != 0) {
         mdns_dbg("Bind error!\n");
         return -1;
     }
     
-    if(pico_mdns_probe(hostname, cb_initialised, arg) != 0) {
-        mdns_dbg("Probe error\n");
-        return -1;
-    }
+    /* Call callback */
+    cb_initialised(OK, arg);
     
     return 0;
 }

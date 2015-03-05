@@ -368,7 +368,7 @@ pico_dns_packet *pico_dns_query_create( struct pico_dns_question *question_list,
     }
     
     /* Fill the Resource Record Sections with resource records */
-    if (pico_dns_fill_packet_rr_sections(packet, NULL, answer_list, authority_list, additional_list)) {
+    if (pico_dns_fill_packet_rr_sections(packet, question_list, answer_list, authority_list, additional_list)) {
         dns_dbg("Could not fill Resource Record Sections correctly!\n");
         return NULL;
     }
@@ -401,7 +401,8 @@ static void pico_dns_rr_fill_suffix( struct pico_dns_res_record_suffix *suf,
  * 'len'-argument with the total length of the res_record.
  * **************************************************************************/
 struct pico_dns_res_record *pico_dns_rr_create( const char *url,
-                                                void *_rdata, uint16_t *len,
+                                                void *_rdata,
+                                                uint16_t *len,
                                                 uint16_t rtype,
                                                 uint16_t rclass,
                                                 uint16_t rttl )

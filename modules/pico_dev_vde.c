@@ -76,8 +76,6 @@ void pico_vde_set_packetloss(struct pico_device *dev, uint32_t in_pct, uint32_t 
     vde->lost_out = out_pct;
 }
 
-
-
 struct pico_device *pico_vde_create(char *sock, char *name, uint8_t *mac)
 {
     struct pico_device_vde *vde = PICO_ZALLOC(sizeof(struct pico_device_vde));

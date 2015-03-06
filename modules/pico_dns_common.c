@@ -20,7 +20,7 @@
 #define dns_dbg dbg
 
 // MARK: PROTOTYPES
-static int pico_dns_rr_copy_flat( struct pico_dns_res_record *res_record, uint8_t *destination );
+static int pico_dns_rr_copy_flat( struct pico_dns_res_record *res_record, uint8_t **destination );
 
 // MARK: DNS PACKET FUNCTIONS
 
@@ -92,7 +92,7 @@ static int pico_dns_fill_packet_rr_sections( pico_dns_packet *packet,
     /* Keep iterating over the list until the end */
     while (iterator) {
         /* Copy resource record flat in packet */
-        if (pico_dns_rr_copy_flat(iterator, destination)) {
+        if (pico_dns_rr_copy_flat(iterator, &destination)) {
             dns_dbg("Could not copy resource record with rname '%s' into Answer Section!\n", iterator->rname);
             return -1;
         }
@@ -104,7 +104,7 @@ static int pico_dns_fill_packet_rr_sections( pico_dns_packet *packet,
     iterator = authority_list;
     
     while (iterator) {
-        if (pico_dns_rr_copy_flat(iterator, destination)) {
+        if (pico_dns_rr_copy_flat(iterator, &destination)) {
             dns_dbg("Could not copy resource record with rname '%s' into Authority Section!\n", iterator->rname);
             return -1;
         }
@@ -116,7 +116,7 @@ static int pico_dns_fill_packet_rr_sections( pico_dns_packet *packet,
     iterator = additional_list;
     
     while (iterator) {
-        if (pico_dns_rr_copy_flat(iterator, destination)) {
+        if (pico_dns_rr_copy_flat(iterator, &destination)) {
             dns_dbg("Could not copy resource record with rname '%s' into Authority Section!\n", iterator->rname);
             return -1;
         }
@@ -405,7 +405,7 @@ struct pico_dns_res_record *pico_dns_rr_create( const char *url,
                                                 uint16_t *len,
                                                 uint16_t rtype,
                                                 uint16_t rclass,
-                                                uint16_t rttl )
+                                                uint32_t rttl )
 {
     struct pico_dns_res_record *res_record = NULL;  /* res_record to return */
     uint16_t slen, datalen;                         /* some lenghts */
@@ -512,20 +512,20 @@ uint16_t pico_dns_rr_list_size( struct pico_dns_res_record *list_begin, uint8_t 
  *  location in [destination]. [destination] pointer will point to address
  *  right after this flat resource record on success.
  * **************************************************************************/
-static int pico_dns_rr_copy_flat( struct pico_dns_res_record *res_record, uint8_t *destination )
+static int pico_dns_rr_copy_flat( struct pico_dns_res_record *res_record, uint8_t **destination )
 {
     char *dest_rname = NULL; // Destination location for the rname
     struct pico_dns_res_record_suffix *dest_rsuffix = NULL; // Destination location for the rsuffix
     uint8_t *dest_rdata = NULL; // Destination location for the rdata
     
     /* Check if there are no NULL-pointers given */
-    if (!res_record || !destination) {
+    if (!res_record || !destination || !(*destination)) {
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }
     
     /* Initialise the destiation pointers to the right locations */
-    dest_rname = (char *) destination;
+    dest_rname = (char *) *destination;
     dest_rsuffix = (struct pico_dns_res_record_suffix *) (dest_rname + res_record->rname_length);
     dest_rdata = ((uint8_t *)dest_rsuffix + sizeof(struct pico_dns_res_record_suffix));
     
@@ -542,7 +542,7 @@ static int pico_dns_rr_copy_flat( struct pico_dns_res_record *res_record, uint8_
     memcpy(dest_rdata, res_record->rdata, short_be(dest_rsuffix->rdlength));
     
     /* Point to location right after flat resource record */
-    destination = (uint8_t *)(dest_rdata + short_be(res_record->rsuffix->rdlength));
+    *destination = (uint8_t *)(dest_rdata + short_be(res_record->rsuffix->rdlength));
     
     return 0;
 }
@@ -876,8 +876,6 @@ int pico_dns_notation_to_name(char *fqdn)
 /* mirror ip address numbers
  * f.e. 192.168.0.1 => 1.0.168.192 */
 /* **************************************************************************
- *
- *
  *
  * **************************************************************************/
 int8_t pico_dns_mirror_addr(char *ptr)

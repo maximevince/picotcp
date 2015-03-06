@@ -156,7 +156,7 @@ pico_dns_packet *pico_dns_query_create( struct pico_dns_question *question_list,
  * Creates a standalone DNS resource record for given 'url'. Fills the
  * 'len'-argument with the total length of the res_record.
  * **************************************************************************/
-struct pico_dns_res_record *pico_dns_rr_create( const char *url, void *_rdata, uint16_t *len, uint16_t rtype, uint16_t rclass, uint16_t rttl );
+struct pico_dns_res_record *pico_dns_rr_create( const char *url, void *_rdata, uint16_t *len, uint16_t rtype, uint16_t rclass, uint32_t rttl );
 
 /* **************************************************************************
  *  Deletes & free's the memory for a certain dns resource record

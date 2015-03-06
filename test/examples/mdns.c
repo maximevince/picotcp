@@ -58,6 +58,11 @@ void mdns_getaddr_callback(char *str, void *arg)
         printf("Getname returned with error!\n");
 }
 
+void mdns_claimed_callback(char *str, void *arg)
+{
+    printf("Claimed: %s\n", str);
+}
+
 void mdns_init_callback(char *str, void *arg)
 {
 //    char *peername = (char *)arg;
@@ -76,6 +81,7 @@ void app_mdns(char *arg, struct pico_ipv4_link *link)
     char *hostname, *peername;
     char *nxt = arg;
     pico_mdns_res_record_list *records = NULL;
+    struct pico_mdns_res_record *iterator = NULL;
     
     if (!nxt)
         exit(255);
@@ -109,7 +115,13 @@ void app_mdns(char *arg, struct pico_ipv4_link *link)
     printf("mDNS module initialised\n");
     
     /* Create a resource record you want to register */
-    if (pico_mdns_res_record_create(&records, hostname, (void*)(&(link->address)), PICO_DNS_TYPE_A, 120, PICO_MDNS_RES_RECORD_UNIQUE) != 0) {
+    if (pico_mdns_res_record_create(&records, hostname, (void*)(&(link->address)), PICO_DNS_TYPE_A, 120, PICO_MDNS_RES_RECORD_SHARED) != 0) {
+        printf("Could not create mDNS resource record!\n");
+        exit(255);
+    }
+    
+    /* Create a resource record you want to register */
+    if (pico_mdns_res_record_create(&records, "foo.local", (void*)(&(link->address)), PICO_DNS_TYPE_A, 120, PICO_MDNS_RES_RECORD_SHARED) != 0) {
         printf("Could not create mDNS resource record!\n");
         exit(255);
     }
@@ -120,7 +132,7 @@ void app_mdns(char *arg, struct pico_ipv4_link *link)
     }
     
     /* Try to claim it */
-    if (pico_mdns_claim(records, &mdns_init_callback, peername) != 0) {
+    if (pico_mdns_claim(records, &mdns_claimed_callback, peername) != 0) {
         printf("Could not claim mDNS resource record!\n");
         exit(255);
     }

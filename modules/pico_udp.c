@@ -38,8 +38,8 @@ uint16_t pico_udp_checksum_ipv4(struct pico_frame *f)
     if (s) {
         /* Case of outgoing frame */
         udp_dbg("UDP CRC: on outgoing frame\n");
-        pseudo.src.addr = s->local_addr.ip4.addr;
-        pseudo.dst.addr = s->remote_addr.ip4.addr;
+        pseudo.src.addr = s->local_addr.addr.ip4.addr;
+        pseudo.dst.addr = s->remote_addr.addr.ip4.addr;
     } else {
         /* Case of incomming frame */
         udp_dbg("UDP CRC: on incomming frame\n");
@@ -67,11 +67,11 @@ uint16_t pico_udp_checksum_ipv6(struct pico_frame *f)
      *     Address used in the pseudo-header is that of the final destination */
     if (s) {
         /* Case of outgoing frame */
-        pseudo.src = s->local_addr.ip6;
+        pseudo.src = s->local_addr.addr.ip6;
         if (remote_endpoint)
             pseudo.dst = remote_endpoint->remote_addr.ip6;
         else
-            pseudo.dst = s->remote_addr.ip6;
+            pseudo.dst = s->remote_addr.addr.ip6;
     } else {
         /* Case of incomming frame */
         pseudo.src = ipv6_hdr->src;

@@ -72,10 +72,10 @@ static int socket_cmp_ipv6(struct pico_socket *a, struct pico_socket *b)
     if (!is_sock_ipv6(a) || !is_sock_ipv6(b))
         return 0;
 
-    if ((memcmp(a->local_addr.ip6.addr, PICO_IP6_ANY, PICO_SIZE_IP6) == 0) || (memcmp(b->local_addr.ip6.addr, PICO_IP6_ANY, PICO_SIZE_IP6) == 0))
+    if ((memcmp(a->local_addr.addr.ip6.addr, PICO_IP6_ANY, PICO_SIZE_IP6) == 0) || (memcmp(b->local_addr.addr.ip6.addr, PICO_IP6_ANY, PICO_SIZE_IP6) == 0))
         ret = 0;
     else
-        ret = memcmp(a->local_addr.ip6.addr, b->local_addr.ip6.addr, PICO_SIZE_IP6);
+        ret = memcmp(a->local_addr.addr.ip6.addr, b->local_addr.addr.ip6.addr, PICO_SIZE_IP6);
 
 #endif
     return ret;
@@ -90,10 +90,10 @@ static int socket_cmp_ipv4(struct pico_socket *a, struct pico_socket *b)
         return 0;
 
 #ifdef PICO_SUPPORT_IPV4
-    if ((a->local_addr.ip4.addr == PICO_IP4_ANY) || (b->local_addr.ip4.addr == PICO_IP4_ANY))
+    if ((a->local_addr.addr.ip4.addr == PICO_IP4_ANY) || (b->local_addr.addr.ip4.addr == PICO_IP4_ANY))
         ret = 0;
     else
-        ret = (int)(a->local_addr.ip4.addr - b->local_addr.ip4.addr);
+        ret = (int)(a->local_addr.addr.ip4.addr - b->local_addr.addr.ip4.addr);
 
 #endif
     return ret;
@@ -103,9 +103,9 @@ static int socket_cmp_remotehost(struct pico_socket *a, struct pico_socket *b)
 {
     int ret = 0;
     if (is_sock_ipv6(a))
-        ret = memcmp(a->remote_addr.ip6.addr, b->remote_addr.ip6.addr, PICO_SIZE_IP6);
+        ret = memcmp(a->remote_addr.addr.ip6.addr, b->remote_addr.addr.ip6.addr, PICO_SIZE_IP6);
     else
-        ret = (int)(a->remote_addr.ip4.addr - b->remote_addr.ip4.addr);
+        ret = (int)(a->remote_addr.addr.ip4.addr - b->remote_addr.addr.ip4.addr);
 
     return ret;
 }
@@ -778,8 +778,8 @@ static void *pico_socket_sendto_get_ip4_src(struct pico_socket *s, struct pico_i
      * current connected endpoint
      */
     if ((s->state & PICO_SOCKET_STATE_CONNECTED)) {
-        src4 = &s->local_addr.ip4;
-        if  (s->remote_addr.ip4.addr != ((struct pico_ip4 *)dst)->addr ) {
+        src4 = &s->local_addr.addr.ip4;
+        if  (s->remote_addr.addr.ip4.addr != ((struct pico_ip4 *)dst)->addr ) {
             pico_err = PICO_ERR_EADDRNOTAVAIL;
             return NULL;
         }
@@ -794,7 +794,7 @@ static void *pico_socket_sendto_get_ip4_src(struct pico_socket *s, struct pico_i
     }
 
     if (src4->addr != PICO_IPV4_INADDR_ANY)
-        s->local_addr.ip4.addr = src4->addr;
+        s->local_addr.addr.ip4.addr = src4->addr;
 
 #else
     pico_err = PICO_ERR_EPROTONOSUPPORT;
@@ -814,7 +814,7 @@ static void *pico_socket_sendto_get_ip6_src(struct pico_socket *s, struct pico_i
      * current connected endpoint
      */
     if ((s->state & PICO_SOCKET_STATE_CONNECTED)) {
-        src6 = &s->local_addr.ip6;
+        src6 = &s->local_addr.addr.ip6;
         if (memcmp(&s->remote_addr, dst, PICO_SIZE_IP6)) {
             pico_err = PICO_ERR_EADDRNOTAVAIL;
             return NULL;
@@ -827,7 +827,7 @@ static void *pico_socket_sendto_get_ip6_src(struct pico_socket *s, struct pico_i
         }
 
         if (!pico_ipv6_is_unspecified(src6->addr))
-            s->local_addr.ip6 = *src6;
+            s->local_addr.addr.ip6 = *src6;
     }
 
 #else
@@ -1162,10 +1162,10 @@ static void get_sock_dev(struct pico_socket *s)
 {
 #ifdef PICO_SUPPORT_IPV6
     if (is_sock_ipv6(s))
-        s->dev = pico_ipv6_source_dev_find(&s->remote_addr.ip6);
+        s->dev = pico_ipv6_source_dev_find(&s->remote_addr.addr.ip6);
     else
 #endif
-        s->dev = pico_ipv4_source_dev_find(&s->remote_addr.ip4);
+        s->dev = pico_ipv4_source_dev_find(&s->remote_addr.addr.ip4);
 }
 
 
@@ -1373,13 +1373,13 @@ int pico_socket_getname(struct pico_socket *s, void *local_addr, uint16_t *port,
     if (is_sock_ipv4(s)) {
     #ifdef PICO_SUPPORT_IPV4
         struct pico_ip4 *ip = (struct pico_ip4 *)local_addr;
-        ip->addr = s->local_addr.ip4.addr;
+        ip->addr = s->local_addr.addr.ip4.addr;
         *proto = PICO_PROTO_IPV4;
     #endif
     } else if (is_sock_ipv6(s)) {
     #ifdef PICO_SUPPORT_IPV6
         struct pico_ip6 *ip = (struct pico_ip6 *)local_addr;
-        memcpy(ip->addr, s->local_addr.ip6.addr, PICO_SIZE_IP6);
+        memcpy(ip->addr, s->local_addr.addr.ip6.addr, PICO_SIZE_IP6);
         *proto = PICO_PROTO_IPV6;
     #endif
     } else {
@@ -1445,12 +1445,12 @@ int pico_socket_bind(struct pico_socket *s, void *local_addr, uint16_t *port)
     if (is_sock_ipv4(s)) {
     #ifdef PICO_SUPPORT_IPV4
         struct pico_ip4 *ip = (struct pico_ip4 *)local_addr;
-        s->local_addr.ip4 = *ip;
+        s->local_addr.addr.ip4 = *ip;
     #endif
     } else if (is_sock_ipv6(s)) {
     #ifdef PICO_SUPPORT_IPV6
         struct pico_ip6 *ip = (struct pico_ip6 *)local_addr;
-        s->local_addr.ip6 = *ip;
+        s->local_addr.addr.ip6 = *ip;
     #endif
     } else {
         pico_err = PICO_ERR_EINVAL;
@@ -1484,11 +1484,11 @@ int pico_socket_connect(struct pico_socket *s, const void *remote_addr, uint16_t
     #ifdef PICO_SUPPORT_IPV4
         struct pico_ip4 *local = NULL;
         const struct pico_ip4 *ip = (const struct pico_ip4 *)remote_addr;
-        s->remote_addr.ip4 = *ip;
+        s->remote_addr.addr.ip4 = *ip;
         local = pico_ipv4_source_find(ip);
         if (local) {
             get_sock_dev(s);
-            s->local_addr.ip4 = *local;
+            s->local_addr.addr.ip4 = *local;
         } else {
             pico_err = PICO_ERR_EHOSTUNREACH;
             return -1;
@@ -1499,11 +1499,11 @@ int pico_socket_connect(struct pico_socket *s, const void *remote_addr, uint16_t
     #ifdef PICO_SUPPORT_IPV6
         struct pico_ip6 *local = NULL;
         const struct pico_ip6 *ip = (const struct pico_ip6 *)remote_addr;
-        s->remote_addr.ip6 = *ip;
+        s->remote_addr.addr.ip6 = *ip;
         local = pico_ipv6_source_find(ip);
         if (local) {
             get_sock_dev(s);
-            s->local_addr.ip6 = *local;
+            s->local_addr.addr.ip6 = *local;
         } else {
             pico_err = PICO_ERR_EHOSTUNREACH;
             return -1;

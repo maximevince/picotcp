@@ -108,8 +108,8 @@ static struct pico_socket *socket_tcp_deliver_ipv4(struct pico_socket *s, struct
     struct pico_ip4 s_local, s_remote, p_src, p_dst;
     struct pico_ipv4_hdr *ip4hdr = (struct pico_ipv4_hdr*)(f->net_hdr);
     struct pico_trans *tr = (struct pico_trans *) f->transport_hdr;
-    s_local.addr = s->local_addr.ip4.addr;
-    s_remote.addr = s->remote_addr.ip4.addr;
+    s_local.addr = s->local_addr.addr.ip4.addr;
+    s_remote.addr = s->remote_addr.addr.ip4.addr;
     p_src.addr = ip4hdr->src.addr;
     p_dst.addr = ip4hdr->dst.addr;
     if ((s->remote_port == tr->sport) && /* remote port check */
@@ -134,8 +134,8 @@ static struct pico_socket *socket_tcp_deliver_ipv6(struct pico_socket *s, struct
     struct pico_trans *tr = (struct pico_trans *) f->transport_hdr;
     struct pico_ip6 s_local = {{0}}, s_remote = {{0}}, p_src = {{0}}, p_dst = {{0}};
     struct pico_ipv6_hdr *ip6hdr = (struct pico_ipv6_hdr *)(f->net_hdr);
-    s_local = s->local_addr.ip6;
-    s_remote = s->remote_addr.ip6;
+    s_local = s->local_addr.addr.ip6;
+    s_remote = s->remote_addr.addr.ip6;
     p_src = ip6hdr->src;
     p_dst = ip6hdr->dst;
     if ((s->remote_port == tr->sport) &&

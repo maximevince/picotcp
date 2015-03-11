@@ -46,8 +46,8 @@ struct pico_socket {
     struct pico_protocol *proto;
     struct pico_protocol *net;
 
-    union pico_address local_addr;
-    union pico_address remote_addr;
+    struct pico_address_t local_addr;
+    struct pico_address_t remote_addr;
 
     uint16_t local_port;
     uint16_t remote_port;
@@ -113,6 +113,23 @@ struct pico_ipv6_mreq_source {
     struct pico_ip6 mcast_link_addr;
 };
 
+union pico_mreq {
+    struct pico_ip_mreq ipv4;
+    struct pico_ipv6_mreq ipv6;
+};
+struct pico_mreq_t {
+    int type;
+    union pico_mreq mreq;
+};
+
+union pico_mreq_source {
+    struct pico_ip_mreq_source ipv4;
+    struct pico_ipv6_mreq_source ipv6;
+};
+struct pico_mreq_source_t {
+    int type;
+    union pico_mreq_source mreq_source;
+};       
 #endif
 
 #define PICO_SOCKET_STATE_UNDEFINED       0x0000u

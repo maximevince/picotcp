@@ -9,11 +9,11 @@
 #define _INCLUDE_PICO_IPV6
 #include "pico_addressing.h"
 #include "pico_protocol.h"
-
+#include "pico_tree.h"
 #define PICO_SIZE_IP6HDR ((uint32_t)(sizeof(struct pico_ipv6_hdr)))
 #define PICO_IPV6_DEFAULT_HOP 64
 #define PICO_IPV6_MIN_MTU 1280
-
+#define PICO_IPV6_ADDR_LEN 54
 extern const uint8_t PICO_IP6_ANY[PICO_SIZE_IP6];
 extern struct pico_protocol pico_proto_ipv6;
 extern struct pico_tree IPV6Routes;
@@ -44,8 +44,21 @@ struct pico_ipv6_link
     struct pico_ip6 netmask;
     uint8_t istentative : 1;
     uint8_t isduplicate : 1;
-};
+#ifdef PICO_SUPPORT_MCAST
+    struct pico_tree *MCASTGroups;
+    uint8_t mcast_compatibility;
+    uint8_t mcast_last_query_interval;
+#endif
 
+};
+#ifdef PICO_SUPPORT_MCAST
+struct pico_ipv6_mcast_group {
+    uint8_t filter_mode;
+    uint16_t reference_count;
+    struct pico_ip6 mcast_addr;
+    struct pico_tree MCASTSources;
+};
+#endif
 struct pico_ipv6_hbhoption {
     uint8_t type;
     uint8_t len;

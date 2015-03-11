@@ -424,8 +424,8 @@ uint16_t pico_tcp_checksum_ipv4(struct pico_frame *f)
     if (s) {
         /* Case of outgoing frame */
         /* dbg("TCP CRC: on outgoing frame\n"); */
-        pseudo.src.addr = s->local_addr.ip4.addr;
-        pseudo.dst.addr = s->remote_addr.ip4.addr;
+        pseudo.src.addr = s->local_addr.addr.ip4.addr;
+        pseudo.dst.addr = s->remote_addr.addr.ip4.addr;
     } else {
         /* Case of incomming frame */
         /* dbg("TCP CRC: on incomming frame\n"); */
@@ -452,8 +452,8 @@ uint16_t pico_tcp_checksum_ipv6(struct pico_frame *f)
      *     Address used in the pseudo-header is that of the final destination */
     if (s) {
         /* Case of outgoing frame */
-        pseudo.src = s->local_addr.ip6;
-        pseudo.dst = s->remote_addr.ip6;
+        pseudo.src = s->local_addr.addr.ip6;
+        pseudo.dst = s->remote_addr.addr.ip6;
     } else {
         /* Case of incomming frame */
         pseudo.src = ipv6_hdr->src;
@@ -2265,15 +2265,15 @@ static int tcp_syn(struct pico_socket *s, struct pico_frame *f)
     new->sock.remote_port = ((struct pico_trans *)f->transport_hdr)->sport;
 #ifdef PICO_SUPPORT_IPV4
     if (IS_IPV4(f)) {
-        new->sock.remote_addr.ip4.addr = ((struct pico_ipv4_hdr *)(f->net_hdr))->src.addr;
-        new->sock.local_addr.ip4.addr = ((struct pico_ipv4_hdr *)(f->net_hdr))->dst.addr;
+        new->sock.remote_addr.addr.ip4.addr = ((struct pico_ipv4_hdr *)(f->net_hdr))->src.addr;
+        new->sock.local_addr.addr.ip4.addr = ((struct pico_ipv4_hdr *)(f->net_hdr))->dst.addr;
     }
 
 #endif
 #ifdef PICO_SUPPORT_IPV6
     if (IS_IPV6(f)) {
-        new->sock.remote_addr.ip6 = ((struct pico_ipv6_hdr *)(f->net_hdr))->src;
-        new->sock.local_addr.ip6 = ((struct pico_ipv6_hdr *)(f->net_hdr))->dst;
+        new->sock.remote_addr.addr.ip6 = ((struct pico_ipv6_hdr *)(f->net_hdr))->src;
+        new->sock.local_addr.addr.ip6 = ((struct pico_ipv6_hdr *)(f->net_hdr))->dst;
     }
 
 #endif

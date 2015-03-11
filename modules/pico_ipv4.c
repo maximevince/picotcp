@@ -1343,7 +1343,7 @@ static int pico_ipv4_frame_sock_push(struct pico_protocol *self, struct pico_fra
     if (remote_endpoint) {
         dst = &remote_endpoint->remote_addr.ip4;
     } else {
-        dst = &f->sock->remote_addr.ip4;
+        dst = &f->sock->remote_addr.addr.ip4;
     }
 
     return pico_ipv4_frame_push(f, dst, (uint8_t)f->sock->proto->proto_number);

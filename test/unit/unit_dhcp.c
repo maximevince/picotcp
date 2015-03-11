@@ -193,7 +193,7 @@ START_TEST (test_dhcp)
     fail_unless(dn == NULL, "DCHP SERVER -> negotiation data available befor discover msg recvd");
 
     /* simulate reception of a DISCOVER packet */
-    sock.local_addr.ip4 = serverip;
+    sock.local_addr.addr.ip4 = serverip;
     pico_dhcp_server_recv(&sock, buf, len);
 
     tick_it(3);
@@ -292,7 +292,7 @@ START_TEST (test_dhcp_server_ipninarp)
     fail_unless(dn == NULL, "DCHP SERVER -> negotiation data available before discover msg recvd");
 
     /* simulate reception of a DISCOVER packet */
-    sock.local_addr.ip4 = serverip;
+    sock.local_addr.addr.ip4 = serverip;
     pico_dhcp_server_recv(&sock, buf, len);
 
     /* check if negotiation data is stored */
@@ -364,7 +364,7 @@ START_TEST (test_dhcp_server_ipinarp)
     fail_if(pico_dhcp_server_initiate(&s), "DHCP_SERVER> server initiation failed");
 
     /* simulate reception of a DISCOVER packet */
-    sock.local_addr.ip4 = serverip;
+    sock.local_addr.addr.ip4 = serverip;
     pico_dhcp_server_recv(&sock, buf, len);
 
     /* check if negotiation data is stored */

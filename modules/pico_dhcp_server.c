@@ -350,7 +350,7 @@ static void pico_dhcp_server_recv(struct pico_socket *s, uint8_t *buf, uint32_t 
     if (!pico_dhcp_are_options_valid(hdr->options, optlen))
         return;
 
-    dev = pico_ipv4_link_find(&s->local_addr.ip4);
+    dev = pico_ipv4_link_find(&s->local_addr.addr.ip4);
     dhcpn = pico_dhcp_server_find_negotiation(hdr->xid);
     if (!dhcpn)
         dhcpn = pico_dhcp_server_add_negotiation(dev, hdr);

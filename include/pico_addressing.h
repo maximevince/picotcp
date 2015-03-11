@@ -6,7 +6,9 @@
 #ifndef INCLUDE_PICO_ADDRESSING
 #define INCLUDE_PICO_ADDRESSING
 
+
 #include "pico_config.h"
+
 
 PACKED_STRUCT_DEF pico_ip4
 {
@@ -17,11 +19,14 @@ PACKED_STRUCT_DEF pico_ip6
 {
     uint8_t addr[16];
 };
-
 union pico_address
 {
     struct pico_ip4 ip4;
     struct pico_ip6 ip6;
+};
+struct pico_address_t {
+    int type;
+    union pico_address addr;
 };
 
 PACKED_STRUCT_DEF pico_eth

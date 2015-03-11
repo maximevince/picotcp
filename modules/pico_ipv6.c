@@ -2,7 +2,7 @@
    PicoTCP. Copyright (c) 2012 TASS Belgium NV. Some rights reserved.
    See LICENSE and COPYING for usage.
 
-   Authors: Daniele Lacamera, Kristof Roelants
+   Authors: Daniele Lacamera, Kristof Roelants, Roel Postelmans
  *********************************************************************/
 
 
@@ -19,6 +19,8 @@
 
 #ifdef PICO_SUPPORT_IPV6
 
+
+#define ip_mcast_dbg(...) do {} while(0) /* so_mcast_dbg in pico_socket.c */
 #define PICO_IPV6_EXTHDR_HOPBYHOP 0
 #define PICO_IPV6_EXTHDR_ROUTING 43
 #define PICO_IPV6_EXTHDR_FRAG 44
@@ -920,7 +922,7 @@ static int pico_ipv6_frame_sock_push(struct pico_protocol *self, struct pico_fra
     if (remote_endpoint) {
         dst = &remote_endpoint->remote_addr.ip6;
     } else {
-        dst = &f->sock->remote_addr.ip6;
+        dst = &f->sock->remote_addr.addr.ip6;
     }
 
     return pico_ipv6_frame_push(f, dst, (uint8_t)f->sock->proto->proto_number);
@@ -938,7 +940,264 @@ struct pico_protocol pico_proto_ipv6 = {
     .q_in = &ipv6_in,
     .q_out = &ipv6_out,
 };
+#ifdef PICO_SUPPORT_MCAST
+/*                        link
+ *                         |
+ *                    MCASTGroups
+ *                    |    |     |
+ *         ------------    |     ------------
+ *         |               |                |
+ *   MCASTSources    MCASTSources     MCASTSources
+ *   |  |  |  |      |  |  |  |       |  |  |  |
+ *   S  S  S  S      S  S  S  S       S  S  S  S
+ *
+ *   MCASTGroups: RBTree(mcast_group)
+ *   MCASTSources: RBTree(source)
+ */
+static int ipv6_mcast_groups_cmp(void *ka, void *kb)
+{
+    struct pico_ipv6_mcast_group *a = ka, *b = kb;
+    return pico_ipv6_compare(&a->mcast_addr, &b->mcast_addr);
+}
 
+static int ipv6_mcast_sources_cmp(void *ka, void *kb)
+{
+    struct pico_ip6 *a = ka, *b = kb;
+    return pico_ipv6_compare(a, b);
+}
+
+static void pico_ipv6_mcast_print_groups(struct pico_ipv6_link *mcast_link)
+{
+    uint16_t i = 0;
+    struct pico_ipv6_mcast_group *g = NULL;
+    struct pico_ip6 *source = NULL;
+    struct pico_tree_node *index = NULL, *index2 = NULL;
+    (void) source;
+    char *string = PICO_ZALLOC(PICO_IPV6_ADDR_LEN);
+
+    ipv6_mcast_dbg("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
+    ipv6_mcast_dbg("+                           MULTICAST list interface %-16s             +\n", mcast_link->dev->name);
+    ipv6_mcast_dbg("+---------------------------------------------------------------------------------+\n");
+    ipv6_mcast_dbg("+  nr  |    interface     | host group | reference count | filter mode |  source  +\n");
+    ipv6_mcast_dbg("+---------------------------------------------------------------------------------+\n");
+
+    pico_tree_foreach(index, mcast_link->MCASTGroups)
+    {
+        g = index->keyValue;
+        ipv6_mcast_dbg("+ %04d | %16s |  %08X  |      %05u      |      %u      | %8s +\n", i, mcast_link->dev->name, g->mcast_addr.addr, g->reference_count, g->filter_mode, "");
+        pico_tree_foreach(index2, &g->MCASTSources)
+        {
+            source = index2->keyValue;
+            pico_ipv6_to_string(string, source->addr);
+            ipv6_mcast_dbg("+ %4s | %16s |  %8s  |      %5s      |      %s      | %s +\n", "", "", "", "", "", string);
+        }
+        i++;
+    }
+    ipv6_mcast_dbg("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
+    PICO_FREE(string);
+}
+
+static int mcast_group_update(struct pico_ipv6_mcast_group *g, struct pico_tree *MCASTFilter, uint8_t filter_mode)
+{
+    struct pico_tree_node *index = NULL, *_tmp = NULL;
+    struct pico_ip6 *source = NULL;
+    /* cleanup filter */
+    pico_tree_foreach_safe(index, &g->MCASTSources, _tmp)
+    {
+        source = index->keyValue;
+        pico_tree_delete(&g->MCASTSources, source);
+        PICO_FREE(source);
+    }
+    /* insert new filter */
+    if (MCASTFilter) {
+        pico_tree_foreach(index, MCASTFilter)
+        {
+            if (index->keyValue) {
+                source = PICO_ZALLOC(sizeof(struct pico_ip4));
+                if (!source) {
+                    pico_err = PICO_ERR_ENOMEM;
+                    return -1;
+                }
+
+                memcpy(source->addr ,((struct pico_ip6 *)index->keyValue)->addr, sizeof(struct pico_ip6));
+                pico_tree_insert(&g->MCASTSources, source);
+            }
+        }
+    }
+
+    g->filter_mode = filter_mode;
+    return 0;
+}
+#if 0
+int pico_ipv6_mcast_join(struct pico_ip6 *mcast_link, struct pico_ip6 *mcast_group, uint8_t reference_count, uint8_t filter_mode, struct pico_tree *MCASTFilter)
+{
+    struct pico_ipv6_mcast_group *g = NULL, test = {
+        0
+    };
+    struct pico_ipv6_link *link = NULL;
+
+    if (mcast_link)
+        link = pico_ipv6_link_get(mcast_link);
+   
+    if(!link)
+        link = mcast_default_link;
+
+    test.mcast_addr = *mcast_group;
+    g = pico_tree_findKey(link->MCASTGroups, &test);
+    if (g) {
+        if (reference_count)
+            g->reference_count++;
+
+        pico_igmp_state_change(mcast_link, mcast_group, filter_mode, MCASTFilter, PICO_IGMP_STATE_UPDATE);
+    } else {
+        g = PICO_ZALLOC(sizeof(struct pico_mcast_group));
+        if (!g) {
+            pico_err = PICO_ERR_ENOMEM;
+            return -1;
+        }
+
+        /* "non-existent" state of filter mode INCLUDE and empty source list */
+        g->filter_mode = PICO_IP_MULTICAST_INCLUDE;
+        g->reference_count = 1;
+        g->mcast_addr = *mcast_group;
+        g->MCASTSources.root = &LEAF;
+        g->MCASTSources.compare = ipv4_mcast_sources_cmp;
+        pico_tree_insert(link->MCASTGroups, g);
+        pico_igmp_state_change(mcast_link, mcast_group, filter_mode, MCASTFilter, PICO_IGMP_STATE_CREATE);
+    }
+
+    if (mcast_group_update(g, MCASTFilter, filter_mode) < 0) {
+        dbg("Error in mcast_group update\n");
+        return -1;
+    }
+
+    pico_ipv4_mcast_print_groups(link);
+    return 0;
+}
+
+int pico_ipv4_mcast_leave(struct pico_ip4 *mcast_link, struct pico_ip4 *mcast_group, uint8_t reference_count, uint8_t filter_mode, struct pico_tree *MCASTFilter)
+{
+
+    struct pico_mcast_group *g = NULL, test = {
+        0
+    };
+    struct pico_ipv4_link *link = NULL;
+    struct pico_tree_node *index = NULL, *_tmp = NULL;
+    struct pico_ip4 *source = NULL;
+
+    if (mcast_link)
+        link = pico_ipv4_link_get(mcast_link);
+    
+    if(!link)
+        link = mcast_default_link;
+
+    test.mcast_addr = *mcast_group;
+    g = pico_tree_findKey(link->MCASTGroups, &test);
+    if (!g) {
+        pico_err = PICO_ERR_EINVAL;
+        return -1;
+    } else {
+        if (reference_count && (--(g->reference_count) < 1)) {
+            pico_igmp_state_change(mcast_link, mcast_group, filter_mode, MCASTFilter, PICO_IGMP_STATE_DELETE);
+            /* cleanup filter */
+            pico_tree_foreach_safe(index, &g->MCASTSources, _tmp)
+            {
+                source = index->keyValue;
+                pico_tree_delete(&g->MCASTSources, source);
+                PICO_FREE(source);
+            }
+            pico_tree_delete(link->MCASTGroups, g);
+            PICO_FREE(g);
+        } else {
+            pico_igmp_state_change(mcast_link, mcast_group, filter_mode, MCASTFilter, PICO_IGMP_STATE_UPDATE);
+            if (mcast_group_update(g, MCASTFilter, filter_mode) < 0)
+                return -1;
+        }
+    }
+
+    pico_ipv4_mcast_print_groups(link);
+    return 0;
+}
+
+struct pico_ipv4_link *pico_ipv4_get_default_mcastlink(void)
+{
+    return mcast_default_link;
+}
+
+static int pico_ipv4_mcast_filter(struct pico_frame *f)
+{
+    struct pico_ipv4_link *link = NULL;
+    struct pico_tree_node *index = NULL, *index2 = NULL;
+    struct pico_mcast_group *g = NULL, test = {
+        0
+    };
+    struct pico_ipv4_hdr *hdr = (struct pico_ipv4_hdr *) f->net_hdr;
+
+    test.mcast_addr = hdr->dst;
+
+    pico_tree_foreach(index, &Tree_dev_link)
+    {
+        link = index->keyValue;
+        g = pico_tree_findKey(link->MCASTGroups, &test);
+        if (g) {
+            if (f->dev == link->dev) {
+                ipv6_mcast_dbg("MCAST: IP %08X is group member of current link %s\n", hdr->dst.addr, f->dev->name);
+                /* perform source filtering */
+                switch (g->filter_mode)
+                {
+                case PICO_IP_MULTICAST_INCLUDE:
+                    pico_tree_foreach(index2, &g->MCASTSources)
+                    {
+                        if (hdr->src.addr == ((struct pico_ip4 *)index2->keyValue)->addr) {
+                            ipv6_mcast_dbg("MCAST: IP %08X in included interface source list\n", hdr->src.addr);
+                            return 0;
+                        }
+                    }
+                    ipv6_mcast_dbg("MCAST: IP %08X NOT in included interface source list\n", hdr->src.addr);
+                    return -1;
+
+                case PICO_IP_MULTICAST_EXCLUDE:
+                    pico_tree_foreach(index2, &g->MCASTSources)
+                    {
+                        if (hdr->src.addr == ((struct pico_ip4 *)index2->keyValue)->addr) {
+                            ipv6_mcast_dbg("MCAST: IP %08X in excluded interface source list\n", hdr->src.addr);
+                            return -1;
+                        }
+                    }
+                    ipv6_mcast_dbg("MCAST: IP %08X NOT in excluded interface source list\n", hdr->src.addr);
+                    return 0;
+
+                default:
+                    return -1;
+                }
+            } else {
+                ipv6_mcast_dbg("MCAST: IP %08X is group member of different link %s\n", hdr->dst.addr, link->dev->name);
+            }
+        } else {
+            ipv6_mcast_dbg("MCAST: IP %08X is not a group member of link %s\n", hdr->dst.addr, f->dev->name);
+        }
+    }
+    return -1;
+}
+#endif
+#else
+
+int pico_ipv4_mcast_join(struct pico_ip4 *mcast_link, struct pico_ip4 *mcast_group, uint8_t reference_count, uint8_t filter_mode, struct pico_tree *MCASTFilter)
+{
+    pico_err = PICO_ERR_EPROTONOSUPPORT;
+    return -1;
+}
+int pico_ipv4_mcast_leave(struct pico_ip4 *mcast_link, struct pico_ip4 *mcast_group, uint8_t reference_count, uint8_t filter_mode, struct pico_tree *MCASTFilter)
+{
+    pico_err = PICO_ERR_EPROTONOSUPPORT;
+    return -1;
+}
+struct pico_ipv4_link *pico_ipv4_get_default_mcastlink(void)
+{
+    pico_err = PICO_ERR_EPROTONOSUPPORT;
+    return NULL;
+}
+#endif /* PICO_SUPPORT_MCAST */
 #ifdef DEBUG_ROUTE
 static void pico_ipv6_dbg_route(void)
 {

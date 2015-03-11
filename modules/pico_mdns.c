@@ -630,7 +630,7 @@ static int pico_check_query_name(char *url)
     if(strcmp(url, mdns_global_host) == 0)
         return 1;
 
-    pico_ipv4_to_string(addr, mdns_sock->local_addr.ip4.addr);
+    pico_ipv4_to_string(addr, mdns_sock->local_addr.addr.ip4.addr);
     pico_dns_mirror_addr(addr);
     memcpy(addr + strlen(addr), ".in-addr.arpa", 13);
     if(strcmp(url, addr) == 0)

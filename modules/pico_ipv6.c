@@ -1028,7 +1028,7 @@ static int mcast_group_update(struct pico_ipv6_mcast_group *g, struct pico_tree 
     g->filter_mode = filter_mode;
     return 0;
 }
-#if 0
+
 int pico_ipv6_mcast_join(struct pico_ip6 *mcast_link, struct pico_ip6 *mcast_group, uint8_t reference_count, uint8_t filter_mode, struct pico_tree *MCASTFilter)
 {
     struct pico_ipv6_mcast_group *g = NULL, test = {
@@ -1042,7 +1042,7 @@ int pico_ipv6_mcast_join(struct pico_ip6 *mcast_link, struct pico_ip6 *mcast_gro
     if(!link)
         link = mcast_default_link;
 
-    test.mcast_addr = *mcast_group;
+    memcpy(test.mcast_addr, mcast_group, sizeof(struct pico_ip6));
     g = pico_tree_findKey(link->MCASTGroups, &test);
     if (g) {
         if (reference_count)
@@ -1050,7 +1050,7 @@ int pico_ipv6_mcast_join(struct pico_ip6 *mcast_link, struct pico_ip6 *mcast_gro
 
         pico_igmp_state_change(mcast_link, mcast_group, filter_mode, MCASTFilter, PICO_IGMP_STATE_UPDATE);
     } else {
-        g = PICO_ZALLOC(sizeof(struct pico_mcast_group));
+        g = PICO_ZALLOC(sizeof(struct pico_ipv6_mcast_group));
         if (!g) {
             pico_err = PICO_ERR_ENOMEM;
             return -1;
@@ -1061,7 +1061,7 @@ int pico_ipv6_mcast_join(struct pico_ip6 *mcast_link, struct pico_ip6 *mcast_gro
         g->reference_count = 1;
         g->mcast_addr = *mcast_group;
         g->MCASTSources.root = &LEAF;
-        g->MCASTSources.compare = ipv4_mcast_sources_cmp;
+        g->MCASTSources.compare =  ipv6_mcast_sources_cmp;
         pico_tree_insert(link->MCASTGroups, g);
         pico_igmp_state_change(mcast_link, mcast_group, filter_mode, MCASTFilter, PICO_IGMP_STATE_CREATE);
     }
@@ -1074,7 +1074,7 @@ int pico_ipv6_mcast_join(struct pico_ip6 *mcast_link, struct pico_ip6 *mcast_gro
     pico_ipv4_mcast_print_groups(link);
     return 0;
 }
-
+#if 0 
 int pico_ipv4_mcast_leave(struct pico_ip4 *mcast_link, struct pico_ip4 *mcast_group, uint8_t reference_count, uint8_t filter_mode, struct pico_tree *MCASTFilter)
 {
 

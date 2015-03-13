@@ -9,7 +9,7 @@
 #define _INCLUDE_PICO_ICMP6
 #include "pico_addressing.h"
 #include "pico_protocol.h"
-
+#include "pico_mld.h"
 /* ICMP header sizes */
 #define PICO_ICMP6HDR_DRY_SIZE          4
 #define PICO_ICMP6HDR_ECHO_REQUEST_SIZE 8
@@ -34,7 +34,7 @@
 #define PICO_ICMP6_NEIGH_SOL           135
 #define PICO_ICMP6_NEIGH_ADV           136
 #define PICO_ICMP6_REDIRECT            137
-
+#define PICO_ICMP6_MLD_REPORT          143
 /* destination unreachable codes */
 #define PICO_ICMP6_UNREACH_NOROUTE     0
 #define PICO_ICMP6_UNREACH_ADMIN       1
@@ -167,6 +167,21 @@ PACKED_STRUCT_DEF pico_icmp6_hdr {
                 struct pico_ip6 dest;
                 uint8_t options[0];
             } redirect;
+            PEDANTIC_STRUCT_DEF mld_query_s { 
+                uint16_t max_response_time;
+                uint16_t reserved;
+                struct pico_ip6 multicast;
+                /*MLDv2*/
+                uint8_t reserverd; // With S and QRV
+                uint8_t QQIC;
+                uint16_t nbr_src;
+                struct pico_ip6 src[0];
+            } mld;          
+            PEDANTIC_STRUCT_DEF mld_report_s { 
+                uint16_t reserved;
+                uint16_t nbr_adr;
+                struct  mld_multicast_address_record record[0];
+            } mld_report;
         } info;
     } msg;
 };

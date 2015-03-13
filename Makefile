@@ -226,6 +226,7 @@ endif
 ifneq ($(MCAST),0)
   include rules/mcast.mk
   include rules/igmp.mk
+  include rules/mld.mk
 endif
 ifneq ($(NAT),0)
   include rules/nat.mk

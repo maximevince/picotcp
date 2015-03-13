@@ -20,7 +20,6 @@
 #ifdef PICO_SUPPORT_IPV6
 
 
-#define ip_mcast_dbg(...) do {} while(0) /* so_mcast_dbg in pico_socket.c */
 #define PICO_IPV6_EXTHDR_HOPBYHOP 0
 #define PICO_IPV6_EXTHDR_ROUTING 43
 #define PICO_IPV6_EXTHDR_FRAG 44
@@ -40,6 +39,12 @@
 #define PICO_IPV6_EXTHDR_OPT_ACTION_DISCARD_SINM 0xC0 /* discard and send ICMP parameter problem if not multicast */
 
 #define PICO_IPV6_MAX_RTR_SOLICITATION_DELAY 1000
+
+#ifdef PICO_SUPPORT_MCAST
+#define ip_mcast_dbg(...) do {} while(0) /* so_mcast_dbg in pico_socket.c */
+
+static struct pico_ipv6_link *mcast_ipv6_default_link = NULL;
+#endif
 
 #define ipv6_dbg(...) do {} while(0)
 /* #define ipv6_dbg dbg   */
@@ -1040,15 +1045,15 @@ int pico_ipv6_mcast_join(struct pico_ip6 *mcast_link, struct pico_ip6 *mcast_gro
         link = pico_ipv6_link_get(mcast_link);
    
     if(!link)
-        link = mcast_default_link;
+        link = mcast_ipv6_default_link;
 
-    memcpy(test.mcast_addr, mcast_group, sizeof(struct pico_ip6));
+    memcpy(&test.mcast_addr, mcast_group, sizeof(struct pico_ip6));
     g = pico_tree_findKey(link->MCASTGroups, &test);
     if (g) {
         if (reference_count)
             g->reference_count++;
 
-        pico_igmp_state_change(mcast_link, mcast_group, filter_mode, MCASTFilter, PICO_IGMP_STATE_UPDATE);
+        //pico_igmp_state_change(mcast_link, mcast_group, filter_mode, MCASTFilter, PICO_IGMP_STATE_UPDATE);
     } else {
         g = PICO_ZALLOC(sizeof(struct pico_ipv6_mcast_group));
         if (!g) {
@@ -1063,7 +1068,7 @@ int pico_ipv6_mcast_join(struct pico_ip6 *mcast_link, struct pico_ip6 *mcast_gro
         g->MCASTSources.root = &LEAF;
         g->MCASTSources.compare =  ipv6_mcast_sources_cmp;
         pico_tree_insert(link->MCASTGroups, g);
-        pico_igmp_state_change(mcast_link, mcast_group, filter_mode, MCASTFilter, PICO_IGMP_STATE_CREATE);
+        //pico_igmp_state_change(mcast_link, mcast_group, filter_mode, MCASTFilter, PICO_IGMP_STATE_CREATE);
     }
 
     if (mcast_group_update(g, MCASTFilter, filter_mode) < 0) {

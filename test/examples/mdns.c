@@ -67,6 +67,7 @@ void mdns_claimed_callback(char *str, void *arg)
 
 void mdns_init_callback(char *str, void *arg)
 {
+    printf("Initialised: %s\n", str);
 //    char *peername = (char *)arg;
 //    printf("Init callback called, str: %s\n", str);
 //    if(!peername) {
@@ -109,84 +110,81 @@ void app_mdns(char *arg, struct pico_ipv4_link *link)
         exit(255);
     }
     
-    printf("Starting to claim name: %s, system name: %s\n",
-           hostname,
-           peername);
-    
-    if (pico_mdns_init(0, &mdns_init_callback, peername) != 0) {
+    printf("\nStarting mDNS module...\n");
+    if (pico_mdns_init(hostname, link, 0, &mdns_init_callback, peername) != 0) {
         printf("Initialisation returned with Error!\n");
         exit(255);
     }
-    printf("mDNS module initialised\n");
-    
-    /* Create a resource record you want to register */
-    if (pico_mdns_res_record_list_append_create(hostname,
-                                                (void*)(&(link->address)),
-                                                PICO_DNS_TYPE_A,
-                                                120,
-                                                PICO_MDNS_RES_RECORD_SHARED,
-                                                &records) != 0) {
-        DEBUG("Could not create mDNS resource record!\n");
-        exit(255);
-    }
-    
-    /* Create a resource record you want to register */
-    if (pico_mdns_res_record_list_append_create("foo.local",
-                                                (void*)(&(link->address)),
-                                                PICO_DNS_TYPE_A,
-                                                120,
-                                                PICO_MDNS_RES_RECORD_SHARED,
-                                                &records) != 0) {
-        DEBUG("Could not create mDNS resource record!\n");
-        exit(255);
-    }
-    
-    /* Create a resource record you want to register */
-    if (pico_mdns_res_record_list_append_create("bar.local",
-                                                (void*)(&(link->address)),
-                                                PICO_DNS_TYPE_A,
-                                                120,
-                                                PICO_MDNS_RES_RECORD_UNIQUE,
-                                                &records) != 0) {
-        DEBUG("Could not create mDNS resource record!\n");
-        exit(255);
-    }
-    
-    /* Create a resource record you want to register */
-    if (pico_mdns_res_record_list_append_create("test.local",
-                                                (void*)(&(link->address)),
-                                                PICO_DNS_TYPE_A,
-                                                120,
-                                                PICO_MDNS_RES_RECORD_UNIQUE,
-                                                &records) != 0) {
-        DEBUG("Could not create mDNS resource record!\n");
-        exit(255);
-    }
-    
-    pico_string_to_ipv6("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
-                        ipaddr6.addr);
-    
-    /* Create a resource record you want to register */
-    if (pico_mdns_res_record_list_append_create("test.local",
-                                                (void*)(&ipaddr6),
-                                                PICO_DNS_TYPE_AAAA,
-                                                120,
-                                                PICO_MDNS_RES_RECORD_UNIQUE,
-                                                &records) != 0) {
-        DEBUG("Could not create mDNS resource record!\n");
-        exit(255);
-    }
-    
-    /* Check if records is not still empty */
-    if (!records) {
-        printf("Creating a mDNS resource record returned NULL!\n");
-    }
-    
-    /* Try to claim it */
-    if (pico_mdns_claim(records, &mdns_claimed_callback, peername) != 0) {
-        printf("Could not claim mDNS resource record!\n");
-        exit(255);
-    }
+    printf("DONE - Initialising mDNS module.\n");
+//    
+//    /* Create a resource record you want to register */
+//    if (pico_mdns_res_record_list_append_create(hostname,
+//                                                (void*)(&(link->address)),
+//                                                PICO_DNS_TYPE_A,
+//                                                120,
+//                                                PICO_MDNS_RES_RECORD_SHARED,
+//                                                &records) != 0) {
+//        DEBUG("Could not create mDNS resource record!\n");
+//        exit(255);
+//    }
+//    
+//    /* Create a resource record you want to register */
+//    if (pico_mdns_res_record_list_append_create("foo.local",
+//                                                (void*)(&(link->address)),
+//                                                PICO_DNS_TYPE_A,
+//                                                120,
+//                                                PICO_MDNS_RES_RECORD_SHARED,
+//                                                &records) != 0) {
+//        DEBUG("Could not create mDNS resource record!\n");
+//        exit(255);
+//    }
+//    
+//    /* Create a resource record you want to register */
+//    if (pico_mdns_res_record_list_append_create("bar.local",
+//                                                (void*)(&(link->address)),
+//                                                PICO_DNS_TYPE_A,
+//                                                120,
+//                                                PICO_MDNS_RES_RECORD_UNIQUE,
+//                                                &records) != 0) {
+//        DEBUG("Could not create mDNS resource record!\n");
+//        exit(255);
+//    }
+//    
+//    /* Create a resource record you want to register */
+//    if (pico_mdns_res_record_list_append_create("test.local",
+//                                                (void*)(&(link->address)),
+//                                                PICO_DNS_TYPE_A,
+//                                                120,
+//                                                PICO_MDNS_RES_RECORD_UNIQUE,
+//                                                &records) != 0) {
+//        DEBUG("Could not create mDNS resource record!\n");
+//        exit(255);
+//    }
+//    
+//    pico_string_to_ipv6("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+//                        ipaddr6.addr);
+//    
+//    /* Create a resource record you want to register */
+//    if (pico_mdns_res_record_list_append_create("test.local",
+//                                                (void*)(&ipaddr6),
+//                                                PICO_DNS_TYPE_AAAA,
+//                                                120,
+//                                                PICO_MDNS_RES_RECORD_UNIQUE,
+//                                                &records) != 0) {
+//        DEBUG("Could not create mDNS resource record!\n");
+//        exit(255);
+//    }
+//    
+//    /* Check if records is not still empty */
+//    if (!records) {
+//        printf("Creating a mDNS resource record returned NULL!\n");
+//    }
+//    
+//    /* Try to claim it */
+//    if (pico_mdns_claim(records, &mdns_claimed_callback, peername) != 0) {
+//        printf("Could not claim mDNS resource record!\n");
+//        exit(255);
+//    }
     
     while(1) {
         pico_stack_tick();

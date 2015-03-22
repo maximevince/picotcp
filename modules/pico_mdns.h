@@ -42,8 +42,8 @@ pico_mdns_res_record_list_append( struct pico_mdns_res_record *record,
  *  will be created.
  * ****************************************************************************/
 int
-pico_mdns_res_record_append_copy( struct pico_mdns_res_record *record,
-                                  pico_mdns_res_record_list **records );
+pico_mdns_res_record_append_list_copy( struct pico_mdns_res_record *record,
+                                       pico_mdns_res_record_list **records );
 
 /* ****************************************************************************
  *  Creates a new mDNS resource record for which you want to have the
@@ -85,12 +85,29 @@ pico_mdns_claim( pico_mdns_res_record_list *records,
                  void *arg );
 
 /* ****************************************************************************
+ *  Set the hostname for this machine. Claims it automatically as a unique
+ *  A record for the local address of the bound socket.
+ * ****************************************************************************/
+int
+pico_mdns_set_hostname( const char *url,
+                        void (*cb_set)(char *str, void *arg),
+                        void *arg );
+
+/* ****************************************************************************
+ *  Returns the hostname for this machine
+ * ****************************************************************************/
+const char *
+pico_mdns_get_hostname( void );
+
+/* ****************************************************************************
  *  Initialises the global mDNS socket. Calls cb_initialised when succeeded.
  *  [flags] is for future use. f.e. Opening a IPv4 multicast socket or an 
  *  IPv6 one or both.
  * ****************************************************************************/
 int
-pico_mdns_init( uint8_t flags,
+pico_mdns_init( const char *_hostname,
+                struct pico_ipv4_link *link,
+                uint8_t flags,
                 void (*cb_initialised)(char *str, void *arg),
                 void *arg );
 

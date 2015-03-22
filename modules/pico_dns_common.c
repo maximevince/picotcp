@@ -289,6 +289,69 @@ pico_dns_question_list_find( char *qname,
 }
 
 /* ****************************************************************************
+ *  Returns the size summed up of all the questions contained in a
+ *  linked list. Fills [count] with the number of questions in the list.
+ * ****************************************************************************/
+uint16_t
+pico_dns_question_list_size( pico_dns_question_list *questions,
+                            uint8_t *count )
+{
+    struct pico_dns_question *iterator = NULL;  // iterator
+    uint16_t size = 0;                          // Size of list, to return
+    
+    /* Clean out count */
+    if (count)
+        *count = 0;
+    
+    /* Initialise iterator */
+    iterator = questions;
+    
+    /* Determine the length that the Question Section needs to be */
+    while (iterator != NULL) {
+        /* Increment count */
+        if (count)
+            (*count)++;
+        size = (uint16_t)((uint16_t)(size + iterator->qname_length) +
+                          (sizeof(struct pico_dns_question_suffix)));
+        iterator = iterator->next;
+    }
+    
+    return size;
+}
+
+/* ****************************************************************************
+ *  Deletes & free's the memory for all the questions contained in a question-
+ *  list.
+ * ****************************************************************************/
+int
+pico_dns_question_list_delete ( pico_dns_question_list **questions )
+{
+    struct pico_dns_question **iterator = NULL;
+    struct pico_dns_question **previous = NULL;
+    
+    /* Check params */
+    if (!questions) {
+        pico_err = PICO_ERR_EINVAL;
+        return -1;
+    }
+    
+    /* Iterate */
+    iterator = questions;
+    while (*iterator) {
+        /* Move to next question but keep previous */
+        previous = iterator;
+        iterator = &((*iterator)->next);
+        
+        /* Delete previous question */
+        pico_dns_question_delete(previous);
+    }
+    
+    questions = NULL;
+    
+    return 0;
+}
+
+/* ****************************************************************************
  *  Fills the question fixed-sized flags & fields accordingly.
  * ****************************************************************************/
 void
@@ -431,34 +494,29 @@ pico_dns_question_create( const char *url,
 }
 
 /* ****************************************************************************
- *  Returns the size summed up of all the questions contained in a
- *  linked list. Fills [count] with the number of questions in the list.
+ *  Deletes & free's the memory for a certain dns resource record. Doesn't take
+ *  lists into account so if applied to a list, most probably, gaps will arisee.
  * ****************************************************************************/
-uint16_t
-pico_dns_question_list_size( pico_dns_question_list *questions,
-                             uint8_t *count )
+int
+pico_dns_question_delete( struct pico_dns_question **question)
 {
-    struct pico_dns_question *iterator = NULL;  // iterator
-    uint16_t size = 0;                          // Size of list, to return
-    
-    /* Clean out count */
-    if (count)
-        *count = 0;
-    
-    /* Initialise iterator */
-    iterator = questions;
-    
-    /* Determine the length that the Question Section needs to be */
-    while (iterator != NULL) {
-        /* Increment count */
-        if (count)
-            (*count)++;
-        size = (uint16_t)((uint16_t)(size + iterator->qname_length) +
-                          (sizeof(struct pico_dns_question_suffix)));
-        iterator = iterator->next;
+    if (!question || !(*question)) {
+        pico_err = PICO_ERR_EINVAL;
+        return -1;
     }
     
-    return size;
+    if ((*question)->qname)
+        PICO_FREE((*question)->qname);
+    (*question)->qname = NULL;
+    
+    if ((*question)->qsuffix)
+        PICO_FREE((*question)->qsuffix);
+     (*question)->qsuffix = NULL;
+    
+    PICO_FREE((*question));
+    *question = NULL;
+    
+    return 0;
 }
 
 // MARK: QUERY FUNCTIONS

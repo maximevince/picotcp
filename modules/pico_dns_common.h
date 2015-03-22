@@ -165,6 +165,21 @@ pico_dns_question_list_find( char *qname,
                              pico_dns_question_list *question_list );
 
 /* ****************************************************************************
+ *  Returns the size summed up of all the questions contained in a
+ *  linked list. Fills [count] with the number of questions in the list.
+ * ****************************************************************************/
+uint16_t
+pico_dns_question_list_size( struct pico_dns_question *list_begin,
+                            uint8_t *count );
+
+/* ****************************************************************************
+ *  Deletes & free's the memory for all the questions contained in a question-
+ *  list.
+ * ****************************************************************************/
+int
+pico_dns_question_list_delete ( pico_dns_question_list **questions );
+
+/* ****************************************************************************
  *  Fills the question fixed-sized flags & fields accordingly.
  * ****************************************************************************/
 void
@@ -184,12 +199,11 @@ pico_dns_question_create( const char *url,
                           uint16_t qclass );
 
 /* ****************************************************************************
- *  Returns the size summed up of all the questions contained in a
- *  linked list. Fills [count] with the number of questions in the list.
+ *  Deletes & free's the memory for a certain dns resource record. Doesn't take
+ *  lists into account so if applied to a list, most probably, gaps will arise.
  * ****************************************************************************/
-uint16_t
-pico_dns_question_list_size( struct pico_dns_question *list_begin,
-                             uint8_t *count );
+int
+pico_dns_question_delete( struct pico_dns_question **question);
 
 // MARK: QUERY FUNCTIONS
 
@@ -241,7 +255,8 @@ pico_dns_rr_create( const char *url,
 /* ****************************************************************************
  *  Deletes & free's the memory for a certain dns resource record
  * ****************************************************************************/
-int pico_dns_rr_delete( struct pico_dns_res_record **rr );
+int
+pico_dns_rr_delete( struct pico_dns_res_record **rr );
 
 /* ****************************************************************************
  *  Returns the size summed up of all the resource records contained in a

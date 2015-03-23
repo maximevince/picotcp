@@ -1657,7 +1657,6 @@ int pico_socket_setoption(struct pico_socket *s, int option, void *value)
         return -1;
     }
 
-
     if (PROTO(s) == PICO_PROTO_TCP)
         return pico_setsockopt_tcp(s, option, value);
 

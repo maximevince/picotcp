@@ -1361,6 +1361,7 @@ pico_mdns_handle_single_question( struct pico_dns_question *question )
     switch (short_be(question->qsuffix->qtype)) {
         case PICO_DNS_TYPE_PTR:
             /* TODO: Find the record for the global hostname for IPv4 or IPv6 */
+            /* Find */
             break;
         case PICO_DNS_TYPE_ANY:
             found = pico_mdns_res_record_list_find_name_copies(question->qname,

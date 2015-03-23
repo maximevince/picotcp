@@ -17,7 +17,6 @@
 #include "pico_dns_client.h"
 
 #include "pico_olsr.h"
-#include "pico_aodv.h"
 #include "pico_eth.h"
 #include "pico_arp.h"
 #include "pico_ipv4.h"
@@ -172,6 +171,7 @@ int pico_notify_pkt_too_big(struct pico_frame *f)
 #endif
     return 0;
 }
+
 
 
 /* Transport layer */
@@ -350,6 +350,7 @@ static int32_t pico_ipv6_ethernet_receive(struct pico_frame *f)
         pico_enqueue(pico_proto_ipv6.q_in, f);
     } else {
         /* Wrong version for link layer type */
+        (void)pico_icmp6_parameter_problem(f, PICO_ICMP6_PARAMPROB_HDRFIELD, 0);
         pico_frame_discard(f);
         return -1;
     }
@@ -442,34 +443,24 @@ struct pico_eth *pico_ethernet_mcast6_translate(struct pico_frame *f, uint8_t *p
 }
 #endif
 
-int pico_ethernet_ipv6_dst(struct pico_frame *f, struct pico_eth * const dstmac)
+struct pico_eth *pico_ethernet_ipv6_dst(struct pico_frame *f)
 {
-    int retval = -1;
-    if (!dstmac)
-        return -1;
-
+    struct pico_eth *dstmac = NULL;
     #ifdef PICO_SUPPORT_IPV6
     if (destination_is_mcast(f)) {
         uint8_t pico_mcast6_mac[6] = {
             0x33, 0x33, 0x00, 0x00, 0x00, 0x00
         };
-        pico_ethernet_mcast6_translate(f, pico_mcast6_mac);
-        memcpy(dstmac, pico_mcast6_mac, PICO_SIZE_ETH);
-        retval = 0;
+        dstmac = pico_ethernet_mcast6_translate(f, pico_mcast6_mac);
     } else {
-        struct pico_eth * neighbor = pico_ipv6_get_neighbor(f);
-        if (neighbor)
-        {
-            memcpy(dstmac, neighbor, PICO_SIZE_ETH);
-            retval = 0;
-        }
+        dstmac = pico_ipv6_get_neighbor(f);
     }
 
     #else
     (void)f;
     pico_err = PICO_ERR_EPROTONOSUPPORT;
     #endif
-    return retval;
+    return dstmac;
 }
 
 
@@ -529,8 +520,7 @@ static int32_t pico_ethsend_dispatch(struct pico_frame *f)
 
 int32_t MOCKABLE pico_ethernet_send(struct pico_frame *f)
 {
-    struct pico_eth dstmac;
-    uint8_t dstmac_valid = 0;
+    const struct pico_eth *dstmac = NULL;
     uint16_t proto = PICO_IDETH_IPV4;
 
 #ifdef PICO_SUPPORT_IPV6
@@ -538,12 +528,11 @@ int32_t MOCKABLE pico_ethernet_send(struct pico_frame *f)
      * destination address is taken from the ND tables
      */
     if (IS_IPV6(f)) {
-        if (pico_ethernet_ipv6_dst(f, &dstmac) < 0)
-        {
+        dstmac = pico_ethernet_ipv6_dst(f);
+        if (!dstmac) {
             pico_ipv6_nd_postpone(f);
             return 0; /* I don't care if frame was actually postponed. If there is no room in the ND table, discard safely. */
         }
-        dstmac_valid = 1;
         proto = PICO_IDETH_IPV6;
     }
     else
@@ -551,42 +540,32 @@ int32_t MOCKABLE pico_ethernet_send(struct pico_frame *f)
 
     /* In case of broadcast (IPV4 only), dst mac is FF:FF:... */
     if (IS_BCAST(f) || destination_is_bcast(f))
-    {
-        memcpy(&dstmac, PICO_ETHADDR_ALL, PICO_SIZE_ETH);
-        dstmac_valid = 1;
-    }
+        dstmac = (const struct pico_eth *) PICO_ETHADDR_ALL;
 
     /* In case of multicast, dst mac is translated from the group address */
     else if (destination_is_mcast(f)) {
         uint8_t pico_mcast_mac[6] = {
             0x01, 0x00, 0x5e, 0x00, 0x00, 0x00
         };
-        pico_ethernet_mcast_translate(f, pico_mcast_mac);
-        memcpy(&dstmac, pico_mcast_mac, PICO_SIZE_ETH);
-        dstmac_valid = 1;
+        dstmac = pico_ethernet_mcast_translate(f, pico_mcast_mac);
     }
 
 #if (defined PICO_SUPPORT_IPV4)
     else {
-        struct pico_eth * arp_get;
-        arp_get = pico_arp_get(f);
-        if (arp_get) {
-            memcpy(&dstmac, arp_get, PICO_SIZE_ETH);
-            dstmac_valid = 1;
-        } else { 
-            /* At this point, ARP will discard the frame in any case.
-             * It is safe to return without discarding.
-             */
+        dstmac = pico_arp_get(f);
+        /* At this point, ARP will discard the frame in any case.
+         * It is safe to return without discarding.
+         */
+        if (!dstmac) {
             pico_arp_postpone(f);
             return 0;
             /* Same case as for IPv6 ... */
         }
-
     }
 #endif
 
     /* This sets destination and source address, then pushes the packet to the device. */
-    if (dstmac_valid) {
+    if (dstmac) {
         struct pico_eth_hdr *hdr;
         hdr = (struct pico_eth_hdr *) f->datalink_hdr;
         if ((f->start > f->buffer) && ((f->start - f->buffer) >= PICO_SIZE_ETHHDR))
@@ -596,7 +575,7 @@ int32_t MOCKABLE pico_ethernet_send(struct pico_frame *f)
             f->datalink_hdr = f->start;
             hdr = (struct pico_eth_hdr *) f->datalink_hdr;
             memcpy(hdr->saddr, f->dev->eth->mac.addr, PICO_SIZE_ETH);
-            memcpy(hdr->daddr, &dstmac, PICO_SIZE_ETH);
+            memcpy(hdr->daddr, dstmac, PICO_SIZE_ETH);
             hdr->proto = proto;
         }
         if (pico_ethsend_local(f, hdr) || pico_ethsend_bcast(f) || pico_ethsend_dispatch(f)) {
@@ -786,31 +765,6 @@ typedef struct pico_timer_ref pico_timer_ref;
 DECLARE_HEAP(pico_timer_ref, expire);
 
 static heap_pico_timer_ref *Timers;
-
-int32_t pico_seq_compare(uint32_t a, uint32_t b)
-{
-    uint32_t thresh = ((uint32_t)(-1)) >> 1;
-
-    if (a > b) /* return positive number, if not wrapped */
-    {
-        if ((a - b) > thresh) /* b wrapped */
-            return -(int32_t)(b - a); /* b = very small,     a = very big      */
-        else
-            return (int32_t)(a - b); /* a = biggest,        b = a bit smaller */
-
-    }
-
-    if (a < b) /* return negative number, if not wrapped */
-    {
-        if ((b - a) > thresh) /* a wrapped */
-            return (int32_t)(a - b); /* a = very small,     b = very big      */
-        else
-            return -(int32_t)(b - a); /* b = biggest,        a = a bit smaller */
-
-    }
-
-    return 0;
-}
 
 void pico_check_timers(void)
 {
@@ -1086,9 +1040,6 @@ int pico_stack_init(void)
 
 #ifdef PICO_SUPPORT_OLSR
     pico_olsr_init();
-#endif
-#ifdef PICO_SUPPORT_AODV
-    pico_aodv_init();
 #endif
 
     pico_stack_tick();

@@ -5,7 +5,7 @@
 #define dbg(...) do {} while(0)
 /* #define dbg printf */
 
-extern volatile unsigned int tassTick;
+extern volatile uint32_t tassTick;
 
 #ifdef PICO_SUPPORT_RTOS
     #define PICO_SUPPORT_MUTEX

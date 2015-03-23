@@ -263,9 +263,9 @@ static int pico_port_in_use_ipv6(struct pico_sockport *sp, void *addr)
     struct pico_ip6 ip;
     /* IPv6 */
     if (addr)
-        memcpy(ip.addr, ((struct pico_ip6 *)addr)->addr, sizeof(struct pico_ip6));
+        memcpy(&ip.addr, ((struct pico_ip6 *)addr)->addr, sizeof(struct pico_ip6));
     else
-        memcpy(ip.addr, PICO_IP6_ANY, sizeof(struct pico_ip6));
+        memcpy(&ip.addr, PICO_IP6_ANY, sizeof(struct pico_ip6));
 
     if (memcmp(ip.addr, PICO_IP6_ANY, sizeof(struct pico_ip6)) ==  0) {
         if (!sp)
@@ -282,28 +282,24 @@ static int pico_port_in_use_ipv6(struct pico_sockport *sp, void *addr)
 
 
 
-static int pico_generic_port_in_use(uint16_t proto, uint16_t port, struct pico_sockport *sp, void *addr, void *net)
+static int pico_generic_port_in_use(uint16_t proto, uint16_t port, struct pico_sockport *sp, void *addr)
 {
 #ifdef PICO_SUPPORT_IPV4
-    if (net == &pico_proto_ipv4)
-    {
-        if (pico_port_in_use_by_nat(proto, port)) {
-            return 1;
-        }
-
-        if (pico_port_in_use_ipv4(sp, addr)) {
-            return 1;
-        }
+    if (pico_port_in_use_by_nat(proto, port)) {
+        return 1;
     }
+
+    if (pico_port_in_use_ipv4(sp, addr)) {
+        return 1;
+    }
+
 #endif
 
 #ifdef PICO_SUPPORT_IPV6
-    if (net == &pico_proto_ipv6)
-    {
-        if (pico_port_in_use_ipv6(sp, addr)) {
-            return 1;
-        }
+    if (pico_port_in_use_ipv6(sp, addr)) {
+        return 1;
     }
+
 #endif
 
     return 0;
@@ -312,9 +308,10 @@ static int pico_generic_port_in_use(uint16_t proto, uint16_t port, struct pico_s
 int pico_is_port_free(uint16_t proto, uint16_t port, void *addr, void *net)
 {
     struct pico_sockport *sp;
+    (void) net;
     sp = pico_get_sockport(proto, port);
 
-    if (pico_generic_port_in_use(proto, port, sp, addr, net))
+    if (pico_generic_port_in_use(proto, port, sp, addr))
         return 0;
 
     return 1;
@@ -1022,8 +1019,7 @@ static int pico_socket_final_xmit(struct pico_socket *s, struct pico_frame *f)
     }
 }
 
-static int pico_socket_xmit_one(struct pico_socket *s, const void *buf, const int len, void *src, 
-        struct pico_remote_endpoint *ep, struct pico_msginfo *msginfo)
+static int pico_socket_xmit_one(struct pico_socket *s, const void *buf, const int len, void *src, struct pico_remote_endpoint *ep)
 {
     struct pico_frame *f;
     uint16_t hdr_offset = (uint16_t)pico_socket_sendto_transport_offset(s);
@@ -1047,12 +1043,6 @@ static int pico_socket_xmit_one(struct pico_socket *s, const void *buf, const in
             pico_frame_discard(f);
             return -1;
         }
-    }
-
-    if (msginfo) {
-        f->send_ttl = (uint8_t)msginfo->ttl;
-        f->send_tos = (uint8_t)msginfo->tos;
-        f->dev = msginfo->dev;
     }
 
     memcpy(f->payload, (const uint8_t *)buf, f->payload_len);
@@ -1091,8 +1081,7 @@ static void pico_socket_xmit_next_fragment_setup(struct pico_frame *f, int hdr_o
 }
 #endif
 
-static int pico_socket_xmit_fragments(struct pico_socket *s, const void *buf, const int len,
-        void *src, struct pico_remote_endpoint *ep, struct pico_msginfo *msginfo)
+static int pico_socket_xmit_fragments(struct pico_socket *s, const void *buf, const int len, void *src, struct pico_remote_endpoint *ep)
 {
     int space = pico_socket_xmit_avail_space(s);
     int hdr_offset = pico_socket_sendto_transport_offset(s);
@@ -1100,13 +1089,13 @@ static int pico_socket_xmit_fragments(struct pico_socket *s, const void *buf, co
     struct pico_frame *f = NULL;
 
     if (space > len) {
-        return pico_socket_xmit_one(s, buf, len, src, ep, msginfo);
+        return pico_socket_xmit_one(s, buf, len, src, ep);
     }
 
 #ifdef PICO_SUPPORT_IPV6
     /* Can't fragment IPv6 */
     if (is_sock_ipv6(s)) {
-        return pico_socket_xmit_one(s, buf, space, src, ep, msginfo);
+        return pico_socket_xmit_one(s, buf, space, src, ep);
     }
 #endif
 
@@ -1164,7 +1153,7 @@ static int pico_socket_xmit_fragments(struct pico_socket *s, const void *buf, co
     (void) f;
     (void) hdr_offset;
     (void) total_payload_written;
-    return pico_socket_xmit_one(s, buf, space, src, ep, msginfo);
+    return pico_socket_xmit_one(s, buf, space, src, ep);
 
 #endif
 }
@@ -1229,8 +1218,7 @@ static int pico_socket_xmit_avail_space(struct pico_socket *s)
 }
 
 
-static int pico_socket_xmit(struct pico_socket *s, const void *buf, const int len, void *src, 
-        struct pico_remote_endpoint *ep, struct pico_msginfo *msginfo)
+static int pico_socket_xmit(struct pico_socket *s, const void *buf, const int len, void *src, struct pico_remote_endpoint *ep)
 {
     int space = pico_socket_xmit_avail_space(s);
     int total_payload_written = 0;
@@ -1241,7 +1229,7 @@ static int pico_socket_xmit(struct pico_socket *s, const void *buf, const int le
     }
 
     if ((PROTO(s) == PICO_PROTO_UDP) && (len > space)) {
-        return pico_socket_xmit_fragments(s, buf, len, src, ep, msginfo);
+        return pico_socket_xmit_fragments(s, buf, len, src, ep);
     }
 
     while (total_payload_written < len) {
@@ -1249,7 +1237,7 @@ static int pico_socket_xmit(struct pico_socket *s, const void *buf, const int le
         if (chunk_len > space)
             chunk_len = space;
 
-        w = pico_socket_xmit_one(s, (const void *)((const uint8_t *)buf + total_payload_written), chunk_len, src, ep, msginfo);
+        w = pico_socket_xmit_one(s, (const void *)((const uint8_t *)buf + total_payload_written), chunk_len, src, ep);
         if (w <= 0) {
             break;
         }
@@ -1272,8 +1260,7 @@ static void pico_socket_sendto_set_dport(struct pico_socket *s, uint16_t port)
 }
 
 
-int MOCKABLE pico_socket_sendto_extended(struct pico_socket *s, const void *buf, const int len, 
-        void *dst, uint16_t remote_port, struct pico_msginfo *msginfo)
+int MOCKABLE pico_socket_sendto(struct pico_socket *s, const void *buf, const int len, void *dst, uint16_t remote_port)
 {
     struct pico_remote_endpoint *remote_endpoint = NULL;
     void *src = NULL;
@@ -1287,17 +1274,6 @@ int MOCKABLE pico_socket_sendto_extended(struct pico_socket *s, const void *buf,
 
     src = pico_socket_sendto_get_src(s, dst);
     if (!src) {
-#ifdef PICO_SUPPORT_IPV6
-        if((s->net->proto_number == PICO_PROTO_IPV6) 
-                && msginfo && msginfo->dev 
-                && pico_ipv6_is_linklocal(((struct pico_ip6 *)dst)->addr))
-        {
-            src = &(pico_ipv6_linklocal_get(msginfo->dev)->address);
-            if(!src)
-                return -1;
-        }
-        else
-#endif
         return -1;
     }
 
@@ -1307,12 +1283,7 @@ int MOCKABLE pico_socket_sendto_extended(struct pico_socket *s, const void *buf,
 
     pico_socket_sendto_set_dport(s, remote_port);
 
-    return pico_socket_xmit(s, buf, len, src, remote_endpoint, msginfo); 
-}
-
-int MOCKABLE pico_socket_sendto(struct pico_socket *s, const void *buf, const int len, void *dst, uint16_t remote_port)
-{
-    return pico_socket_sendto_extended(s, buf, len, dst, remote_port, NULL);
+    return pico_socket_xmit(s, buf, len, src, remote_endpoint);
 }
 
 int pico_socket_send(struct pico_socket *s, const void *buf, int len)
@@ -1337,8 +1308,7 @@ int pico_socket_send(struct pico_socket *s, const void *buf, int len)
     return pico_socket_sendto(s, buf, len, &s->remote_addr, s->remote_port);
 }
 
-int pico_socket_recvfrom_extended(struct pico_socket *s, void *buf, int len, void *orig, 
-        uint16_t *remote_port, struct pico_msginfo *msginfo)
+int pico_socket_recvfrom(struct pico_socket *s, void *buf, int len, void *orig, uint16_t *remote_port)
 {
     if (!s || buf == NULL) { /* / || orig == NULL || remote_port == NULL) { */
         pico_err = PICO_ERR_EINVAL;
@@ -1365,7 +1335,7 @@ int pico_socket_recvfrom_extended(struct pico_socket *s, void *buf, int len, voi
             return -1;
         }
 
-        return pico_udp_recv(s, buf, (uint16_t)len, orig, remote_port, msginfo);
+        return pico_udp_recv(s, buf, (uint16_t)len, orig, remote_port);
     }
 
 #endif
@@ -1384,13 +1354,6 @@ int pico_socket_recvfrom_extended(struct pico_socket *s, void *buf, int len, voi
 #endif
     /* dbg("socket return 0\n"); */
     return 0;
-}
-
-int pico_socket_recvfrom(struct pico_socket *s, void *buf, int len, void *orig, 
-        uint16_t *remote_port)
-{
-    return pico_socket_recvfrom_extended(s, buf, len, orig, remote_port, NULL);
-
 }
 
 int pico_socket_recv(struct pico_socket *s, void *buf, int len)
@@ -1600,7 +1563,7 @@ int pico_socket_connect(struct pico_socket *s, const void *remote_addr, uint16_t
 #ifdef PICO_SUPPORT_TCP
     if (PROTO(s) == PICO_PROTO_TCP) {
         if (pico_tcp_initconn(s) == 0) {
-            pico_socket_alter_state(s, PICO_SOCKET_STATE_CONNECTED | PICO_SOCKET_STATE_TCP_SYN_SENT, PICO_SOCKET_STATE_CLOSED, 0);
+            pico_socket_alter_state(s, PICO_SOCKET_STATE_CONNECTED | PICO_SOCKET_STATE_TCP_SYN_SENT, 0, 0);
             pico_err = PICO_ERR_NOERR;
             ret = 0;
         } else {
@@ -1822,7 +1785,6 @@ static inline int pico_transport_crc_check(struct pico_frame *f)
 
     switch (net_hdr->proto)
     {
-#ifdef PICO_SUPPORT_TCP
     case PICO_PROTO_TCP:
         checksum_invalid = short_be(pico_tcp_checksum(f));
         /* dbg("TCP CRC validation == %u\n", checksum_invalid); */
@@ -1833,9 +1795,7 @@ static inline int pico_transport_crc_check(struct pico_frame *f)
         }
 
         break;
-#endif /* PICO_SUPPORT_TCP */
 
-#ifdef PICO_SUPPORT_UDP
     case PICO_PROTO_UDP:
         udp_hdr = (struct pico_udp_hdr *) f->transport_hdr;
         if (short_be(udp_hdr->crc)) {
@@ -1858,7 +1818,6 @@ static inline int pico_transport_crc_check(struct pico_frame *f)
         }
 
         break;
-#endif /* PICO_SUPPORT_UDP */
 
     default:
         /* Do nothing */

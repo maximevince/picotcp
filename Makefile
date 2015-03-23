@@ -38,12 +38,10 @@ CRC?=1
 OLSR?=0
 SLAACV4?=1
 TFTP?=1
-AODV?=1
 MEMORY_MANAGER?=0
 MEMORY_MANAGER_PROFILING?=0
 TUN?=0
 TAP?=0
-UNIT_TEST?=0
 
 #IPv6 related
 IPV6?=1
@@ -55,10 +53,6 @@ CFLAGS=-I$(PREFIX)/include -Iinclude -Imodules -Wall -Wdeclaration-after-stateme
 CFLAGS+= -Wconversion
 # request from Toon
 CFLAGS+= -Wcast-align
-
-ifeq ($(UNIT_TEST),1)
-  CFLAGS+=-DUNIT_TEST
-endif
 
 ifeq ($(DEBUG),1)
   CFLAGS+=-ggdb
@@ -77,11 +71,6 @@ endif
 ifeq ($(TFTP),1)
   MOD_OBJ+=$(LIBBASE)modules/pico_strings.o $(LIBBASE)modules/pico_tftp.o
   OPTIONS+=-DPICO_SUPPORT_TFTP
-endif
-
-ifeq ($(AODV),1)
-  MOD_OBJ+=$(LIBBASE)modules/pico_aodv.o 
-  OPTIONS+=-DPICO_SUPPORT_AODV
 endif
 
 
@@ -204,7 +193,7 @@ ifeq ($(ARCH),shared)
   CFLAGS+=-fPIC
 endif
 
-%.o:%.c deps
+.c.o:
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 CORE_OBJ= stack/pico_stack.o \
@@ -295,11 +284,11 @@ endif
 
 all: mod core lib
 
-core: $(CORE_OBJ)
+core: deps $(CORE_OBJ)
 	@mkdir -p $(PREFIX)/lib
 	@mv stack/*.o $(PREFIX)/lib
 
-mod: $(MOD_OBJ)
+mod: deps $(MOD_OBJ)
 	@mkdir -p $(PREFIX)/modules
 	@mv modules/*.o $(PREFIX)/modules || echo
 
@@ -360,7 +349,7 @@ units: mod core lib $(UNITS_OBJ) $(MOD_OBJ)
 	@echo -e "\t[CC] units.o"
 	@$(CC) -c -o $(PREFIX)/test/units.o test/units.c $(CFLAGS) -I stack -I modules -I includes -I test/unit -DUNIT_TEST
 	@echo -e "\t[LD] $(PREFIX)/test/units"
-	@$(CC) -o $(PREFIX)/test/units $(CFLAGS) $(PREFIX)/test/units.o -lcheck -lm -pthread -lrt $(UNITS_OBJ) $(PREFIX)/modules/pico_aodv.o
+	@$(CC) -o $(PREFIX)/test/units $(CFLAGS) $(PREFIX)/test/units.o -lcheck -lm -pthread -lrt $(UNITS_OBJ) 
 	@$(CC) -o $(PREFIX)/test/modunit_pico_protocol.elf $(CFLAGS) -I. test/unit/modunit_pico_protocol.c stack/pico_tree.c -lcheck -lm -pthread -lrt $(UNITS_OBJ)
 	@$(CC) -o $(PREFIX)/test/modunit_pico_frame.elf $(CFLAGS) -I. test/unit/modunit_pico_frame.c stack/pico_tree.c -lcheck -lm -pthread -lrt $(UNITS_OBJ)
 	@$(CC) -o $(PREFIX)/test/modunit_seq.elf $(CFLAGS) -I. test/unit/modunit_seq.c -lcheck -lm -pthread -lrt $(UNITS_OBJ) $(PREFIX)/lib/libpicotcp.a
@@ -374,7 +363,6 @@ units: mod core lib $(UNITS_OBJ) $(MOD_OBJ)
 	@$(CC) -o $(PREFIX)/test/modunit_tftp.elf $(CFLAGS) -I. test/unit/modunit_pico_tftp.c  -lcheck -lm -pthread -lrt $(UNITS_OBJ) $(PREFIX)/lib/libpicotcp.a
 	@$(CC) -o $(PREFIX)/test/modunit_sntp_client.elf $(CFLAGS) -I. test/unit/modunit_pico_sntp_client.c -lcheck -lm -pthread -lrt $(UNITS_OBJ)
 	@$(CC) -o $(PREFIX)/test/modunit_ipfilter.elf $(CFLAGS) -I. test/unit/modunit_pico_ipfilter.c stack/pico_tree.c -lcheck -lm -pthread -lrt $(UNITS_OBJ)
-	@$(CC) -o $(PREFIX)/test/modunit_aodv.elf $(CFLAGS) -I. test/unit/modunit_pico_aodv.c  -lcheck -lm -pthread -lrt $(UNITS_OBJ) $(PREFIX)/lib/libpicotcp.a
 	@$(CC) -o $(PREFIX)/test/modunit_queue.elf $(CFLAGS) -I. test/unit/modunit_queue.c  -lcheck -lm -pthread -lrt $(UNITS_OBJ)
 
 devunits: mod core lib

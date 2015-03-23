@@ -133,6 +133,7 @@ static inline uint64_t long_long_be(uint64_t le)
     be = b[7] + (b6 << 8) + (b5 << 16) + (b4 << 24) + (b3 << 32) + (b2 << 40) + (b1 << 48) + (b0 << 56);
     return be;
 }
+#warning "Not using GCC Optimizations!"
 #   else
 /*
 extern uint32_t __builtin_bswap32(uint32_t);

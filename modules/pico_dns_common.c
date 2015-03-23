@@ -273,10 +273,6 @@ pico_dns_question_list_find( char *qname,
     /* Initialise iterator */
     iterator = question_list;
     
-    if (iterator) {
-        
-    }
-    
     /* Iterate */
     while (iterator) {
         if (strcmp(iterator->qname, qname) == 0)

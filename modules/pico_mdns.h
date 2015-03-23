@@ -28,6 +28,22 @@ struct pico_mdns_res_record
 typedef struct pico_mdns_res_record pico_mdns_res_record_list;
 
 /* ****************************************************************************
+ *  Deletes & free's the memory for all the records contained in an mDNS record-
+ *  list.
+ * ****************************************************************************/
+int
+pico_mdns_res_record_list_delete ( pico_mdns_res_record_list **records );
+
+/* ****************************************************************************
+ *  Deletes & free's the memory for a specific record contained in an mDNS
+ *  record-list.
+ * ****************************************************************************/
+int
+pico_mdns_res_record_list_delete_record( char *rname,
+                                         uint16_t rtype,
+                                         pico_mdns_res_record_list **records );
+
+/* ****************************************************************************
  *  Adds a mDNS resource record to the end of the [records] list. If a NULL-
  *  pointer is provided a new list will be created.
  * ****************************************************************************/
@@ -38,7 +54,7 @@ pico_mdns_res_record_list_append( struct pico_mdns_res_record *record,
 /* ****************************************************************************
  *  Creates a new mDNS resource record for which you want to have the
  *  authority from an already existing mDNS resource record, and adds it to
- *  the end of the [records] list. If a NULL- pointer is provided a new list
+ *  the end of the [records] list. If a NULL-pointer is provided a new list
  *  will be created.
  * ****************************************************************************/
 int

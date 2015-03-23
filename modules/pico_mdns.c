@@ -243,9 +243,6 @@ pico_mdns_send_packet_unicast(pico_dns_packet *packet,
                               uint16_t len,
                               struct pico_ip4 peer)
 {
-    //static struct pico_socket *unicast_sock_ipv4 = NULL;
-    char ip[15] = { '\0' };
-    
     /* Send packet to IPv4 socket */
     return pico_socket_sendto(mdns_sock_ipv4,
                               packet,

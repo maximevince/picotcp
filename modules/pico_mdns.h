@@ -35,6 +35,14 @@ int
 pico_mdns_res_record_list_delete ( pico_mdns_res_record_list **records );
 
 /* ****************************************************************************
+ *  Deletes & free's the memory for all the record with a certain name contained
+ *  in an mDNS record-list.
+ * ****************************************************************************/
+int
+pico_mdns_res_record_list_delete_name( char *rname,
+                                       pico_mdns_res_record_list **records);
+
+/* ****************************************************************************
  *  Deletes & free's the memory for a specific record contained in an mDNS
  *  record-list.
  * ****************************************************************************/
@@ -97,6 +105,7 @@ pico_mdns_res_record_delete( struct pico_mdns_res_record **record );
  * ****************************************************************************/
 int
 pico_mdns_claim( pico_mdns_res_record_list *records,
+                 uint8_t reclaim,
                  void (*cb_claimed)(char *str, void *arg),
                  void *arg );
 

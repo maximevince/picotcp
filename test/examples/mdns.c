@@ -1,4 +1,5 @@
 #include "utils.h"
+#include <pico_dns_common.h>
 #include <pico_mdns.h>
 #include <pico_ipv4.h>
 #include <pico_addressing.h>
@@ -67,7 +68,15 @@ void mdns_claimed_callback(char *str, void *arg)
 
 void mdns_init_callback(char *str, void *arg)
 {
-    printf("Initialised: %s\n", str);
+    char *names = NULL;
+    char *hostname = NULL;
+    
+    names = strtok(str, ",");
+    hostname = pico_dns_qname_to_url(names);
+    
+    printf("Initialised with hostname: %s\n", hostname);
+    
+    PICO_FREE(hostname);
 //    char *peername = (char *)arg;
 //    printf("Init callback called, str: %s\n", str);
 //    if(!peername) {

@@ -272,6 +272,9 @@ endif
 ifneq ($(IPV6),0)
   include rules/ipv6.mk
 endif
+ifneq ($(DHCP6_CLIENT),0)
+  include rules/dhcp6_client.mk
+endif
 ifneq ($(MEMORY_MANAGER),0)
   include rules/memory_manager.mk
 endif

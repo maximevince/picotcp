@@ -263,6 +263,7 @@ pico_dns_question_list_find( char *qname,
                              pico_dns_question_list *question_list )
 {
     struct pico_dns_question *iterator = NULL; // To iterate over question list
+    uint16_t i = 0;
     
     /* Check params */
     if (!qname) {

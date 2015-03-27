@@ -82,6 +82,13 @@ pico_mdns_res_record_list_append_create( const char *url,
                                          pico_mdns_res_record_list **records );
 
 /* ****************************************************************************
+ *  Finds a certain mDNS resource record in mDNS resource record list.
+ * ****************************************************************************/
+static struct pico_mdns_res_record *
+pico_mdns_res_record_list_find( struct pico_mdns_res_record *record,
+                                pico_mdns_res_record_list *records );
+
+/* ****************************************************************************
  *  Creates a new mDNS resource record for which you want to have the
  *  authority.
  * ****************************************************************************/

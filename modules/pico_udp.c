@@ -16,6 +16,7 @@
 
 #define UDP_FRAME_OVERHEAD (sizeof(struct pico_frame))
 #define udp_dbg(...) do {} while(0)
+//#define udp_dbg dbg
 
 /* Queues */
 static struct pico_queue udp_in = {

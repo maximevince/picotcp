@@ -39,6 +39,9 @@
 #define PICO_MDNS_COOKIE_TYPE_QUERY 0x04u
 #define PICO_MDNS_COOKIE_TYPE_PROBE 0x08u
 
+#define PICO_MDNS_COOKIE_ACTIVE 0xffu
+#define PICO_MDNS_COOKIE_INACTIVE 0x00u
+
 /* Question flags */
 #define PICO_MDNS_QUESTION_FLAG_PROBE 0x01u
 #define PICO_MDNS_QUESTION_FLAG_NO_PROBE 0x00u
@@ -111,6 +114,7 @@ struct pico_mdns_cookie
     struct pico_mdns_cookie_contents *contents; // Cookie contents
     uint8_t count;                              // Times to send the query
     uint8_t flags;                              // ... | uni/multi | probe |
+    uint8_t status;                             // Active status
     struct pico_timer *timer;                   // For timer events
     void (*callback)(char *, void *);           // Callback
     void *arg;                                  // Argument to pass to callback
@@ -158,6 +162,11 @@ static int
 pico_mdns_cookie_delete( struct pico_mdns_cookie **cookie );
 static int
 pico_mdns_cookie_contents_delete( struct pico_mdns_cookie_contents **contents );
+static int
+pico_mdns_res_record_am_i_lexi_later( struct pico_mdns_res_record *my_record,
+                                      struct pico_mdns_res_record *peer_record);
+static void
+pico_mdns_send_probe_packet( pico_time now, void *arg );
 
 /* List containing packet cookies */
 static pico_mdns_cookie_list *PacketCookies = NULL;
@@ -206,6 +215,10 @@ static int
 pico_mdns_cookie_apply_spt( struct pico_mdns_cookie *cookie,
                             struct pico_dns_res_record *answer )
 {
+    struct pico_mdns_res_record *my_record = NULL;
+    struct pico_mdns_res_record peer_record;
+    int ret = 0;
+    
     /* Check params */
     if (!cookie || !answer) {
         pico_err = PICO_ERR_EINVAL;
@@ -216,7 +229,34 @@ pico_mdns_cookie_apply_spt( struct pico_mdns_cookie *cookie,
         return -1;
     }
     
-    /* TODO: Implement Simultaneous Probe Tiebreaking */
+    cookie->status = PICO_MDNS_COOKIE_INACTIVE;
+    peer_record.record = answer;
+    
+    /* Implement Simultaneous Probe Tiebreaking */
+    my_record = pico_mdns_res_record_list_find(&peer_record,
+                                               cookie->contents->records);
+    if (!my_record) {
+        mdns_dbg("This is weird!\n");
+        return -1;
+    }
+    
+    ret = pico_mdns_res_record_am_i_lexi_later(my_record, &peer_record);
+    if (ret > 0) {
+        mdns_dbg("My record is lexographically later! Yay!\n");
+        cookie->status = PICO_MDNS_COOKIE_ACTIVE;
+    } else if (ret == 0) {
+        pico_timer_cancel(cookie->timer);
+        cookie->count = 3;
+        cookie->timer = pico_timer_add(1000,
+                                       pico_mdns_send_probe_packet,
+                                       (void *)cookie);
+        mdns_dbg("Probing postponed with 1s because of S.P.T.\n");
+    } else {
+        mdns_dbg("Checking for lexographically later failed!\n");
+        return -1;
+    }
+    
+    return 0;
 }
 
 static char *
@@ -275,7 +315,6 @@ pico_mdns_resolve_name_conflict( char rname[] )
             new_rlen = (uint16_t)(strlen(rname) + 1);
             strcpy(new_suffix, "2");
         } else {
-            mdns_dbg("Numeric suffix is present!\n");
             /* If suffix is numeric update the number & generate new suffix */
             str = suffix;
             while (*str >= '0' && *str <= '9')
@@ -344,11 +383,6 @@ pico_mdns_cookie_resolve_conflict( struct pico_mdns_cookie *cookie,
         mdns_dbg("Could not delete my conflicting records!\n");
     }
     
-    if (MyRecords == NULL)
-        mdns_dbg("Deleted all my conflicting records!\n");
-    else
-        mdns_dbg("My Record: '%s'", MyRecords->record->rname);
-    
     /* Step 1: Remove question with that name from cookie */
     qiterator = cookie->contents->questions;
     while (qiterator) {
@@ -385,6 +419,7 @@ pico_mdns_cookie_resolve_conflict( struct pico_mdns_cookie *cookie,
         return -1;
     }
     new_url = pico_dns_qname_to_url(new_name);
+    PICO_FREE(new_name);
 
     /* Step 3: Create records with new name for the records with that name */
     riterator = cookie->contents->records;
@@ -435,13 +470,11 @@ pico_mdns_cookie_resolve_conflict( struct pico_mdns_cookie *cookie,
     PICO_FREE(new_url);
     
     /* Set the claim ID to the one of the conflicting records */
-    mdns_dbg("Setting all new records to claim ID '%d'...", claim_id);
     riterator = new_records;
     while (riterator) {
         riterator->claim_id = claim_id;
         riterator = riterator->next;
     }
-    mdns_dbg("done\n");
     
     /* Step 5: Try to reclaim the newly created records */
     if (pico_mdns_claim(new_records, 1, cookie->callback, cookie->arg) < 0) {
@@ -459,6 +492,9 @@ pico_mdns_cookie_resolve_conflict( struct pico_mdns_cookie *cookie,
         else
             mdns_dbg("done\n");
     } else {
+        /* There are still questions && records in the cookie for which no 
+           conflict occured. So don't delete the cookie, let it finish it's
+           initialisation for leftover records. */
         mdns_dbg("For now, this shouldn't happen..\n");
     }
     
@@ -1040,6 +1076,8 @@ pico_mdns_res_record_list_find( struct pico_mdns_res_record *record,
             iterator = iterator->next;
     }
     
+    mdns_dbg("Res_record_list_find succeeded\n");
+    
     return NULL;
 }
 
@@ -1073,12 +1111,14 @@ pico_mdns_res_record_list_find_name_type( char *rname,
     if (!found) {
         return NULL;
     } else {
-        if (!IS_RES_RECORD_FLAG_CLAIMED_SET(found->flags))
+        if (!IS_RES_RECORD_FLAG_PROBED_SET(found->flags))
             return NULL;
     }
     
     /* Free the DNS record in the mDNS res record */
     PICO_FREE(test_record.record);
+    
+    mdns_dbg("Res_record_list_find_name_type succeeded\n");
     
     return found;
 }
@@ -1110,7 +1150,7 @@ pico_mdns_res_record_list_find_copy_name( const char *rname,
         hb = pico_hash(rname, (uint32_t)strlen(rname));
         
         /* If names are the same append copy of record */
-        if (ha == hb && IS_RES_RECORD_FLAG_CLAIMED_SET(iterator->flags)) {
+        if (ha == hb && IS_RES_RECORD_FLAG_PROBED_SET(iterator->flags)) {
             mdns_dbg("Found a claimed record '%s'\n", iterator->record->rname);
             pico_mdns_res_record_list_append_copy(iterator, &found_records);
         }
@@ -1160,6 +1200,59 @@ mdns_dbg(
     }
     
     mdns_dbg("\n");
+}
+
+static int
+pico_mdns_res_record_am_i_lexi_later( struct pico_mdns_res_record *my_record,
+                                      struct pico_mdns_res_record *peer_record)
+{
+    /* Hashes */
+    uint16_t i = 0;
+    uint16_t longest_rdlength = 0;
+    
+    /* Check params */
+    if (!my_record || !peer_record) {
+        pico_err = PICO_ERR_EINVAL;
+        return -1;
+    }
+    
+    /* First, check class */
+    if (short_be(my_record->record->rsuffix->rclass) >
+        short_be(peer_record->record->rsuffix->rclass))
+        return 1;
+    
+    /* Then, check type */
+    if (short_be(my_record->record->rsuffix->rtype) >
+        short_be(peer_record->record->rsuffix->rtype))
+        return 1;
+    
+    if (short_be(my_record->record->rsuffix->rdlength) >=
+        short_be(peer_record->record->rsuffix->rdlength))
+        longest_rdlength = my_record->record->rsuffix->rdlength;
+    else
+        longest_rdlength = peer_record->record->rsuffix->rdlength;
+    
+    for (i = 0; i < longest_rdlength; i++) {
+        if (i < my_record->record->rsuffix->rdlength &&
+            i < peer_record->record->rsuffix->rdlength) {
+            if ((uint8_t)my_record->record->rdata[i] >
+                (uint8_t)peer_record->record->rdata[i]) {
+                return 1;
+            } else if ((uint8_t)my_record->record->rdata[i] <
+                       (uint8_t)peer_record->record->rdata[i])
+                return 0;
+        } else {
+            if (my_record->record->rsuffix->rdlength ==
+                peer_record->record->rsuffix->rdlength)
+                return -1;
+            else if (my_record->record->rsuffix->rdlength == longest_rdlength)
+                return 1;
+            else
+                return 0;
+        }
+    }
+    
+    return 0;
 }
 
 /* ****************************************************************************
@@ -1440,9 +1533,9 @@ pico_mdns_my_records_claimed( pico_mdns_res_record_list *records,
         cb_claimed(msg, arg);
     }
     
-    mdns_dbg("\nMY RECORDS:\n");
     /* Debugging purposes */
-    pico_mdns_res_record_list_print(MyRecords);
+//    mdns_dbg("\nMY RECORDS:\n");
+//    pico_mdns_res_record_list_print(MyRecords);
     
     return 0;
 }
@@ -1809,6 +1902,13 @@ pico_mdns_handle_single_question( struct pico_dns_question *question )
     struct pico_mdns_res_record *iterator = NULL;
     struct pico_mdns_res_record *found = NULL;
     
+    if (!question) {
+        pico_err = PICO_ERR_EINVAL;
+        return NULL;
+    }
+    
+    mdns_dbg("Question RCVD for '%s'\n", question->qname);
+    
     switch (short_be(question->qsuffix->qtype)) {
         case PICO_DNS_TYPE_ANY:
             found = pico_mdns_res_record_list_find_copy_name(question->qname,
@@ -1819,6 +1919,7 @@ pico_mdns_handle_single_question( struct pico_dns_question *question )
                     pico_mdns_res_record_list_find_name_type(question->qname,
                                                     question->qsuffix->qtype,
                                                     MyRecords));
+            
             
             if (!IS_RES_RECORD_FLAG_CLAIMED_SET(found->flags))
                 pico_mdns_res_record_delete(&found);
@@ -1852,7 +1953,8 @@ pico_mdns_handle_single_answer( struct pico_dns_res_record *answer )
     mdns_dbg("done\n");
     
     if (found) {
-        if (found->flags == PICO_MDNS_COOKIE_TYPE_PROBE) {
+        if (found->flags == PICO_MDNS_COOKIE_TYPE_PROBE &&
+            found->status == PICO_MDNS_COOKIE_ACTIVE) {
             /* Found cookie is a probe cookie, apply conflict resolution */
             if (pico_mdns_cookie_resolve_conflict(found, answer->rname) < 0) {
                 mdns_dbg("Could not resolve conflict correctly, maybe conflict \
@@ -1863,7 +1965,7 @@ pico_mdns_handle_single_answer( struct pico_dns_res_record *answer )
                      update cache and call callback */
             mdns_dbg("RCVD a response record on a plain query!\n");
         } else {
-            mdns_dbg("This is weird...\n");
+            mdns_dbg("Found a cookie which is probably not active...\n");
         }
     } else {
         /* Received unsollicited answer, update cache */
@@ -1881,10 +1983,20 @@ pico_mdns_handle_single_authority( struct pico_dns_res_record *answer )
     /* Find currently active probe cookie */
     found = pico_mdns_cookie_list_find_query_cookie(answer->rname,
                                                     &PacketCookies);
-    if (found && (found->flags == PICO_MDNS_COOKIE_TYPE_PROBE)) {
-        /* Apply Simultaneous Probe Tiebreaking to cookie */
-        mdns_dbg("Simultaneous Probing occured, go tiebreaking...\n");
+    if (found) {
+        if (found->flags == PICO_MDNS_COOKIE_TYPE_PROBE &&
+            found->status == PICO_MDNS_COOKIE_ACTIVE) {
+            /* Apply Simultaneous Probe Tiebreaking to cookie */
+            mdns_dbg("Simultaneous Probing occured, went tiebreaking...\n");
+            if (pico_mdns_cookie_apply_spt(found, answer) < 0) {
+                mdns_dbg("Could not apply S.P.T. to cookie!\n");
+                return -1;
+            }
+        } else {
+            return -1;
+        }
     } else {
+        mdns_dbg("No query cookie found with name '%s'\n", answer->rname);
         return -1;
     }
     
@@ -1934,7 +2046,7 @@ pico_mdns_handle_data_as_questions ( uint8_t **ptr,
         
         /* Move to next question */
         *ptr = (uint8_t *)question.qsuffix +
-               sizeof(struct pico_dns_question_suffix) + 1u;
+               sizeof(struct pico_dns_question_suffix);
     }
     
     return answers;
@@ -2015,6 +2127,8 @@ pico_mdns_handle_query_packet( pico_dns_packet *packet, struct pico_ip4 peer )
     pico_dns_res_record_list *dns_answers_m = NULL;
     pico_dns_res_record_list *dns_answers_u = NULL;
     
+    struct pico_dns_res_record *known_answer = NULL;
+    
     /* To iterate over the answer records */
     struct pico_mdns_res_record *iterator = NULL;
     
@@ -2024,6 +2138,7 @@ pico_mdns_handle_query_packet( pico_dns_packet *packet, struct pico_ip4 peer )
     
     uint8_t *data = NULL;
     uint16_t len = 0;
+    uint8_t i = 0;
     
     /* Move to the data section of the packet */
     data = (uint8_t *)packet + sizeof(struct pico_dns_header);
@@ -2035,101 +2150,22 @@ pico_mdns_handle_query_packet( pico_dns_packet *packet, struct pico_ip4 peer )
         mdns_dbg("No records found that correspond with this query!\n");
         return 0;
     }
-    
-    /* TODO: K.A.S.: Remove answers given in question Answer section already */
-    
-    iterator = answers;
-    while (iterator) {
-        /* Add the record either to the multicast or unicast list */
-        if (IS_RES_RECORD_FLAG_SEND_UNICAST_SET(iterator->flags)) {
-            pico_dns_rr_list_append(iterator->record, &dns_answers_u);
-        } else {
-            pico_dns_rr_list_append(iterator->record, &dns_answers_m);
-        }
-        
-        iterator = iterator->next;
-    }
-    
-    /* If there are any unicast records */
-    if (dns_answers_u) {
-        /* Create response DNS packet */
-        unicast_response = pico_mdns_answer_create(dns_answers_u,
-                                                   NULL,
-                                                   NULL,
-                                                   &len);
-        if (!unicast_response || len == 0) {
-            pico_err = PICO_ERR_ENOMEM;
-            return -1;
-        }
-        
-        /* Send the packet via unicast */
-        if (pico_mdns_send_packet_unicast(unicast_response, len, peer) < 0) {
-            mdns_dbg("Could not send unicast response!\n");
-            return -1;
-        }
-        
-        mdns_dbg("Unicast response sent succesfully!\n");
-    }
-    
-    /* If there are any unicast records */
-    if (dns_answers_m) {
-        /* Create response DNS packet */
-        multicast_response = pico_mdns_answer_create(dns_answers_u,
-                                                     NULL,
-                                                     NULL,
-                                                     &len);
-        if (!multicast_response || len == 0) {
-            pico_err = PICO_ERR_ENOMEM;
-            return -1;
-        }
-        
-        /* Send the packet via unicast */
-        if (pico_mdns_send_packet(multicast_response, len) < 0) {
-            mdns_dbg("Could not send multicast response!\n");
-            return -1;
-        }
-        
-        mdns_dbg("Multicast response sent succesfully!\n");
-    }
-    
-    return 0;
-}
 
-/* ****************************************************************************
- *  Handle a probe packet
- * ****************************************************************************/
-static int
-pico_mdns_handle_probe_packet( pico_dns_packet *packet, struct pico_ip4 peer )
-{
-    /* DNS record lists to send either unicast or multicast */
-    pico_mdns_res_record_list *answers = NULL; // Answer records
-    pico_dns_res_record_list *dns_answers_m = NULL;
-    pico_dns_res_record_list *dns_answers_u = NULL;
-    
-    /* To iterate over the answer records */
-    struct pico_mdns_res_record *iterator = NULL;
-    
-    /* Answer packets to send either unicast or multicast */
-    pico_dns_packet *unicast_response = NULL;
-    pico_dns_packet *multicast_response = NULL;
-    
-    char host[30];
-    uint8_t *data = NULL;
-    uint16_t len = 0;
-    
-    /* Move to the data section of the packet */
-    data = (uint8_t *)packet + sizeof(struct pico_dns_header);
-    
-    /* Generate a list of answers */
-    answers = pico_mdns_handle_data_as_questions(&data,
-                                                 short_be(packet->qdcount));
-    if (!answers) {
-        mdns_dbg("No records found that correspond with this query!\n");
+    /* K.A.S.: Remove answers given in question Answer section already */
+    for (i = 0; i < short_be(packet->ancount); i++) {
+        known_answer = data;
+        /* Delete known answer */
+        if (pico_mdns_res_record_list_delete_record(known_answer->rname,
+                                                known_answer->rsuffix->rtype,
+                                                answers) < 0) {
+            mdns_dbg("Could not delete known answer from answer list.\n");
+            return -1;
+        }
         
-//        /* Check if we need to tiebreak simultaneous probing */
-//        if (pico_mdns_handle_data_as_authorities(&data,
-//                                        short_be(packet->nscount)) < 0)
-//            mdns_dbg("No Simultaneous Probe Tiebreaking needed!\n");
+        /* Move to next known answer */
+        data += (uint16_t) strlen(known_answer->rname) + 1u +
+                (uint16_t) sizeof(struct pico_dns_res_record_suffix) +
+                known_answer->rsuffix->rdlength;
     }
     
     iterator = answers;
@@ -2190,6 +2226,107 @@ pico_mdns_handle_probe_packet( pico_dns_packet *packet, struct pico_ip4 peer )
 }
 
 /* ****************************************************************************
+ *  Handle a probe packet
+ * ****************************************************************************/
+static int
+pico_mdns_handle_probe_packet( pico_dns_packet *packet, struct pico_ip4 peer )
+{
+    /* DNS record lists to send either unicast or multicast */
+    pico_mdns_res_record_list *answers = NULL; // Answer records
+    pico_dns_res_record_list *dns_answers_m = NULL;
+    pico_dns_res_record_list *dns_answers_u = NULL;
+    
+    /* To iterate over the answer records */
+    struct pico_mdns_res_record *iterator = NULL;
+    
+    /* Answer packets to send either unicast or multicast */
+    pico_dns_packet *unicast_response = NULL;
+    pico_dns_packet *multicast_response = NULL;
+    
+    char host[30];
+    uint8_t *data = NULL;
+    uint16_t len = 0;
+    uint16_t i = 0;
+    
+    /* Move to the data section of the packet */
+    data = (uint8_t *)packet + sizeof(struct pico_dns_header);
+    
+    /* Generate a list of answers */
+    answers = pico_mdns_handle_data_as_questions(&data,
+                                                 short_be(packet->qdcount));
+    if (!answers) {
+        mdns_dbg("No records found that correspond with this query!\n");
+        
+//        mdns_dbg("\nRNAME: ");
+//        for (i = 0; i < strlen((char *)data) + 1; i++) {
+//            mdns_dbg("%X ", data[i]);
+//        }
+//        mdns_dbg("\n");
+        
+        /* Check if we need to tiebreak simultaneous probing */
+        if (pico_mdns_handle_data_as_authorities(&data,
+                                                 short_be(packet->nscount)) < 0)
+            mdns_dbg("No Simultaneous Probe Tiebreaking needed!\n");
+    }
+    
+    iterator = answers;
+    while (iterator) {
+        /* Add the record either to the multicast or unicast list */
+        if (IS_RES_RECORD_FLAG_SEND_UNICAST_SET(iterator->flags)) {
+            pico_dns_rr_list_append(iterator->record, &dns_answers_u);
+        } else {
+            pico_dns_rr_list_append(iterator->record, &dns_answers_m);
+        }
+        
+        iterator = iterator->next;
+    }
+    
+    /* If there are any unicast records */
+    if (dns_answers_u) {
+        /* Create response DNS packet */
+        unicast_response = pico_mdns_answer_create(dns_answers_u,
+                                                   NULL,
+                                                   NULL,
+                                                   &len);
+        if (!unicast_response || len == 0) {
+            pico_err = PICO_ERR_ENOMEM;
+            return -1;
+        }
+        
+        /* Send the packet via unicast */
+        if (pico_mdns_send_packet_unicast(unicast_response, len, peer) < 0) {
+            mdns_dbg("Could not send unicast response!\n");
+            return -1;
+        }
+        
+        mdns_dbg("Defense sent succesfully via unicast!\n");
+    }
+    
+    /* If there are any unicast records */
+    if (dns_answers_m) {
+        /* Create response DNS packet */
+        multicast_response = pico_mdns_answer_create(dns_answers_m,
+                                                     NULL,
+                                                     NULL,
+                                                     &len);
+        if (!multicast_response || len == 0) {
+            pico_err = PICO_ERR_ENOMEM;
+            return -1;
+        }
+        
+        /* Send the packet via unicast */
+        if (pico_mdns_send_packet(multicast_response, len) < 0) {
+            mdns_dbg("Could not send multicast response!\n");
+            return -1;
+        }
+        
+        mdns_dbg("Defense sent successfully via multicast!\n");
+    }
+    
+    return 0;
+}
+
+/* ****************************************************************************
  *  Handle a DNS response packet
  * ****************************************************************************/
 static int
@@ -2240,33 +2377,24 @@ pico_mdns_recv(void *buf, int buflen, struct pico_ip4 peer)
 
     /* Determine what kind of DNS packet we have to deal with */
     if ((qdcount > 0)) {
-        if (ancount > 0) {
-            mdns_dbg(">>>>>>> RCVD a query with Known Answer Suppression:\n");
-            /* Known-Answer Suppression query */
+        if (authcount > 0) {
+            mdns_dbg(">>>>>>> RCVD a mDNS probe query:\n");
+            /* Packet is probe query */
+            if (pico_mdns_handle_probe_packet(packet, peer) < 0) {
+                mdns_dbg("Could not handle mDNS probe query!\n");
+                return -1;
+            }
+        } else {
+            mdns_dbg(">>>>>>> RCVD a plain mDNS query:\n");
+            /* Packet is a plain query */
             if (pico_mdns_handle_query_packet(packet, peer) < 0) {
                 mdns_dbg("Could not handle plain DNS query!\n");
                 return -1;
             }
-        } else {
-            if (authcount > 0) {
-                mdns_dbg(">>>>>>> RCVD a mDNS probe query:\n");
-                /* Packet is probe query */
-                if (pico_mdns_handle_probe_packet(packet, peer) < 0) {
-                    mdns_dbg("Could not handle mDNS probe query!\n");
-                    return -1;
-                }
-            } else {
-                mdns_dbg(">>>>>>> RCVD a plain DNS query:\n");
-                /* Packet is a plain query */
-                if (pico_mdns_handle_query_packet(packet, peer) < 0) {
-                    mdns_dbg("Could not handle plain DNS query!\n");
-                    return -1;
-                }
-            }
         }
     } else {
         if (ancount > 0) {
-            mdns_dbg(">>>>>>> RCVD a DNS response:\n");
+            mdns_dbg(">>>>>>> RCVD a mDNS response:\n");
             /* Packet is a response */
             if (pico_mdns_handle_response_packet(packet, peer) < 0) {
                 mdns_dbg("Could not handle DNS response!\n");
@@ -2530,6 +2658,8 @@ pico_mdns_send_announcement_packet( pico_time now, void *arg )
     } else {
         mdns_dbg("DONE - Announcing.\n");
         
+        packet_cookie->status = PICO_MDNS_COOKIE_INACTIVE;
+        
         /* Update my records */
         pico_mdns_my_records_claimed(packet_cookie->contents->records,
                                      packet_cookie->callback,
@@ -2604,6 +2734,7 @@ pico_mdns_send_probe_packet( pico_time now, void *arg )
     pico_dns_packet *packet = NULL; // DNS packet we need to create
     struct pico_mdns_cookie *packet_cookie = NULL; // To parse argument in arg
     struct pico_mdns_res_record *record_iterator = NULL;
+    struct pico_mdns_res_record *found = NULL;
     
     /* Questions & Authority records */
     struct pico_dns_res_record *authority_records = NULL; //
@@ -2619,6 +2750,9 @@ pico_mdns_send_probe_packet( pico_time now, void *arg )
     
     /* Parse argument */
     packet_cookie = (struct pico_mdns_cookie *)arg;
+    
+    packet_cookie->status = PICO_MDNS_COOKIE_ACTIVE;
+    
     if (packet_cookie->count > 0) {
         /* Initialise cookie iterator */
         if (!(packet_cookie->contents) ||
@@ -2687,6 +2821,12 @@ pico_mdns_send_probe_packet( pico_time now, void *arg )
         while (record_iterator) {
             /* We want the cache flush bit set here */
             PICO_MDNS_SET_MSB_BE(record_iterator->record->rsuffix->rclass);
+            
+            /* Set the probed flag of 'my records' */
+            found = pico_mdns_res_record_list_find(record_iterator, MyRecords);
+            if (found)
+                PICO_MDNS_SET_FLAG(found->flags, PICO_MDNS_RES_RECORD_PROBED);
+            
             /* Move to next resource record in answer cookie */
             record_iterator = record_iterator->next;
         }

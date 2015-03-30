@@ -299,7 +299,7 @@ pico_dns_namelen_uncomp( char *name, pico_dns_packet *packet );
  *  DNS packet.
  * ****************************************************************************/
 char *
-pico_dns_expand_name_comp( char *name, pico_dns_packet *packet );
+pico_dns_decompress_name( char *name, pico_dns_packet *packet );
 
 /* ****************************************************************************
  *  Create an URL in *[url_addr] from any qname given in [qname]. [url_addr]

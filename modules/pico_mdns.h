@@ -8,6 +8,12 @@
 #define INCLUDE_PICO_MDNS
 
 #include "pico_dns_common.h"
+#include "pico_ipv4.h"
+
+/* ********************************* CONFIG ***********************************/
+#define PICO_MDNS_PROBE_UNICAST 1            /* Probe queries as QU-questions */
+#define PICO_MDNS_DEFAULT_TTL 120            /* Default TTL of mDNS records   */
+/* ****************************************************************************/
 
 #define PICO_MDNS_DEST_ADDR4 "224.0.0.251"
 
@@ -19,6 +25,7 @@ struct pico_mdns_res_record
 {
     struct pico_dns_res_record *record; // DNS Resource Record
     struct pico_timer *timer;           // Used For Timer events
+    uint32_t current_ttl;               // Current TTL
     uint8_t flags;                      // Resource Record flags
     uint8_t claim_id;                   // Claim ID number
     struct pico_mdns_res_record *next;  // Possibility to create a list
@@ -82,13 +89,6 @@ pico_mdns_res_record_list_append_create( const char *url,
                                          pico_mdns_res_record_list **records );
 
 /* ****************************************************************************
- *  Finds a certain mDNS resource record in mDNS resource record list.
- * ****************************************************************************/
-static struct pico_mdns_res_record *
-pico_mdns_res_record_list_find( struct pico_mdns_res_record *record,
-                                pico_mdns_res_record_list *records );
-
-/* ****************************************************************************
  *  Creates a new mDNS resource record for which you want to have the
  *  authority.
  * ****************************************************************************/
@@ -113,7 +113,7 @@ pico_mdns_res_record_delete( struct pico_mdns_res_record **record );
 int
 pico_mdns_claim( pico_mdns_res_record_list *records,
                  uint8_t reclaim,
-                 void (*cb_claimed)(char *str, void *arg),
+                 void (*cb_claimed)(void *data, void *arg),
                  void *arg );
 
 /* ****************************************************************************
@@ -147,27 +147,10 @@ pico_mdns_init( const char *_hostname,
  *  API functions
  * ****************************************************************************/
 int
-pico_mdns_getaddr( const char *url,
-                   void (*callback)(char *ip, void *arg),
-                   void *arg );
-int
-pico_mdns_getname( const char *ip,
-                   void (*callback)(char *url, void *arg),
-                   void *arg );
-
-int
-pico_mdns_flush_cache(void);
-
-#ifdef PICO_SUPPORT_IPV6
-#define PICO_MDNS_DEST_ADDR6 "FF02::FB"
-int
-pico_mdns_getaddr6( const char *url,
-                    void (*callback)(char *ip, void *arg),
-                    void *arg );
-int
-pico_mdns_getname6( const char *ip,
-                    void (*callback)(char *url, void *arg),
-                    void *arg);
-#endif
+pico_mdns_getrecord( const char *url,
+                     uint16_t type,
+                     void (*callback)(pico_mdns_res_record_list *data,
+                                      void *arg),
+                     void *arg );
 
 #endif /* _INCLUDE_PICO_MDNS */

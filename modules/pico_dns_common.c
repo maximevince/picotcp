@@ -263,8 +263,8 @@ pico_dns_packet_compress_name( uint8_t *name,
             /* Copy data after zero-byte, to location right after pointer,
              previously set in offset */
             memcpy(offset, lbl_iterator + 1,
-                   ((uint8_t *)packet + *len) - lbl_iterator);
-            *len = *len - (lbl_iterator - offset + 1);
+                   (size_t)(((uint8_t *)packet + *len) - lbl_iterator));
+            *len = (uint16_t)(*len - (lbl_iterator - offset + 1));
             break;
         }
         
@@ -281,7 +281,7 @@ pico_dns_packet_compress( pico_dns_packet *packet, uint16_t *len )
     uint8_t *packet_buf = NULL;
     uint8_t *iterator = NULL;
     struct pico_dns_res_record_suffix *rsuffix = NULL;
-    uint8_t qdcount = 0, ancount = 0, nscount = 0, arcount = 0;
+    uint16_t qdcount = 0, ancount = 0, nscount = 0, arcount = 0;
     
     uint16_t i = 0;
     
@@ -327,7 +327,7 @@ pico_dns_packet_compress( pico_dns_packet *packet, uint16_t *len )
                   (iterator + pico_dns_namelen_comp((char *) iterator));
         
         /* Move to next res record */
-        iterator = (uint8_t *)((uint8_t)rsuffix + rsuffix->rdlength + 1u);
+        iterator = (uint8_t *)((uint8_t *)rsuffix + rsuffix->rdlength + 1u);
     }
     
     /* Then onto the authorities */
@@ -342,7 +342,7 @@ pico_dns_packet_compress( pico_dns_packet *packet, uint16_t *len )
         (iterator + pico_dns_namelen_comp((char *) iterator));
         
         /* Move to next res record */
-        iterator = (uint8_t *)((uint8_t)rsuffix + rsuffix->rdlength + 1u);
+        iterator = (uint8_t *)((uint8_t *)rsuffix + rsuffix->rdlength + 1u);
     }
     
     /* Then onto the additionals */
@@ -357,7 +357,7 @@ pico_dns_packet_compress( pico_dns_packet *packet, uint16_t *len )
         (iterator + pico_dns_namelen_comp((char *) iterator));
         
         /* Move to next res record */
-        iterator = (uint8_t *)((uint8_t)rsuffix + rsuffix->rdlength + 1u);
+        iterator = (uint8_t *)((uint8_t *)rsuffix + rsuffix->rdlength + 1u);
     }
     
     return 0;
@@ -1153,8 +1153,6 @@ pico_dns_decompress_name( char *name, pico_dns_packet *packet )
         pico_err = PICO_ERR_ENOMEM;
         return NULL;
     }
-    dns_dbg("Allocated string sized: %d\n",
-            pico_dns_namelen_uncomp(name, packet) + 1);
     
     /* Initialise iterators */
     iterator = (uint8_t *) name;

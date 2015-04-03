@@ -10,11 +10,12 @@
 #include "modules/pico_mdns.c"
 #include "check.h"
 
-void callback(char *str, void *arg)
+void callback(void *data, void *arg)
 {
-    (void) str;
+    (void) data;
     (void) arg;
 }
+
 START_TEST(tc_mdns_cache_cmp)
 {
     struct pico_mdns_cache_rr ka;

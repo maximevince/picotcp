@@ -522,6 +522,8 @@ pico_dns_question_list_delete ( pico_dns_question_list **questions )
         previous = iterator;
         iterator = &((*iterator)->next);
         
+        dns_dbg("Deleting question %s...\n", (*previous)->qname);
+        
         /* Delete previous question */
         pico_dns_question_delete(previous);
     }
@@ -693,7 +695,7 @@ pico_dns_question_delete( struct pico_dns_question **question)
         PICO_FREE((*question)->qsuffix);
      (*question)->qsuffix = NULL;
     
-    PICO_FREE((*question));
+    PICO_FREE(*question);
     *question = NULL;
     
     return 0;

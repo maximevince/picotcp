@@ -28,26 +28,20 @@ void mdns_claimed_callback(char *str, void *arg)
     printf("Claimed: %s\n", str);
 }
 
-void mdns_init_callback(char *str, void *arg)
+void mdns_init_callback(pico_mdns_record_vector *vector, char *str, void *arg)
 {
-    char *names = NULL;
     char *hostname = NULL;
-    
-    names = strtok(str, ",");
-    hostname = pico_dns_qname_to_url(names);
-    
+    struct pico_mdns_record *hostname_record = NULL;
+    hostname_record = pico_mdns_record_vector_get(vector, 0);
+    hostname = pico_dns_qname_to_url(hostname_record->record->rname);
     printf("Initialised with hostname: %s\n", hostname);
-    
     PICO_FREE(hostname);
-    
 }
 
 void app_mdns(char *arg, struct pico_ipv4_link *link)
 {
     char *hostname, *peername;
     char *nxt = arg;
-    pico_mdns_res_record_list *records = NULL;
-    struct pico_mdns_res_record *iterator = NULL;
     struct pico_ip6 ipaddr6 = {{0}};
     
     if (!nxt)

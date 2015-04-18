@@ -1,18 +1,9 @@
-<<<<<<< HEAD
-/* ****************************************************************************
- *  PicoTCP. Copyright (c) 2014 TASS Belgium NV. Some rights reserved.
- *  See LICENSE and COPYING for usage.
- *  .
- *  Author: Toon Stegen
- * ****************************************************************************/
-=======
 /*********************************************************************
    PicoTCP. Copyright (c) 2012-2015 Altran Intelligent Systems. Some rights reserved.
    See LICENSE and COPYING for usage.
    .
    Author: Toon Stegen
  *********************************************************************/
->>>>>>> master
 #ifndef INCLUDE_PICO_MDNS
 #define INCLUDE_PICO_MDNS
 

@@ -1,20 +1,9 @@
-<<<<<<< HEAD
-/* ****************************************************************************
- *  PicoTCP. Copyright (c) 2014 TASS Belgium NV. Some rights reserved.
- *  See LICENSE and COPYING for usage.
- *  .
- *  Author: Toon Stegen
- * ****************************************************************************/
-
-/* picoTCP */
-=======
 /*********************************************************************
    PicoTCP. Copyright (c) 2014-2015 Altran Intelligent Systems. Some rights reserved.
    See LICENSE and COPYING for usage.
    .
    Author: Toon Stegen
  *********************************************************************/
->>>>>>> master
 #include "pico_config.h"
 #include "pico_stack.h"
 #include "pico_addressing.h"
@@ -221,13 +210,8 @@ pico_mdns_cmp( void *ka, void *kb )
         return 1;
     if (!(a->record) && b->record)
         return -1;
-<<<<<<< HEAD
-    
-    if (a->record->rsuffix && !(b->record->rsuffix))
-=======
 
-    if(b->suf->qtype < a->suf->qtype)
->>>>>>> master
+    if (a->record->rsuffix && !(b->record->rsuffix))
         return 1;
     if (!(a->record->rsuffix) && b->record->rsuffix)
         return -1;
@@ -260,8 +244,7 @@ pico_mdns_cookie_cmp( void *ka, void *kb )
     struct pico_mdns_cookie *a = NULL;
     struct pico_mdns_cookie *b = NULL;
     uint32_t ha = 0, hb = 0;
-<<<<<<< HEAD
-    
+
     /* To compare questions */
     struct pico_dns_question *qa = NULL;
     struct pico_dns_question *qb = NULL;
@@ -302,19 +285,10 @@ pico_mdns_cookie_cmp( void *ka, void *kb )
     /* All the questions currently compared are the same. Check which has the 
        most questions, if they have the same amount, move on */
     if (a->qvector.count < b->qvector.count)
-=======
-
-    /* Cookie is sorted by qtype, name */
-    if(a->qtype < b->qtype)
-        return -1;
-
-    if(b->qtype < a->qtype)
->>>>>>> master
         return 1;
     if (b->qvector.count < a->qvector.count)
         return -1;
-<<<<<<< HEAD
-    
+
     for (i = 0, j = 0; ((i < a->rvector.count) && (j < b->rvector.count));
          i++, j++) {
         /* Get records at current index */
@@ -332,10 +306,6 @@ pico_mdns_cookie_cmp( void *ka, void *kb )
     /* All the records currently compared are the same. Check Which has the most
        records, if they have the same amount, move on */
     if (a->rvector.count < b->rvector.count)
-=======
-
-    if(hb < ha)
->>>>>>> master
         return 1;
     if (b->rvector.count < a->rvector.count)
         return -1;
@@ -627,15 +597,10 @@ pico_mdns_cookie_apply_spt( struct pico_mdns_cookie *cookie,
     } else {
         mdns_dbg("Checking for lexographically later failed!\n");
         return -1;
-<<<<<<< HEAD
     }
     
     return 0;
 }
-=======
-
-    strcpy(temp + 1, url);
->>>>>>> master
 
 /* ****************************************************************************
  *  Utility function to append a conflict resolution suffix to the first label
@@ -1014,7 +979,6 @@ pico_mdns_record_am_i_lexi_later( struct pico_mdns_record *my_record,
 static struct pico_mdns_record *
 pico_mdns_record_create_from_dns( struct pico_dns_record *dns_record )
 {
-<<<<<<< HEAD
     struct pico_mdns_record *record = NULL;  // Address to set afterwards
     
     /* Provide space for the new mDNS resource record */
@@ -1034,13 +998,6 @@ pico_mdns_record_create_from_dns( struct pico_dns_record *dns_record )
     
     return record;
 }
-=======
-    struct pico_mdns_cookie *ck = (struct pico_mdns_cookie *)_arg;
-    char url[256] = {
-        0
-    };
-    IGNORE_PARAMETER(now);
->>>>>>> master
 
 /* ****************************************************************************
  *  Just copies an mDNS resource record
@@ -1078,8 +1035,6 @@ pico_mdns_record_copy( struct pico_mdns_record *record )
                                        record->flags);
     }
 
-
-<<<<<<< HEAD
     if (!copy) {
         mdns_dbg("Could not create new record @ copy!\n");
         return NULL;
@@ -1092,10 +1047,6 @@ pico_mdns_record_copy( struct pico_mdns_record *record )
     PICO_FREE(url);
     
     return copy;
-=======
-    pico_dns_notation_to_name(url);
-    pico_mdns_del_cookie(url + 1, ck->qtype);
->>>>>>> master
 }
 
 /* ****************************************************************************
@@ -1188,7 +1139,6 @@ pico_mdns_record_vector_init( pico_mdns_record_vector *vector )
     return 0;
 }
 
-<<<<<<< HEAD
 /* ****************************************************************************
  *  Returns the amount of records contained in an mDNS record vector
  * ****************************************************************************/
@@ -1199,12 +1149,6 @@ pico_mdns_record_vector_count( pico_mdns_record_vector *vector )
     if (!vector)
         return 0;
     return vector->count;
-=======
-    if(probe == 0)
-        ck->timer = pico_timer_add(PICO_MDNS_QUERY_TIMEOUT, pico_mdns_timeout, ck);
-
-    return hdr;
->>>>>>> master
 }
 
 /* ****************************************************************************
@@ -1857,7 +1801,6 @@ pico_mdns_query_create( pico_dns_question_vector *qvector,
                         pico_dns_record_vector *arvector,
                         uint16_t *len )
 {
-<<<<<<< HEAD
     pico_dns_packet *packet = NULL;
     
     /* Create an answer as you would with plain DNS */
@@ -1871,32 +1814,6 @@ pico_mdns_query_create( pico_dns_question_vector *qvector,
     packet->id = 0;
     
     return packet;
-=======
-    struct pico_mdns_cache_rr *rr = NULL;
-    struct pico_dns_answer_suffix *suf = NULL;
-    struct pico_mdns_cache_rr test;
-    char temp[256] = {
-        0
-    };
-
-    suf = PICO_ZALLOC(sizeof(struct pico_dns_answer_suffix));
-    if(!suf)
-        return NULL;
-
-    test.suf = suf;
-    suf->qtype = qtype;
-
-    strcpy(temp + 1, url);
-    pico_to_lowercase(temp);
-    test.url = temp;
-    pico_dns_name_to_dns_notation(test.url);
-
-    mdns_dbg("Looking for '%s' with qtype '%d' in cache\n", url, qtype);
-
-    rr = pico_tree_findKey(&CacheTable, &test);
-    PICO_FREE(suf);
-    return rr;
->>>>>>> master
 }
 
 // MARK: MDNS ANSWER UTILITIES
@@ -1926,12 +1843,7 @@ pico_mdns_answer_create( pico_dns_record_vector *anvector,
     return packet;
 }
 
-<<<<<<< HEAD
 // MARK: CACHE UTILITIES
-=======
-    if(!url || !suf || !rdata)
-        return -1;
->>>>>>> master
 
 /* ****************************************************************************
  *  Add a copy of an mDNS resource record to the cache tree.
@@ -1949,7 +1861,6 @@ pico_mdns_cache_add_record( struct pico_dns_record *record )
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }
-<<<<<<< HEAD
     
     /* Try to make a copy of the record */
     if ((copy = pico_dns_record_copy(record)) == NULL) {
@@ -1984,41 +1895,6 @@ pico_mdns_cache_add_record( struct pico_dns_record *record )
             found->record->rsuffix->rttl = record->rsuffix->rttl;
             found->current_ttl = long_be(record->rsuffix->rttl);
         } else {
-=======
-
-    rr = PICO_ZALLOC(sizeof(struct pico_mdns_cache_rr));
-    rr_suf = PICO_ZALLOC(sizeof(struct pico_dns_answer_suffix));
-    rr_url = PICO_ZALLOC(strlen(url) + 1);
-    rr_rdata = PICO_ZALLOC(short_be(suf->rdlength));
-
-    if(!rr || !rr_suf || !rr_url || !rr_rdata) {
-        PICO_FREE(rr);
-        PICO_FREE(rr_suf);
-        PICO_FREE(rr_url);
-        PICO_FREE(rr_rdata);
-        return -1;
-    }
-
-    memcpy(rr_url + 1, url, strlen(url));
-    rr->url = rr_url;
-    pico_dns_name_to_dns_notation(rr->url);
-    memcpy(rr_suf, suf, sizeof(struct pico_dns_answer_suffix));
-    rr->suf = rr_suf;
-    rr->suf->qtype = short_be(rr->suf->qtype);
-    rr->suf->qclass = short_be(rr->suf->qclass);
-    rr->suf->ttl = long_be(suf->ttl);
-    rr->suf->rdlength = short_be(suf->rdlength);
-    memcpy(rr_rdata, rdata, rr->suf->rdlength);
-    rr->rdata = rr_rdata;
-
-    found = pico_mdns_cache_find_rr(url, rr->suf->qtype);
-    if(found) {
-        if(rr->suf->ttl > 0) {
-            mdns_dbg("RR already in cache, updating TTL (was %ds now %ds)\n", found->suf->ttl, rr->suf->ttl);
-            found->suf->ttl = rr->suf->ttl;
-        }
-        else {
->>>>>>> master
             mdns_dbg("RR scheduled for deletion\n");
             /* TTL 0 means delete from cache but we need to wait one second */
             found->record->rsuffix->rttl = long_be(1u);
@@ -2050,27 +1926,16 @@ pico_mdns_cache_add_record( struct pico_dns_record *record )
             mdns_dbg("RR is Goodbye Record.\n");
         }
     }
-<<<<<<< HEAD
-    
     /* Free the url created */
     PICO_FREE(url);
     
     pico_mdns_print_cache();
-    
-=======
-
-    PICO_FREE(rr->suf);
-    PICO_FREE(rr->url);
-    PICO_FREE(rr->rdata);
-    PICO_FREE(rr);
->>>>>>> master
     return 0;
 }
 
 static void
 pico_mdns_cache_tick( pico_time now, void *_arg )
 {
-<<<<<<< HEAD
     struct pico_mdns_record *record = NULL;
     char *url = NULL;
     uint32_t original = 0, current = 0, rnd = 0;
@@ -2088,17 +1953,7 @@ pico_mdns_cache_tick( pico_time now, void *_arg )
     
     /* Parse the rname to an url for a second */
     url = pico_dns_qname_to_url(record->record->rname);
-=======
-    struct pico_mdns_cookie test;
-    char temp[256] = {
-        0
-    };
 
-    if(!url)
-        return NULL;
->>>>>>> master
-
-    
     /* Update the current TTL */
     record->current_ttl--;
     
@@ -3476,31 +3331,12 @@ pico_mdns_init( const char *_hostname,
         mdns_dbg("socket_setoption PICO_IP_MULTICAST_LOOP failed\n");
         return -1;
     }
-<<<<<<< HEAD
-    
     /* Tell the stack we're interested in this particular multicast group */
     if(pico_socket_setoption(mdns_sock_ipv4,
                              PICO_IP_ADD_MEMBERSHIP,
                              &mreq4) < 0) {
         mdns_dbg("socket_setoption PICO_IP_ADD_MEMBERSHIP failed\n");
         return -1;
-=======
-
-    return 0;
-}
-
-int pico_mdns_getaddr(const char *url, void (*callback)(char *ip, void *arg), void *arg)
-{
-    struct pico_mdns_cache_rr *rr = NULL;
-    char addr[46];
-    rr = pico_mdns_cache_find_rr(url, PICO_DNS_TYPE_A);
-
-    if(rr && rr->rdata) {
-        pico_ipv4_to_string(addr, long_from(rr->rdata));
-        mdns_dbg("Cache hit! Found A record for '%s' with addr '%s'\n", url, addr);
-        callback(addr, arg);
-        return 0;
->>>>>>> master
     }
     
     /* RFC:

@@ -55,8 +55,6 @@ static int pico_icmp4_process_in(struct pico_protocol *self, struct pico_frame *
         if (f->dev && f->dev->eth)
             f->len -= PICO_SIZE_ETHHDR;
 
-<<<<<<< HEAD
-=======
         if (!firstpkt && (hdr->hun.ih_idseq.idseq_id ==  last_id) && (last_seq == hdr->hun.ih_idseq.idseq_seq)) {
             /* The network duplicated the echo. Do not reply. */
             pico_frame_discard(f);
@@ -66,7 +64,6 @@ static int pico_icmp4_process_in(struct pico_protocol *self, struct pico_frame *
         firstpkt = 0;
         last_id = hdr->hun.ih_idseq.idseq_id;
         last_seq = hdr->hun.ih_idseq.idseq_seq;
->>>>>>> master
         pico_icmp4_checksum(f);
         pico_ipv4_rebound(f);
     } else if (hdr->type == PICO_ICMP_UNREACH) {

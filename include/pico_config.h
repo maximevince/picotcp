@@ -184,20 +184,6 @@ static inline uint64_t long_long_be(uint64_t le)
 /*** *** *** *** *** *** ***
  *** PLATFORM SPECIFIC   ***
  *** *** *** *** *** *** ***/
-<<<<<<< HEAD
-#if defined STM32
-# include "arch/pico_stm32.h"
-#elif defined STM32_GC
-# include "arch/pico_stm32_gc.h"
-#elif defined STELLARIS
-# include "arch/pico_stellaris.h"
-#elif defined LPC
-# include "arch/pico_lpc1768.h"
-#elif defined LPC43XX
-# include "arch/pico_lpc43xx.h"
-#elif defined LPC18XX
-# include "arch/pico_lpc18xx.h"
-=======
 #if defined PICO_PORT_CUSTOM
 # include "pico_port.h"
 #elif defined CORTEX_M4_HARDFLOAT
@@ -206,7 +192,6 @@ static inline uint64_t long_long_be(uint64_t le)
 # include "arch/pico_cortex_m.h"
 #elif defined CORTEX_M3
 # include "arch/pico_cortex_m.h"
->>>>>>> master
 #elif defined PIC24
 # include "arch/pico_pic24.h"
 #elif defined MSP430

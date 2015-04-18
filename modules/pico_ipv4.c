@@ -215,17 +215,12 @@ int pico_ipv4_is_valid_src(uint32_t address, struct pico_device *dev)
     } else if (pico_ipv4_is_invalid_loopback(address, dev)) {
         dbg("Source is a loopback address, discard packet\n");
         return 0;
-<<<<<<< HEAD
-    }
-    else {
-=======
     } else {
 #ifdef PICO_SUPPORT_AODV
         union pico_address src;
         src.ip4.addr = address;
         pico_aodv_refresh(&src);
 #endif
->>>>>>> master
         return 1;
     }
 }
@@ -883,8 +878,6 @@ struct pico_ip4 *pico_ipv4_source_find(const struct pico_ip4 *dst)
 {
     struct pico_ip4 *myself = NULL;
     struct pico_ipv4_route *rt;
-<<<<<<< HEAD
-=======
 #ifdef PICO_SUPPORT_AODV
     union pico_address node_address;
     node_address.ip4.addr = dst->addr;
@@ -892,7 +885,6 @@ struct pico_ip4 *pico_ipv4_source_find(const struct pico_ip4 *dst)
         pico_aodv_lookup(&node_address);
 
 #endif
->>>>>>> master
 
     if (!dst) {
         pico_err = PICO_ERR_EINVAL;
@@ -902,12 +894,9 @@ struct pico_ip4 *pico_ipv4_source_find(const struct pico_ip4 *dst)
     rt = route_find(dst);
     if (rt && rt->link) {
         myself = &rt->link->address;
-    } else
+    } else {
         pico_err = PICO_ERR_EHOSTUNREACH;
-<<<<<<< HEAD
-=======
     }
->>>>>>> master
 
     return myself;
 }
@@ -1284,13 +1273,10 @@ int pico_ipv4_frame_push(struct pico_frame *f, struct pico_ip4 *dst, uint8_t pro
         1 )
         ipv4_progressive_id++;
 
-<<<<<<< HEAD
-=======
     if (f->send_ttl > 0) {
         ttl = f->send_ttl;
     }
 
->>>>>>> master
     hdr->id = short_be(ipv4_progressive_id);
     hdr->dst.addr = dst->addr;
     hdr->src.addr = link->address.addr;
@@ -1337,9 +1323,6 @@ int pico_ipv4_frame_push(struct pico_frame *f, struct pico_ip4 *dst, uint8_t pro
 
 #endif
 
-<<<<<<< HEAD
-    if(pico_ipv4_link_get(&hdr->dst)) {
-=======
 /* #ifdef PICO_SUPPORT_AODV */
 #if 0
     {
@@ -1351,7 +1334,6 @@ int pico_ipv4_frame_push(struct pico_frame *f, struct pico_ip4 *dst, uint8_t pro
 #endif
 
     if (pico_ipv4_link_get(&hdr->dst)) {
->>>>>>> master
         /* it's our own IP */
         return pico_enqueue(&in, f);
     } else{
@@ -1614,11 +1596,7 @@ struct pico_ipv4_link *pico_ipv4_link_get(struct pico_ip4 *address)
         return found;
 }
 
-<<<<<<< HEAD
-struct pico_ipv4_link *pico_ipv4_link_by_dev(struct pico_device *dev)
-=======
 struct pico_ipv4_link *MOCKABLE pico_ipv4_link_by_dev(struct pico_device *dev)
->>>>>>> master
 {
     struct pico_tree_node *index = NULL;
     struct pico_ipv4_link *link = NULL;
@@ -1652,11 +1630,7 @@ struct pico_ipv4_link *pico_ipv4_link_by_dev_next(struct pico_device *dev, struc
     return NULL;
 }
 
-<<<<<<< HEAD
-struct pico_device *pico_ipv4_link_find(struct pico_ip4 *address)
-=======
 struct pico_device *MOCKABLE pico_ipv4_link_find(struct pico_ip4 *address)
->>>>>>> master
 {
     struct pico_ipv4_link test, *found;
     if (!address) {

@@ -636,49 +636,6 @@ static int radv_process(struct pico_frame *f)
     while (optlen > 0) {
         uint8_t *type = (uint8_t *)nxtopt;
         switch (*type) {
-<<<<<<< HEAD
-            case PICO_ND_OPT_PREFIX:
-                {
-                    struct pico_icmp6_opt_prefix *prefix = 
-                        (struct pico_icmp6_opt_prefix *) nxtopt;
-                    if (prefix->val_lifetime > 0) {
-                        if (prefix->prefix_len == 64) {
-                            pico_ipv6_route_add(prefix->prefix, netmask, ipv6_hdr->src, 1, NULL);
-                        } else {
-                            pico_icmp6_parameter_problem(f, PICO_ICMP6_PARAMPROB_IPV6OPT, 
-                                (uint32_t)sizeof(struct pico_ipv6_hdr) + (uint32_t)PICO_ICMP6HDR_ROUTER_ADV_SIZE + (uint32_t)(nxtopt - opt_start));
-                            return -1;
-                        }
-                    }
-                    optlen -= (prefix->len << 3);
-                    nxtopt += (prefix->len << 3);
-                }
-                break;
-            case PICO_ND_OPT_LLADDR_SRC:
-                {
-                    struct pico_icmp6_opt_lladdr *lladdr_src = 
-                        (struct pico_icmp6_opt_lladdr *) nxtopt;
-                    optlen -= (lladdr_src->len << 3);
-                    nxtopt += (lladdr_src->len << 3);
-                }
-                break;
-            case PICO_ND_OPT_MTU:
-                {
-                    struct pico_icmp6_opt_mtu *mtu = 
-                        (struct pico_icmp6_opt_mtu *) nxtopt;
-                    /* Skip this */
-                    optlen -= (mtu->len << 3);
-                    nxtopt += (mtu->len << 3);
-                }
-                break;
-            case PICO_ND_OPT_REDIRECT:
-                {
-                    struct pico_icmp6_opt_redirect *redirect = 
-                        (struct pico_icmp6_opt_redirect *) nxtopt;
-                    /* Skip this */
-                    optlen -= (redirect->len << 3);
-                    nxtopt += (redirect->len << 3);
-=======
         case PICO_ND_OPT_PREFIX:
         {
             pico_time now = PICO_TIME_MS();
@@ -710,7 +667,6 @@ static int radv_process(struct pico_frame *f)
             if (prefix->prefix_len != 64) {
                 return -1;
             }
->>>>>>> master
 
             link = pico_ipv6_prefix_configured(&prefix->prefix);
             if (link) {

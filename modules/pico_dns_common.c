@@ -1,13 +1,3 @@
-<<<<<<< HEAD
-/* ****************************************************************************
- *  PicoTCP. Copyright (c) 2012 TASS Belgium NV. Some rights reserved.
- *  See LICENSE and COPYING for usage.
- *
- *  .
- *
- *  Authors: Toon Stegen
- * ****************************************************************************/
-=======
 /*********************************************************************
    PicoTCP. Copyright (c) 2012-2015 Altran Intelligent Systems. Some rights reserved.
    See LICENSE and COPYING for usage.
@@ -16,7 +6,7 @@
 
    Authors: Toon Stegen
  *********************************************************************/
->>>>>>> master
+
 #include "pico_config.h"
 #include "pico_stack.h"
 #include "pico_addressing.h"
@@ -1550,12 +1540,7 @@ pico_dns_client_strlen(const char *url)
 {
     if (!url)
         return 0;
-<<<<<<< HEAD
-    return (uint16_t) strlen(url);
-=======
-
     return (uint16_t)strlen(url);
->>>>>>> master
 }
 
 /* ****************************************************************************

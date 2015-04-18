@@ -124,42 +124,7 @@ ifeq ($(ARCH),msp430)
 endif
 
 ifeq ($(ARCH),esp8266)
-<<<<<<< HEAD
-  CFLAGS +=  -DESP8266              \
-             -g                     \
-             -Wpointer-arith        \
-             -Wundef                \
-             -Wl,-EL                \
-             -fno-inline-functions  \
-             -nostdlib              \
-             -mlongcalls            \
-             -mtext-section-literals
-endif
-
-ifeq ($(ARCH),stellaris)
-  CFLAGS+=-mthumb -DSTELLARIS
-endif
-
-ifeq ($(ARCH),lpc)
-  CFLAGS+=-fmessage-length=0 -fno-builtin \
-  -ffunction-sections -fdata-sections -mlittle-endian \
-  -mcpu=cortex-m3 -mthumb -MMD -MP -DLPC
-endif
-
-ifeq ($(ARCH),lpc18xx)
-  CFLAGS+=-fmessage-length=0 -fno-builtin \
-  -ffunction-sections -fdata-sections -mlittle-endian \
-  -mcpu=cortex-m3 -mthumb -MMD -MP -DLPC18XX
-endif
-
-ifeq ($(ARCH),lpc43xx)
-  CFLAGS+=-fmessage-length=0 -fno-builtin \
-  -ffunction-sections -fdata-sections -mlittle-endian \
-  -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16  \
-  -fsingle-precision-constant -mthumb -MMD -MP -DLPC43XX
-=======
   CFLAGS+=-DESP8266 -Wl,-EL -fno-inline-functions -nostdlib -mlongcalls -mtext-section-literals
->>>>>>> master
 endif
 
 ifeq ($(ARCH),pic24)

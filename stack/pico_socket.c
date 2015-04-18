@@ -1024,12 +1024,8 @@ static int pico_socket_final_xmit(struct pico_socket *s, struct pico_frame *f)
     }
 }
 
-<<<<<<< HEAD
-static int pico_socket_xmit_one(struct pico_socket *s, const void *buf, const int len, void *src, struct pico_remote_endpoint *ep)
-=======
 static int pico_socket_xmit_one(struct pico_socket *s, const void *buf, const int len, void *src,
                                 struct pico_remote_endpoint *ep, struct pico_msginfo *msginfo)
->>>>>>> master
 {
     struct pico_frame *f;
     uint16_t hdr_offset = (uint16_t)pico_socket_sendto_transport_offset(s);
@@ -1091,12 +1087,8 @@ static void pico_socket_xmit_next_fragment_setup(struct pico_frame *f, int hdr_o
 }
 #endif
 
-<<<<<<< HEAD
-static int pico_socket_xmit_fragments(struct pico_socket *s, const void *buf, const int len, void *src, struct pico_remote_endpoint *ep)
-=======
 static int pico_socket_xmit_fragments(struct pico_socket *s, const void *buf, const int len,
                                       void *src, struct pico_remote_endpoint *ep, struct pico_msginfo *msginfo)
->>>>>>> master
 {
     int space = pico_socket_xmit_avail_space(s);
     int hdr_offset = pico_socket_sendto_transport_offset(s);
@@ -1236,13 +1228,8 @@ static int pico_socket_xmit_avail_space(struct pico_socket *s)
     return transport_len;
 }
 
-
-<<<<<<< HEAD
-static int pico_socket_xmit(struct pico_socket *s, const void *buf, const int len, void *src, struct pico_remote_endpoint *ep)
-=======
 static int pico_socket_xmit(struct pico_socket *s, const void *buf, const int len, void *src,
                             struct pico_remote_endpoint *ep, struct pico_msginfo *msginfo)
->>>>>>> master
 {
     int space = pico_socket_xmit_avail_space(s);
     int total_payload_written = 0;
@@ -1284,12 +1271,8 @@ static void pico_socket_sendto_set_dport(struct pico_socket *s, uint16_t port)
 }
 
 
-<<<<<<< HEAD
-int MOCKABLE pico_socket_sendto(struct pico_socket *s, const void *buf, const int len, void *dst, uint16_t remote_port)
-=======
 int MOCKABLE pico_socket_sendto_extended(struct pico_socket *s, const void *buf, const int len,
                                          void *dst, uint16_t remote_port, struct pico_msginfo *msginfo)
->>>>>>> master
 {
     struct pico_remote_endpoint *remote_endpoint = NULL;
     void *src = NULL;
@@ -1303,8 +1286,6 @@ int MOCKABLE pico_socket_sendto_extended(struct pico_socket *s, const void *buf,
 
     src = pico_socket_sendto_get_src(s, dst);
     if (!src) {
-<<<<<<< HEAD
-=======
 #ifdef PICO_SUPPORT_IPV6
         if((s->net->proto_number == PICO_PROTO_IPV6)
            && msginfo && msginfo->dev
@@ -1316,7 +1297,6 @@ int MOCKABLE pico_socket_sendto_extended(struct pico_socket *s, const void *buf,
         }
         else
 #endif
->>>>>>> master
         return -1;
     }
 
@@ -1326,16 +1306,12 @@ int MOCKABLE pico_socket_sendto_extended(struct pico_socket *s, const void *buf,
 
     pico_socket_sendto_set_dport(s, remote_port);
 
-<<<<<<< HEAD
-    return pico_socket_xmit(s, buf, len, src, remote_endpoint);
-=======
     return pico_socket_xmit(s, buf, len, src, remote_endpoint, msginfo);
 }
 
 int MOCKABLE pico_socket_sendto(struct pico_socket *s, const void *buf, const int len, void *dst, uint16_t remote_port)
 {
     return pico_socket_sendto_extended(s, buf, len, dst, remote_port, NULL);
->>>>>>> master
 }
 
 int pico_socket_send(struct pico_socket *s, const void *buf, int len)
@@ -1360,12 +1336,8 @@ int pico_socket_send(struct pico_socket *s, const void *buf, int len)
     return pico_socket_sendto(s, buf, len, &s->remote_addr, s->remote_port);
 }
 
-<<<<<<< HEAD
-int pico_socket_recvfrom(struct pico_socket *s, void *buf, int len, void *orig, uint16_t *remote_port)
-=======
 int pico_socket_recvfrom_extended(struct pico_socket *s, void *buf, int len, void *orig,
                                   uint16_t *remote_port, struct pico_msginfo *msginfo)
->>>>>>> master
 {
     if (!s || buf == NULL) { /* / || orig == NULL || remote_port == NULL) { */
         pico_err = PICO_ERR_EINVAL;
@@ -1413,8 +1385,6 @@ int pico_socket_recvfrom_extended(struct pico_socket *s, void *buf, int len, voi
     return 0;
 }
 
-<<<<<<< HEAD
-=======
 int pico_socket_recvfrom(struct pico_socket *s, void *buf, int len, void *orig,
                          uint16_t *remote_port)
 {
@@ -1422,7 +1392,6 @@ int pico_socket_recvfrom(struct pico_socket *s, void *buf, int len, void *orig,
 
 }
 
->>>>>>> master
 int pico_socket_recv(struct pico_socket *s, void *buf, int len)
 {
     return pico_socket_recvfrom(s, buf, len, NULL, NULL);

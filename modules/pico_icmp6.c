@@ -44,8 +44,6 @@ uint16_t pico_icmp6_checksum(struct pico_frame *f)
 static void pico_icmp6_ping_recv_reply(struct pico_frame *f);
 #endif
 
-<<<<<<< HEAD
-=======
 static int pico_icmp6_send_echoreply(struct pico_frame *echo)
 {
     struct pico_frame *reply = NULL;
@@ -80,7 +78,6 @@ static int pico_icmp6_send_echoreply(struct pico_frame *echo)
     return 0;
 }
 
->>>>>>> master
 static int pico_icmp6_process_in(struct pico_protocol *self, struct pico_frame *f)
 {
     struct pico_icmp6_hdr *hdr = (struct pico_icmp6_hdr *)f->transport_hdr;
@@ -226,63 +223,48 @@ static int pico_icmp6_notify(struct pico_frame *f, uint8_t type, uint8_t code, u
 
 int pico_icmp6_port_unreachable(struct pico_frame *f)
 {
-<<<<<<< HEAD
-=======
+
     struct pico_ipv6_hdr *hdr = (struct pico_ipv6_hdr *)f->net_hdr;
     if (pico_ipv6_is_multicast(hdr->dst.addr))
         return 0;
 
->>>>>>> master
     return pico_icmp6_notify(f, PICO_ICMP6_DEST_UNREACH, PICO_ICMP6_UNREACH_PORT, 0);
 }
 
 int pico_icmp6_proto_unreachable(struct pico_frame *f)
 {
-<<<<<<< HEAD
-=======
     struct pico_ipv6_hdr *hdr = (struct pico_ipv6_hdr *)f->net_hdr;
     if (pico_ipv6_is_multicast(hdr->dst.addr))
         return 0;
 
->>>>>>> master
     return pico_icmp6_notify(f, PICO_ICMP6_DEST_UNREACH, PICO_ICMP6_UNREACH_ADDR, 0);
 }
 
 int pico_icmp6_dest_unreachable(struct pico_frame *f)
 {
-<<<<<<< HEAD
-=======
     struct pico_ipv6_hdr *hdr = (struct pico_ipv6_hdr *)f->net_hdr;
     if (pico_ipv6_is_multicast(hdr->dst.addr))
         return 0;
 
->>>>>>> master
     return pico_icmp6_notify(f, PICO_ICMP6_DEST_UNREACH, PICO_ICMP6_UNREACH_ADDR, 0);
 }
 
 int pico_icmp6_ttl_expired(struct pico_frame *f)
 {
-<<<<<<< HEAD
-=======
     struct pico_ipv6_hdr *hdr = (struct pico_ipv6_hdr *)f->net_hdr;
     if (pico_ipv6_is_multicast(hdr->dst.addr))
         return 0;
 
->>>>>>> master
     return pico_icmp6_notify(f, PICO_ICMP6_TIME_EXCEEDED, PICO_ICMP6_TIMXCEED_INTRANS, 0);
 }
 
 int pico_icmp6_pkt_too_big(struct pico_frame *f)
 {
-<<<<<<< HEAD
-    return pico_icmp6_notify(f, PICO_ICMP6_PKT_TOO_BIG, 0, 0); 
-=======
     struct pico_ipv6_hdr *hdr = (struct pico_ipv6_hdr *)f->net_hdr;
     if (pico_ipv6_is_multicast(hdr->dst.addr))
         return 0;
 
     return pico_icmp6_notify(f, PICO_ICMP6_PKT_TOO_BIG, 0, 0);
->>>>>>> master
 }
 
 #ifdef PICO_SUPPORT_IPFILTER
@@ -297,8 +279,6 @@ int pico_icmp6_parameter_problem(struct pico_frame *f, uint8_t problem, uint32_t
     return pico_icmp6_notify(f, PICO_ICMP6_PARAM_PROBLEM, problem, ptr);
 }
 
-<<<<<<< HEAD
-=======
 int pico_icmp6_frag_expired(struct pico_frame *f)
 {
     struct pico_ipv6_hdr *hdr = (struct pico_ipv6_hdr *)f->net_hdr;
@@ -308,7 +288,6 @@ int pico_icmp6_frag_expired(struct pico_frame *f)
     return pico_icmp6_notify(f, PICO_ICMP6_TIME_EXCEEDED, PICO_ICMP6_TIMXCEED_REASS, 0);
 }
 
->>>>>>> master
 /* RFC 4861 $7.2.2: sending neighbor solicitations */
 int pico_icmp6_neighbor_solicitation(struct pico_device *dev, struct pico_ip6 *dst, uint8_t type)
 {
@@ -565,12 +544,8 @@ static int pico_icmp6_send_echo(struct pico_icmp6_ping_cookie *cookie)
     /* XXX: Fill payload */
     hdr->crc = 0;
     hdr->crc = short_be(pico_icmp6_checksum(echo));
-<<<<<<< HEAD
-    pico_ipv6_frame_push(echo, &cookie->dst, PICO_PROTO_ICMP6);
-=======
     echo->dev = cookie->dev;
     pico_ipv6_frame_push(echo, NULL, &cookie->dst, PICO_PROTO_ICMP6, 0);
->>>>>>> master
     return 0;
 }
 

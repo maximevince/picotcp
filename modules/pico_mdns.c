@@ -341,7 +341,7 @@ pico_mdns_print_cache( void )
 {
     struct pico_mdns_record *node_record = NULL;
     struct pico_tree_node *node = NULL;
-    char *url = NULL, *ptr = NULL;
+    char *url = NULL;
     char host[50] = { 0 };
     
     mdns_dbg("\033c");

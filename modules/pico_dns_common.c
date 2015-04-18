@@ -23,6 +23,8 @@
 static int
 pico_dns_record_copy_flat( struct pico_dns_record *record,
                            uint8_t **destination );
+static char *
+pico_dns_url_to_reverse_qname( const char *url, uint8_t proto );
 
 // MARK: DNS PACKET FUNCTIONS
 
@@ -369,79 +371,6 @@ pico_dns_question_fill_qsuffix( struct pico_dns_question_suffix *suf,
 }
 
 /* ****************************************************************************
- *  Fills the qname-field [qname] of the question with [url] in DNS-format,
- *  f.e.: www.google.com => 3www6google3com0
- *  If [inverse] is set, an arpa-suffix will be added to the qname depending
- *  on [proto], whether this param is PICO_PROTO_IPV4 or PICO_PROTO_IPV6.
- * ****************************************************************************/
-static void
-pico_dns_question_fill_qname( char *qname,
-                              const char *url,
-                              uint16_t qtype,
-                              uint16_t proto )
-{
-    /* If reverse IPv4 address resolving, convert to IPv4 arpa-format */
-    if(qtype == PICO_DNS_TYPE_PTR && proto == PICO_PROTO_IPV4) {
-        memcpy(qname + 1u, url, strlen(url));
-        pico_dns_mirror_addr(qname + 1u);
-        memcpy(qname + (uint16_t)(pico_dns_client_strlen(url) + 2u) - 1,
-               PICO_ARPA_IPV4_SUFFIX,
-               strlen(PICO_ARPA_IPV4_SUFFIX));
-    }
-    /* If reverse IPv6 address resolving, convert to IPv6 arpa-format */
-#ifdef PICO_SUPPORT_IPV6
-    else if (qtype == PICO_DNS_TYPE_PTR && proto == PICO_PROTO_IPV6) {
-        pico_dns_ipv6_set_ptr(url, qname + 1u);
-        memcpy(qname + 1u + STRLEN_PTR_IP6,
-               PICO_ARPA_IPV6_SUFFIX,
-               strlen(PICO_ARPA_IPV6_SUFFIX));
-    }
-#endif
-    /* If NO reverse address resolving, copy url in the qname field */
-    else
-        memcpy(qname + 1u, url, strlen(url));
-    
-    /* change www.google.com to 3www6google3com0 */
-    pico_dns_name_to_dns_notation(qname);
-}
-
-/* ****************************************************************************
- *  Gets the length of a given 'url' as if it where a qname for given qtype and
- *  protocol. Fills arpalen with the length of the arpa-suffix when qtype is
- *  PICO_DNS_TYPE_PTR, depending on [proto].
- * ****************************************************************************/
-static uint16_t
-pico_dns_question_get_qname_len( const char *url,
-                                 uint16_t *arpalen,
-                                 uint16_t qtype,
-                                 uint16_t proto )
-{
-    uint16_t slen;
-    
-    /* Check if pointers given are not NULL */
-    if (!url && !arpalen) {
-        pico_err = PICO_ERR_EINVAL;
-        return 0;
-    }
-    
-    /* Get length + 2 for .-prefix en trailing zero-byte by default */
-    slen = (uint16_t)(pico_dns_client_strlen(url) + 2u);
-    *arpalen = 0;
-    
-    /* Get the length of arpa-suffix if needed */
-    if (proto == PICO_PROTO_IPV4 && qtype == PICO_DNS_TYPE_PTR)
-        *arpalen = (uint16_t) strlen(PICO_ARPA_IPV4_SUFFIX);
-#ifdef PICO_SUPPORT_IPV6
-    else if (proto == PICO_PROTO_IPV6 && qtype == PICO_DNS_TYPE_PTR) {
-        *arpalen = (uint16_t) strlen(PICO_ARPA_IPV6_SUFFIX);
-        slen = STRLEN_PTR_IP6 + 2u;
-    }
-#endif
-    
-    return slen;
-}
-
-/* ****************************************************************************
  *  Just copies a question provided in [questio]
  * ****************************************************************************/
 struct pico_dns_question *
@@ -469,7 +398,8 @@ pico_dns_question_copy( struct pico_dns_question *question )
                                     &len,
                                     question->proto,
                                     question->qsuffix->qtype,
-                                    question->qsuffix->qclass);
+                                    question->qsuffix->qclass,
+                                    0);
     
     /* Free memory */
     PICO_FREE(url);
@@ -512,41 +442,44 @@ pico_dns_question_create( const char *url,
                           uint16_t *len,
                           uint8_t proto,
                           uint16_t qtype,
-                          uint16_t qclass )
+                          uint16_t qclass,
+                          uint8_t reverse )
 {
-    struct pico_dns_question *question = NULL;  /* Question pointer to return */
-    uint16_t slen, arpalen;                     /* Some lenghts */
+    struct pico_dns_question *question = NULL;
+    char *qname = NULL;
+    uint16_t slen = 0;
     
     /* Check if valid arguments are provided */
     if (!url || !len) {
         pico_err = PICO_ERR_EINVAL;
         return NULL;
     }
-    if (proto != PICO_PROTO_IPV6 && proto != PICO_PROTO_IPV4) {
-        pico_err = PICO_ERR_EINVAL;
-        return NULL;
+
+    if (reverse) {
+        qname = pico_dns_url_to_reverse_qname(url, proto);
+    } else {
+        qname = pico_dns_url_to_qname(url);
     }
-    
-    /* Determine the length of the URL as if it where a qname */
-    slen = pico_dns_question_get_qname_len(url, &arpalen, qtype, proto);
+    slen = (uint16_t)(strlen(qname) + 1u);
     
     /* Allocate space for the question and the subfields */
     question = PICO_ZALLOC(sizeof(struct pico_dns_question));
-    question->qname = PICO_ZALLOC((size_t)(slen + arpalen));
+    if (!question) {
+        pico_err = PICO_ERR_ENOMEM;
+        return NULL;
+    }
+    question->qname = qname;
     question->qsuffix = PICO_ZALLOC(sizeof(struct pico_dns_question_suffix));
-    if (!question || !(question->qname) || !(question->qsuffix)) {
+    if (!(question->qname) || !(question->qsuffix)) {
         pico_err = PICO_ERR_ENOMEM;
         return NULL;
     }
     
     /* Determine the entire length of the question */
-    *len = (uint16_t)(slen + arpalen + (uint16_t)sizeof(struct pico_dns_question_suffix));
+    *len = (uint16_t)(slen + (uint16_t)sizeof(struct pico_dns_question_suffix));
     
     /* Set the length of the question */
-    question->qname_length = (uint8_t)(slen + arpalen);
-    
-    /* Fill in the qname field */
-    pico_dns_question_fill_qname(question->qname, url, qtype, proto);
+    question->qname_length = (uint8_t)(slen);
     
     /* Fill in the question suffix */
     pico_dns_question_fill_qsuffix(question->qsuffix, qtype, qclass);
@@ -989,7 +922,8 @@ pico_dns_record_create( const char *url,
     {
         case PICO_DNS_TYPE_A: datalen = PICO_SIZE_IP4; break;
         case PICO_DNS_TYPE_AAAA: datalen = PICO_SIZE_IP6; break;
-        case PICO_DNS_TYPE_PTR: datalen = (uint16_t)(strlen(rdata) + 1u); break;
+        case PICO_DNS_TYPE_PTR: datalen =
+                        (uint16_t)(pico_dns_client_strlen(rdata) + 2u); break;
         default: datalen = (uint16_t)(strlen(rdata)); break;
     }
     
@@ -1003,7 +937,7 @@ pico_dns_record_create( const char *url,
         return NULL;
     }
     
-    /* Determine the complete length of resource record including rname, rsuffix and rdata */
+    /* Determine the complete length of resource record */
     *len = (uint16_t)(slen + sizeof(struct pico_dns_record_suffix) + datalen);
     
     /* Fill in the rname_length field */
@@ -1017,8 +951,13 @@ pico_dns_record_create( const char *url,
     pico_dns_record_fill_suffix(record->rsuffix, rtype, rclass, rttl, datalen);
     
     /* Fill in the rdata */
-    memcpy(record->rdata, rdata, datalen);
-    
+    if (rtype != PICO_DNS_TYPE_PTR) {
+        memcpy(record->rdata, rdata, datalen);
+    } else {
+        memcpy(record->rdata + 1u, rdata, strlen(rdata));
+        pico_dns_name_to_dns_notation((char *)record->rdata);
+    }
+
     return record;
 }
 
@@ -1376,6 +1315,81 @@ pico_dns_decompress_name( char *name, pico_dns_packet *packet )
     *dest_iterator = (uint8_t) '\0';
     
     return decompressed_name;
+}
+
+/* ****************************************************************************
+ *  Gets the length of a given 'url' as if it where a qname for given qtype and
+ *  protocol. Fills arpalen with the length of the arpa-suffix when qtype is
+ *  PICO_DNS_TYPE_PTR, depending on [proto].
+ * ****************************************************************************/
+static uint16_t
+pico_dns_url_get_reverse_len( const char *url,
+                              uint16_t *arpalen,
+                              uint16_t proto)
+{
+    uint16_t slen = 0;
+
+    /* Check if pointers given are not NULL */
+    if (!url && !arpalen) {
+        pico_err = PICO_ERR_EINVAL;
+        return 0;
+    }
+    /* Get length + 2 for .-prefix en trailing zero-byte by default */
+    slen = (uint16_t)(pico_dns_client_strlen(url) + 2u);
+    *arpalen = 0;
+
+    /* Get the length of arpa-suffix if needed */
+    if (proto == PICO_PROTO_IPV4)
+        *arpalen = (uint16_t) strlen(PICO_ARPA_IPV4_SUFFIX);
+#ifdef PICO_SUPPORT_IPV6
+    else if (proto == PICO_PROTO_IPV6)
+    {
+        *arpalen = (uint16_t) strlen(PICO_ARPA_IPV6_SUFFIX);
+        slen = STRLEN_PTR_IP6 + 2u;
+    }
+#endif
+    return slen;
+}
+
+/* ****************************************************************************
+ *  Returns the qname with [url] in DNS-format, with reverse resolving
+ *  f.e.: www.google.com => 3www6google3com0
+ * ****************************************************************************/
+static char *
+pico_dns_url_to_reverse_qname( const char *url, uint8_t proto )
+{
+    char *reverse_qname = NULL;
+    uint16_t slen = 0, arpalen = 0;
+
+    slen = pico_dns_url_get_reverse_len(url, &arpalen, proto);
+    reverse_qname = PICO_ZALLOC((size_t)(slen + arpalen));
+    if (!reverse_qname) {
+        pico_err = PICO_ERR_ENOMEM;
+        return NULL;
+    }
+
+    /* If reverse IPv4 address resolving, convert to IPv4 arpa-format */
+    if (proto == PICO_PROTO_IPV4) {
+        memcpy(reverse_qname + 1u, url, strlen(url));
+        pico_dns_mirror_addr(reverse_qname + 1u);
+        memcpy(reverse_qname + (uint16_t)(strlen(url) + 2u) - 1,
+               PICO_ARPA_IPV4_SUFFIX,
+               strlen(PICO_ARPA_IPV4_SUFFIX));
+        /* If reverse IPv6 address resolving, convert to IPv6 arpa-format */
+    }
+#ifdef PICO_SUPPORT_IPV6
+    else if (proto == PICO_PROTO_IPV6) {
+        pico_dns_ipv6_set_ptr(url, reverse_qname + 1u);
+        memcpy(reverse_qname + 1u + STRLEN_PTR_IP6,
+               PICO_ARPA_IPV6_SUFFIX,
+               strlen(PICO_ARPA_IPV6_SUFFIX));
+    }
+#endif
+    else {
+        /* If you call this function you want a reverse qname */
+    }
+    pico_dns_name_to_dns_notation(reverse_qname);
+    return reverse_qname;
 }
 
 /* ****************************************************************************

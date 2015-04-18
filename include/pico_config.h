@@ -3,7 +3,7 @@
    See LICENSE and COPYING for usage.
 
  *********************************************************************/
-#include "pico_defines.h"
+//#include "pico_defines.h"
 #ifndef INCLUDE_PICO_CONFIG
 #define INCLUDE_PICO_CONFIG
 #ifndef __KERNEL__

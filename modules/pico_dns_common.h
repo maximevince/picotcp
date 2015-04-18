@@ -171,7 +171,8 @@ pico_dns_question_create( const char *url,
                           uint16_t *len,
                           uint8_t proto,
                           uint16_t qtype,
-                          uint16_t qclass );
+                          uint16_t qclass,
+                          uint8_t reverse );
 
 /* ****************************************************************************
  *  Initialise an mDNS record vector

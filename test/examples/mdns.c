@@ -23,18 +23,41 @@ void mdns_getaddr_callback(char *str, void *arg)
         printf("Getaddr callback called, str: %s\n", str);
 }
 
-void mdns_claimed_callback(char *str, void *arg)
+void mdns_claimed_callback( pico_mdns_record_vector *vector,
+                            char *str,
+                            void *arg )
 {
     printf("Claimed: %s\n", str);
 }
 
-void mdns_init_callback(pico_mdns_record_vector *vector, char *str, void *arg)
+void mdns_init_callback( pico_mdns_record_vector *vector,
+                         char *str,
+                         void *arg )
 {
-    char *hostname = NULL;
+    pico_mdns_record_vector rvector = { 0 };
     struct pico_mdns_record *hostname_record = NULL;
+    struct pico_mdns_record *test = NULL;
+    char *hostname = NULL;
+    char *name = "_kerberos._udp.local";
+    char *pointer = "jelle._kerberos._udp.local";
+
+    /* Get the first record in the vector */
     hostname_record = pico_mdns_record_vector_get(vector, 0);
+
+    /* Convert the rname to an URL */
     hostname = pico_dns_qname_to_url(hostname_record->record->rname);
+
     printf("Initialised with hostname: %s\n", hostname);
+
+    test = pico_mdns_record_create(name,
+                                   (void *)pointer,
+                                   PICO_DNS_TYPE_PTR,
+                                   120,
+                                   PICO_MDNS_RECORD_SHARED);
+
+    pico_mdns_record_vector_add(&rvector, test);
+    pico_mdns_claim(rvector, mdns_claimed_callback, NULL);
+
     PICO_FREE(hostname);
 }
 

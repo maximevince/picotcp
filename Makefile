@@ -1,3 +1,6 @@
+-include ../../config.mk
+-include ../../tools/kconfig/.config
+
 CC:=$(CROSS_COMPILE)gcc
 LD:=$(CROSS_COMPILE)ld
 AR:=$(CROSS_COMPILE)ar
@@ -15,6 +18,7 @@ ENDIAN?=little
 STRIP?=0
 RTOS?=0
 CHECKSUMFUN?=young
+ADDRESS_SANITIZER?=0
 
 # Default compiled-in protocols
 #
@@ -47,6 +51,7 @@ TAP?=0
 IPV6?=1
 
 EXTRA_CFLAGS+=-DPICO_COMPILE_TIME=`date +%s`
+EXTRA_CFLAGS+=$(PLATFORM_CFLAGS)
 
 CFLAGS=-I$(PREFIX)/include -Iinclude -Imodules -Wall -Wdeclaration-after-statement -W -Wextra -Wshadow -Wcast-qual -Wwrite-strings -Wmissing-field-initializers -Wunused-variable -Wundef -Wunused-function $(EXTRA_CFLAGS)
 # extra flags recommanded by TIOBE TICS framework to score an A on compiler warnings
@@ -57,11 +62,11 @@ CFLAGS+= -Wcast-align
 ifeq ($(DEBUG),1)
   CFLAGS+=-ggdb
 else
-    ifeq ($(PERF), 1)
-        CFLAGS+=-O3
-    else
-        CFLAGS+=-Os
-    endif
+  ifeq ($(PERF), 1)
+    CFLAGS+=-O3
+  else
+    CFLAGS+=-Os
+  endif
 endif
 
 ifeq ($(PROFILE),1)
@@ -86,22 +91,25 @@ ifneq ($(RTOS),0)
   OPTIONS+=-DPICO_SUPPORT_RTOS
 endif
 
-ifeq ($(ARCH),stm32f4xx)
-  CFLAGS+=-mcpu=cortex-m4 \
-  -mthumb -mlittle-endian -mfpu=fpv4-sp-d16 \
-  -mfloat-abi=hard -mthumb-interwork -fsingle-precision-constant -DSTM32
+ifeq ($(ARCH),cortexm4-hardfloat)
+  CFLAGS+=-DCORTEX_M4_HARDFLOAT -mcpu=cortex-m4 -mthumb -mlittle-endian -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb-interwork -fsingle-precision-constant
 endif
 
-ifeq ($(ARCH),stm32)
-  CFLAGS+=-mcpu=cortex-m4 \
-  -mthumb -mlittle-endian -mfpu=fpv4-sp-d16 \
-  -mfloat-abi=hard -mthumb-interwork -fsingle-precision-constant -DSTM32
+ifeq ($(ARCH),cortexm4-softfloat)
+  CFLAGS+=-DCORTEX_M4_SOFTFLOAT -mcpu=cortex-m4 -mthumb -mlittle-endian -mfloat-abi=soft -mthumb-interwork
 endif
 
-ifeq ($(ARCH),stm32_gc)
-  CFLAGS_CORTEX_M4 = -mthumb -mtune=cortex-m4 -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 
-  CFLAGS_CORTEX_M4 += -mfloat-abi=hard -fsingle-precision-constant -Wdouble-promotion
-  CFLAGS+= $(CFLAGS_CORTEX_M4) -mlittle-endian -DSTM32_GC
+ifeq ($(ARCH),cortexm3)
+  CFLAGS+=-DCORTEX_M3 -mcpu=cortex-m3 -mthumb -mlittle-endian -mthumb-interwork
+endif
+
+ifeq ($(ARCH),arm9)
+  CFLAGS+=-DARM9 -mcpu=arm9e -march=armv5te -gdwarf-2 -Wall -marm -mthumb-interwork -fpack-struct
+endif
+
+ifeq ($(ADDRESS_SANITIZER),1)
+  CFLAGS+=-fsanitize=address -fno-omit-frame-pointer -m32
+  TEST_LDFLAGS+=-fsanitize=address -fno-omit-frame-pointer -m32
 endif
 
 ifeq ($(ARCH),faulty)
@@ -111,27 +119,12 @@ ifeq ($(ARCH),faulty)
   DUMMY_EXTRA+=test/pico_faulty.o
 endif
 
-ifeq ($(ARCH),stm32-softfloat)
-  CFLAGS+=-mcpu=cortex-m3 \
-  -mthumb -mlittle-endian \
-  -mfloat-abi=soft -mthumb-interwork \
-  -DSTM32
-endif
-
-
-ifeq ($(ARCH),stm32f1xx)
-  CFLAGS+=-mcpu=cortex-m3 \
-	-mthumb -mlittle-endian \
-	-mthumb-interwork \
-	-DSTM32F1
-endif
-
-
 ifeq ($(ARCH),msp430)
   CFLAGS+=-DMSP430
 endif
 
 ifeq ($(ARCH),esp8266)
+<<<<<<< HEAD
   CFLAGS +=  -DESP8266              \
              -g                     \
              -Wpointer-arith        \
@@ -164,6 +157,9 @@ ifeq ($(ARCH),lpc43xx)
   -ffunction-sections -fdata-sections -mlittle-endian \
   -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16  \
   -fsingle-precision-constant -mthumb -MMD -MP -DLPC43XX
+=======
+  CFLAGS+=-DESP8266 -Wl,-EL -fno-inline-functions -nostdlib -mlongcalls -mtext-section-literals
+>>>>>>> master
 endif
 
 ifeq ($(ARCH),pic24)
@@ -172,11 +168,7 @@ ifeq ($(ARCH),pic24)
 endif
 
 ifeq ($(ARCH),atmega128)
-	CFLAGS+=-Wall -mmcu=atmega128 -DAVR
-endif
-
-ifeq ($(ARCH),str9)
-  CFLAGS+=-DSTR9 -mcpu=arm9e -march=armv5te -gdwarf-2 -Wall -marm -mthumb-interwork -fpack-struct
+  CFLAGS+=-Wall -mmcu=atmega128 -DAVR
 endif
 
 ifeq ($(ARCH),none)
@@ -195,15 +187,15 @@ CORE_OBJ= stack/pico_stack.o \
           stack/pico_device.o \
           stack/pico_protocol.o \
           stack/pico_socket.o \
-		  stack/pico_socket_multicast.o \
-			stack/pico_tree.o
+          stack/pico_socket_multicast.o \
+          stack/pico_tree.o
 
-POSIX_OBJ+=  modules/pico_dev_vde.o \
-						modules/pico_dev_tun.o \
-						modules/pico_dev_tap.o \
-						modules/pico_dev_mock.o \
+POSIX_OBJ+= modules/pico_dev_vde.o \
+            modules/pico_dev_tun.o \
+            modules/pico_dev_tap.o \
+            modules/pico_dev_mock.o \
             modules/pico_dev_pcap.o \
-						modules/ptsocket/pico_ptsocket.o
+            modules/ptsocket/pico_ptsocket.o
 
 ifneq ($(ETH),0)
   include rules/eth.mk
@@ -307,7 +299,7 @@ test: posix
 	
 tst: test
 
-$(PREFIX)/include/pico_defines.h: FORCE
+$(PREFIX)/include/pico_defines.h:
 	@mkdir -p $(PREFIX)/lib
 	@mkdir -p $(PREFIX)/include
 	@bash ./mkdeps.sh $(PREFIX) $(OPTIONS)

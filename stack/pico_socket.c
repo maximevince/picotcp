@@ -1,5 +1,5 @@
 /*********************************************************************
-   PicoTCP. Copyright (c) 2012 TASS Belgium NV. Some rights reserved.
+   PicoTCP. Copyright (c) 2012-2015 Altran Intelligent Systems. Some rights reserved.
    See LICENSE and COPYING for usage.
 
 
@@ -518,11 +518,13 @@ static int pico_socket_transport_deliver(struct pico_protocol *p, struct pico_so
 #ifdef PICO_SUPPORT_TCP
     if (p->proto_number == PICO_PROTO_TCP)
         return pico_socket_tcp_deliver(sp, f);
+
 #endif
 
 #ifdef PICO_SUPPORT_UDP
     if (p->proto_number == PICO_PROTO_UDP)
         return pico_socket_udp_deliver(sp, f);
+
 #endif
 
     return -1;
@@ -575,11 +577,13 @@ static struct pico_socket *pico_socket_transport_open(uint16_t proto, uint16_t f
 #ifdef PICO_SUPPORT_UDP
     if (proto == PICO_PROTO_UDP)
         s = pico_socket_udp_open();
+
 #endif
 
 #ifdef PICO_SUPPORT_TCP
     if (proto == PICO_PROTO_TCP)
         s = pico_socket_tcp_open(family);
+
 #endif
 
     return s;
@@ -963,6 +967,7 @@ static int32_t pico_socket_sendto_set_localport(struct pico_socket *s)
             pico_err = PICO_ERR_EINVAL;
             return -1;
         }
+
         s->state |= PICO_SOCKET_STATE_BOUND;
     }
 
@@ -1019,7 +1024,12 @@ static int pico_socket_final_xmit(struct pico_socket *s, struct pico_frame *f)
     }
 }
 
+<<<<<<< HEAD
 static int pico_socket_xmit_one(struct pico_socket *s, const void *buf, const int len, void *src, struct pico_remote_endpoint *ep)
+=======
+static int pico_socket_xmit_one(struct pico_socket *s, const void *buf, const int len, void *src,
+                                struct pico_remote_endpoint *ep, struct pico_msginfo *msginfo)
+>>>>>>> master
 {
     struct pico_frame *f;
     uint16_t hdr_offset = (uint16_t)pico_socket_sendto_transport_offset(s);
@@ -1081,7 +1091,12 @@ static void pico_socket_xmit_next_fragment_setup(struct pico_frame *f, int hdr_o
 }
 #endif
 
+<<<<<<< HEAD
 static int pico_socket_xmit_fragments(struct pico_socket *s, const void *buf, const int len, void *src, struct pico_remote_endpoint *ep)
+=======
+static int pico_socket_xmit_fragments(struct pico_socket *s, const void *buf, const int len,
+                                      void *src, struct pico_remote_endpoint *ep, struct pico_msginfo *msginfo)
+>>>>>>> master
 {
     int space = pico_socket_xmit_avail_space(s);
     int hdr_offset = pico_socket_sendto_transport_offset(s);
@@ -1097,6 +1112,7 @@ static int pico_socket_xmit_fragments(struct pico_socket *s, const void *buf, co
     if (is_sock_ipv6(s)) {
         return pico_socket_xmit_one(s, buf, space, src, ep);
     }
+
 #endif
 
 #ifdef PICO_SUPPORT_IPFRAG
@@ -1165,7 +1181,7 @@ static void get_sock_dev(struct pico_socket *s)
         s->dev = pico_ipv6_source_dev_find(&s->remote_addr.ip6);
     else
 #endif
-        s->dev = pico_ipv4_source_dev_find(&s->remote_addr.ip4);
+    s->dev = pico_ipv4_source_dev_find(&s->remote_addr.ip4);
 }
 
 
@@ -1176,7 +1192,7 @@ static uint32_t pico_socket_adapt_mss_to_proto(struct pico_socket *s, uint32_t m
         mss -= PICO_SIZE_IP6HDR;
     else
 #endif
-        mss -= PICO_SIZE_IP4HDR;
+    mss -= PICO_SIZE_IP4HDR;
     return mss;
 }
 
@@ -1185,13 +1201,16 @@ uint32_t pico_socket_get_mss(struct pico_socket *s)
     uint32_t mss = PICO_MIN_MSS;
     if (!s)
         return mss;
+
     if (!s->dev)
         get_sock_dev(s);
+
     if (!s->dev) {
         mss = PICO_MIN_MSS;
     } else {
         mss = s->dev->mtu;
     }
+
     return pico_socket_adapt_mss_to_proto(s, mss);
 }
 
@@ -1218,7 +1237,12 @@ static int pico_socket_xmit_avail_space(struct pico_socket *s)
 }
 
 
+<<<<<<< HEAD
 static int pico_socket_xmit(struct pico_socket *s, const void *buf, const int len, void *src, struct pico_remote_endpoint *ep)
+=======
+static int pico_socket_xmit(struct pico_socket *s, const void *buf, const int len, void *src,
+                            struct pico_remote_endpoint *ep, struct pico_msginfo *msginfo)
+>>>>>>> master
 {
     int space = pico_socket_xmit_avail_space(s);
     int total_payload_written = 0;
@@ -1260,7 +1284,12 @@ static void pico_socket_sendto_set_dport(struct pico_socket *s, uint16_t port)
 }
 
 
+<<<<<<< HEAD
 int MOCKABLE pico_socket_sendto(struct pico_socket *s, const void *buf, const int len, void *dst, uint16_t remote_port)
+=======
+int MOCKABLE pico_socket_sendto_extended(struct pico_socket *s, const void *buf, const int len,
+                                         void *dst, uint16_t remote_port, struct pico_msginfo *msginfo)
+>>>>>>> master
 {
     struct pico_remote_endpoint *remote_endpoint = NULL;
     void *src = NULL;
@@ -1274,6 +1303,20 @@ int MOCKABLE pico_socket_sendto(struct pico_socket *s, const void *buf, const in
 
     src = pico_socket_sendto_get_src(s, dst);
     if (!src) {
+<<<<<<< HEAD
+=======
+#ifdef PICO_SUPPORT_IPV6
+        if((s->net->proto_number == PICO_PROTO_IPV6)
+           && msginfo && msginfo->dev
+           && pico_ipv6_is_linklocal(((struct pico_ip6 *)dst)->addr))
+        {
+            src = &(pico_ipv6_linklocal_get(msginfo->dev)->address);
+            if(!src)
+                return -1;
+        }
+        else
+#endif
+>>>>>>> master
         return -1;
     }
 
@@ -1283,7 +1326,16 @@ int MOCKABLE pico_socket_sendto(struct pico_socket *s, const void *buf, const in
 
     pico_socket_sendto_set_dport(s, remote_port);
 
+<<<<<<< HEAD
     return pico_socket_xmit(s, buf, len, src, remote_endpoint);
+=======
+    return pico_socket_xmit(s, buf, len, src, remote_endpoint, msginfo);
+}
+
+int MOCKABLE pico_socket_sendto(struct pico_socket *s, const void *buf, const int len, void *dst, uint16_t remote_port)
+{
+    return pico_socket_sendto_extended(s, buf, len, dst, remote_port, NULL);
+>>>>>>> master
 }
 
 int pico_socket_send(struct pico_socket *s, const void *buf, int len)
@@ -1308,7 +1360,12 @@ int pico_socket_send(struct pico_socket *s, const void *buf, int len)
     return pico_socket_sendto(s, buf, len, &s->remote_addr, s->remote_port);
 }
 
+<<<<<<< HEAD
 int pico_socket_recvfrom(struct pico_socket *s, void *buf, int len, void *orig, uint16_t *remote_port)
+=======
+int pico_socket_recvfrom_extended(struct pico_socket *s, void *buf, int len, void *orig,
+                                  uint16_t *remote_port, struct pico_msginfo *msginfo)
+>>>>>>> master
 {
     if (!s || buf == NULL) { /* / || orig == NULL || remote_port == NULL) { */
         pico_err = PICO_ERR_EINVAL;
@@ -1356,6 +1413,16 @@ int pico_socket_recvfrom(struct pico_socket *s, void *buf, int len, void *orig, 
     return 0;
 }
 
+<<<<<<< HEAD
+=======
+int pico_socket_recvfrom(struct pico_socket *s, void *buf, int len, void *orig,
+                         uint16_t *remote_port)
+{
+    return pico_socket_recvfrom_extended(s, buf, len, orig, remote_port, NULL);
+
+}
+
+>>>>>>> master
 int pico_socket_recv(struct pico_socket *s, void *buf, int len)
 {
     return pico_socket_recvfrom(s, buf, len, NULL, NULL);

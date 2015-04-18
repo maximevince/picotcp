@@ -1,0 +1,12 @@
+#!/bin/bash
+
+printf '\033c'
+
+if [ -z "$4" ] 
+then
+sudo ./build/test/picoapp.elf --vde $1:/tmp/vde.ctl:$2:255.255.255.0 -a mdns:$3:$3
+else
+sudo ./build/test/picoapp.elf --vde $1:/tmp/vde.ctl:$2:255.255.255.0 -a mdns:$3:$4
+fi
+
+exit 0

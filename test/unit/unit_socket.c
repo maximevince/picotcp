@@ -1,4 +1,11 @@
 
+<<<<<<< HEAD
+=======
+int pico_aodv_init(void)
+{
+    return 0;
+}
+>>>>>>> master
 START_TEST (test_socket)
 {
     int ret = 0;

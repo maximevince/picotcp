@@ -1,5 +1,5 @@
 /*********************************************************************
-   PicoTCP. Copyright (c) 2012 TASS Belgium NV. Some rights reserved.
+   PicoTCP. Copyright (c) 2012-2015 Altran Intelligent Systems. Some rights reserved.
    See LICENSE and COPYING for usage.
 
    .
@@ -44,6 +44,43 @@ uint16_t pico_icmp6_checksum(struct pico_frame *f)
 static void pico_icmp6_ping_recv_reply(struct pico_frame *f);
 #endif
 
+<<<<<<< HEAD
+=======
+static int pico_icmp6_send_echoreply(struct pico_frame *echo)
+{
+    struct pico_frame *reply = NULL;
+    struct pico_icmp6_hdr *ehdr = NULL, *rhdr = NULL;
+    struct pico_ip6 src;
+    struct pico_ip6 dst;
+
+    reply = pico_proto_ipv6.alloc(&pico_proto_ipv6, (uint16_t)(echo->transport_len));
+    if (!reply) {
+        pico_err = PICO_ERR_ENOMEM;
+        return -1;
+    }
+
+    echo->payload = echo->transport_hdr + PICO_ICMP6HDR_ECHO_REQUEST_SIZE;
+    reply->payload = reply->transport_hdr + PICO_ICMP6HDR_ECHO_REQUEST_SIZE;
+    reply->payload_len = echo->transport_len;
+    reply->dev = echo->dev;
+
+    ehdr = (struct pico_icmp6_hdr *)echo->transport_hdr;
+    rhdr = (struct pico_icmp6_hdr *)reply->transport_hdr;
+    rhdr->type = PICO_ICMP6_ECHO_REPLY;
+    rhdr->code = 0;
+    rhdr->msg.info.echo_reply.id = ehdr->msg.info.echo_reply.id;
+    rhdr->msg.info.echo_reply.seq = ehdr->msg.info.echo_request.seq;
+    memcpy(reply->payload, echo->payload, (uint32_t)(echo->transport_len - PICO_ICMP6HDR_ECHO_REQUEST_SIZE));
+    rhdr->crc = 0;
+    rhdr->crc = short_be(pico_icmp6_checksum(reply));
+    /* Get destination and source swapped */
+    memcpy(dst.addr, ((struct pico_ipv6_hdr *)echo->net_hdr)->src.addr, PICO_SIZE_IP6);
+    memcpy(src.addr, ((struct pico_ipv6_hdr *)echo->net_hdr)->dst.addr, PICO_SIZE_IP6);
+    pico_ipv6_frame_push(reply, &src, &dst, PICO_PROTO_ICMP6, 0);
+    return 0;
+}
+
+>>>>>>> master
 static int pico_icmp6_process_in(struct pico_protocol *self, struct pico_frame *f)
 {
     struct pico_icmp6_hdr *hdr = (struct pico_icmp6_hdr *)f->transport_hdr;
@@ -183,33 +220,69 @@ static int pico_icmp6_notify(struct pico_frame *f, uint8_t type, uint8_t code, u
     icmp6_hdr->code = code;
     memcpy(notice->payload, f->net_hdr, notice->payload_len);
     /* f->src is set in frame_push, checksum calculated there */
-    pico_ipv6_frame_push(notice, &ipv6_hdr->src, PICO_PROTO_ICMP6);
+    pico_ipv6_frame_push(notice, NULL, &ipv6_hdr->src, PICO_PROTO_ICMP6, 0);
     return 0;
 }
 
 int pico_icmp6_port_unreachable(struct pico_frame *f)
 {
+<<<<<<< HEAD
+=======
+    struct pico_ipv6_hdr *hdr = (struct pico_ipv6_hdr *)f->net_hdr;
+    if (pico_ipv6_is_multicast(hdr->dst.addr))
+        return 0;
+
+>>>>>>> master
     return pico_icmp6_notify(f, PICO_ICMP6_DEST_UNREACH, PICO_ICMP6_UNREACH_PORT, 0);
 }
 
 int pico_icmp6_proto_unreachable(struct pico_frame *f)
 {
+<<<<<<< HEAD
+=======
+    struct pico_ipv6_hdr *hdr = (struct pico_ipv6_hdr *)f->net_hdr;
+    if (pico_ipv6_is_multicast(hdr->dst.addr))
+        return 0;
+
+>>>>>>> master
     return pico_icmp6_notify(f, PICO_ICMP6_DEST_UNREACH, PICO_ICMP6_UNREACH_ADDR, 0);
 }
 
 int pico_icmp6_dest_unreachable(struct pico_frame *f)
 {
+<<<<<<< HEAD
+=======
+    struct pico_ipv6_hdr *hdr = (struct pico_ipv6_hdr *)f->net_hdr;
+    if (pico_ipv6_is_multicast(hdr->dst.addr))
+        return 0;
+
+>>>>>>> master
     return pico_icmp6_notify(f, PICO_ICMP6_DEST_UNREACH, PICO_ICMP6_UNREACH_ADDR, 0);
 }
 
 int pico_icmp6_ttl_expired(struct pico_frame *f)
 {
+<<<<<<< HEAD
+=======
+    struct pico_ipv6_hdr *hdr = (struct pico_ipv6_hdr *)f->net_hdr;
+    if (pico_ipv6_is_multicast(hdr->dst.addr))
+        return 0;
+
+>>>>>>> master
     return pico_icmp6_notify(f, PICO_ICMP6_TIME_EXCEEDED, PICO_ICMP6_TIMXCEED_INTRANS, 0);
 }
 
 int pico_icmp6_pkt_too_big(struct pico_frame *f)
 {
+<<<<<<< HEAD
     return pico_icmp6_notify(f, PICO_ICMP6_PKT_TOO_BIG, 0, 0); 
+=======
+    struct pico_ipv6_hdr *hdr = (struct pico_ipv6_hdr *)f->net_hdr;
+    if (pico_ipv6_is_multicast(hdr->dst.addr))
+        return 0;
+
+    return pico_icmp6_notify(f, PICO_ICMP6_PKT_TOO_BIG, 0, 0);
+>>>>>>> master
 }
 
 #ifdef PICO_SUPPORT_IPFILTER
@@ -224,6 +297,18 @@ int pico_icmp6_parameter_problem(struct pico_frame *f, uint8_t problem, uint32_t
     return pico_icmp6_notify(f, PICO_ICMP6_PARAM_PROBLEM, problem, ptr);
 }
 
+<<<<<<< HEAD
+=======
+int pico_icmp6_frag_expired(struct pico_frame *f)
+{
+    struct pico_ipv6_hdr *hdr = (struct pico_ipv6_hdr *)f->net_hdr;
+    if (pico_ipv6_is_multicast(hdr->dst.addr))
+        return 0;
+
+    return pico_icmp6_notify(f, PICO_ICMP6_TIME_EXCEEDED, PICO_ICMP6_TIMXCEED_REASS, 0);
+}
+
+>>>>>>> master
 /* RFC 4861 $7.2.2: sending neighbor solicitations */
 int pico_icmp6_neighbor_solicitation(struct pico_device *dev, struct pico_ip6 *dst, uint8_t type)
 {
@@ -270,10 +355,11 @@ int pico_icmp6_neighbor_solicitation(struct pico_device *dev, struct pico_ip6 *d
     } else {
         daddr = *dst;
     }
+
     sol->dev = dev;
 
     /* f->src is set in frame_push, checksum calculated there */
-    pico_ipv6_frame_push(sol, &daddr, PICO_PROTO_ICMP6);
+    pico_ipv6_frame_push(sol, NULL, &daddr, PICO_PROTO_ICMP6, (type == PICO_ICMP6_ND_DAD));
     return 0;
 }
 
@@ -326,7 +412,7 @@ int pico_icmp6_neighbor_advertisement(struct pico_frame *f, struct pico_ip6 *tar
     adv->dev = f->dev;
 
     /* f->src is set in frame_push, checksum calculated there */
-    pico_ipv6_frame_push(adv, &dst, PICO_PROTO_ICMP6);
+    pico_ipv6_frame_push(adv, NULL, &dst, PICO_PROTO_ICMP6, 0);
     return 0;
 }
 
@@ -362,10 +448,11 @@ int pico_icmp6_router_solicitation(struct pico_device *dev, struct pico_ip6 *src
         lladdr->len = 1;
         memcpy(lladdr->addr.mac.addr, dev->eth->mac.addr, PICO_SIZE_ETH);
     }
+
     sol->dev = dev;
 
     /* f->src is set in frame_push, checksum calculated there */
-    pico_ipv6_frame_push(sol, &daddr, PICO_PROTO_ICMP6);
+    pico_ipv6_frame_push(sol, NULL, &daddr, PICO_PROTO_ICMP6, 0);
     return 0;
 }
 
@@ -420,7 +507,7 @@ int pico_icmp6_router_advertisement(struct pico_device *dev, struct pico_ip6 *ds
     icmp6_hdr->crc = 0;
     icmp6_hdr->crc = short_be(pico_icmp6_checksum(adv));
     /* f->src is set in frame_push, checksum calculated there */
-    pico_ipv6_frame_push(adv, &dst_mcast, PICO_PROTO_ICMP6);
+    pico_ipv6_frame_push(adv, NULL, &dst_mcast, PICO_PROTO_ICMP6, 0);
     return 0;
 }
 
@@ -478,7 +565,12 @@ static int pico_icmp6_send_echo(struct pico_icmp6_ping_cookie *cookie)
     /* XXX: Fill payload */
     hdr->crc = 0;
     hdr->crc = short_be(pico_icmp6_checksum(echo));
+<<<<<<< HEAD
     pico_ipv6_frame_push(echo, &cookie->dst, PICO_PROTO_ICMP6);
+=======
+    echo->dev = cookie->dev;
+    pico_ipv6_frame_push(echo, NULL, &cookie->dst, PICO_PROTO_ICMP6, 0);
+>>>>>>> master
     return 0;
 }
 

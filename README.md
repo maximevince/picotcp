@@ -1,4 +1,4 @@
-### picoTCP - dns-sd-dev branch
+picoTCP - dns-sd
 
 ---------------
 
@@ -6,19 +6,12 @@ Welcome to the one and only <font color=ff00f0>picoTCP repository</font>.
 
 picoTCP is a TCP/IP stack designed for embedded systems developed by *[Altran ISY](http://intelligent-systems.altran.com/)*
 
-#### DNS-SD
-This branch is dedicated to the development of a DNS-SD module for the picoTCP-stack.
-
-#### License
-
 This code is released under the terms of GNU GPL v2 only. Some rights reserved.
 Other licenses may apply at the sole discretion of the copyright holders.
 
-#### Getting Started
-
 The getting started guide can be found on the GitHub wiki (https://github.com/tass-belgium/picotcp/wiki)
 
-#### Code quality
+For more information, visit [the project's website](http://www.picotcp.com)
 
 [Check our code quality](http://95.138.172.54:42506/TIOBEPortal/TICS/treeviewer?)
 

@@ -1179,7 +1179,8 @@ pico_mdns_record_vector_add( pico_mdns_record_vector *vector,
     new_records[i] = record;
     
     /* Free the previous array */
-    PICO_FREE(vector->records);
+    if (vector->records)
+        PICO_FREE(vector->records);
     
     /* Set the records array to the new one and update count */
     vector->records = new_records;

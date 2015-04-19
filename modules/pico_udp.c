@@ -1,5 +1,5 @@
 /*********************************************************************
-   PicoTCP. Copyright (c) 2012-2015 Altran Intelligent Systems. Some rights reserved.
+   PicoTCP. Copyright (c) 2012 TASS Belgium NV. Some rights reserved.
    See LICENSE and COPYING for usage.
 
    .
@@ -16,6 +16,7 @@
 
 #define UDP_FRAME_OVERHEAD (sizeof(struct pico_frame))
 #define udp_dbg(...) do {} while(0)
+//#define udp_dbg dbg
 
 /* Queues */
 static struct pico_queue udp_in = {
@@ -59,9 +60,7 @@ uint16_t pico_udp_checksum_ipv6(struct pico_frame *f)
 {
     struct pico_ipv6_hdr *ipv6_hdr = (struct pico_ipv6_hdr *)f->net_hdr;
     struct pico_udp_hdr *udp_hdr = (struct pico_udp_hdr *)f->transport_hdr;
-    struct pico_ipv6_pseudo_hdr pseudo = {
-        .src = {{0}}, .dst = {{0}}, .len = 0, .zero = {0}, .nxthdr = 0
-    };
+    struct pico_ipv6_pseudo_hdr pseudo;
     struct pico_socket *s = f->sock;
     struct pico_remote_endpoint *remote_endpoint = (struct pico_remote_endpoint *)f->info;
 
@@ -156,28 +155,7 @@ struct pico_socket *pico_udp_open(void)
     return &u->sock;
 }
 
-static void pico_udp_get_msginfo(struct pico_frame *f, struct pico_msginfo *msginfo)
-{
-    msginfo->dev = f->dev;
-    if (!msginfo || !f->net_hdr)
-        return;
-
-    if (IS_IPV4(f)) { /* IPV4 */
-#ifdef PICO_SUPPORT_IPV4
-        struct pico_ipv4_hdr *hdr = (struct pico_ipv4_hdr *)(f->net_hdr);
-        msginfo->ttl = hdr->ttl;
-        msginfo->tos = hdr->tos;
-#endif
-    } else {
-#ifdef PICO_SUPPORT_IPV6
-        struct pico_ipv6_hdr *hdr = (struct pico_ipv6_hdr *)(f->net_hdr);
-        msginfo->ttl = hdr->hop;
-        msginfo->tos = (hdr->vtf >> 20) & 0xFF; /* IPv6 traffic class */
-#endif
-    }
-}
-
-uint16_t pico_udp_recv(struct pico_socket *s, void *buf, uint16_t len, void *src, uint16_t *port, struct pico_msginfo *msginfo)
+uint16_t pico_udp_recv(struct pico_socket *s, void *buf, uint16_t len, void *src, uint16_t *port)
 {
     struct pico_frame *f = pico_queue_peek(&s->q_in);
     if (f) {
@@ -193,10 +171,6 @@ uint16_t pico_udp_recv(struct pico_socket *s, void *buf, uint16_t len, void *src
         if (port) {
             struct pico_trans *hdr = (struct pico_trans *)f->transport_hdr;
             *port = hdr->sport;
-        }
-
-        if (msginfo) {
-            pico_udp_get_msginfo(f, msginfo);
         }
 
         if (f->payload_len > len) {

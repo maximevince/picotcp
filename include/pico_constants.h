@@ -1,5 +1,5 @@
 /*********************************************************************
-   PicoTCP. Copyright (c) 2012-2015 Altran Intelligent Systems. Some rights reserved.
+   PicoTCP. Copyright (c) 2012 TASS Belgium NV. Some rights reserved.
    See LICENSE and COPYING for usage.
 
  *********************************************************************/
@@ -25,7 +25,7 @@ extern volatile uint64_t pico_tick;
 #include "pico_addressing.h"
 
 /* Maximum amount of accepted ARP requests per burst interval */
-#define PICO_ARP_MAX_RATE 1
+#define PICO_ARP_MAX_RATE 25
 /* Duration of the burst interval in milliseconds */
 #define PICO_ARP_INTERVAL 1000
 

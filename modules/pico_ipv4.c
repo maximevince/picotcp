@@ -1,5 +1,5 @@
 /*********************************************************************
-   PicoTCP. Copyright (c) 2012-2015 Altran Intelligent Systems. Some rights reserved.
+   PicoTCP. Copyright (c) 2012 TASS Belgium NV. Some rights reserved.
    See LICENSE and COPYING for usage.
 
    Authors: Daniele Lacamera, Markian Yskout
@@ -19,7 +19,6 @@
 #include "pico_nat.h"
 #include "pico_igmp.h"
 #include "pico_tree.h"
-#include "pico_aodv.h"
 #include "pico_socket_multicast.h"
 
 #ifdef PICO_SUPPORT_IPV4
@@ -72,18 +71,18 @@ int pico_ipv4_to_string(char *ipbuf, const uint32_t ip)
 
     for(i = 0; i < 4; i++)
     {
-        if (addr[i] > 99) {
+        if(addr[i] > 99) {
             *ipbuf++ = (char)('0' + (addr[i] / 100));
             *ipbuf++ = (char)('0' + ((addr[i] % 100) / 10));
             *ipbuf++ = (char)('0' + ((addr[i] % 100) % 10));
-        } else if (addr[i] > 9) {
+        }else if(addr[i] > 9) {
             *ipbuf++ = (char)('0' + (addr[i] / 10));
             *ipbuf++ = (char)('0' + (addr[i] % 10));
-        } else {
+        }else{
             *ipbuf++ = (char)('0' + addr[i]);
         }
 
-        if (i < 3)
+        if(i < 3)
             *ipbuf++ = '.';
     }
     *ipbuf = '\0';
@@ -94,7 +93,7 @@ int pico_ipv4_to_string(char *ipbuf, const uint32_t ip)
 static int pico_string_check_null_args(const char *ipstr, uint32_t *ip)
 {
 
-    if (!ipstr || !ip) {
+    if(!ipstr || !ip) {
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }
@@ -105,7 +104,7 @@ static int pico_string_check_null_args(const char *ipstr, uint32_t *ip)
 
 int pico_string_to_ipv4(const char *ipstr, uint32_t *ip)
 {
-    unsigned char buf[PICO_SIZE_IP4] = {
+    unsigned char buf[4] = {
         0
     };
     int cnt = 0;
@@ -114,25 +113,26 @@ int pico_string_to_ipv4(const char *ipstr, uint32_t *ip)
     if (pico_string_check_null_args(ipstr, ip) < 0)
         return -1;
 
-    while((p = *ipstr++) != 0 && cnt < PICO_SIZE_IP4)
+
+    while((p = *ipstr++) != 0)
     {
-        if (pico_is_digit(p)) {
+        if(pico_is_digit(p)) {
             buf[cnt] = (uint8_t)((10 * buf[cnt]) + (p - '0'));
-        } else if (p == '.') {
+        }else if(p == '.') {
             cnt++;
-        } else {
+        }else{
             return -1;
         }
     }
     /* Handle short notation */
-    if (cnt == 1) {
+    if(cnt == 1) {
         buf[3] = buf[1];
         buf[1] = 0;
         buf[2] = 0;
-    } else if (cnt == 2) {
+    }else if (cnt == 2) {
         buf[3] = buf[2];
         buf[2] = 0;
-    } else if (cnt != 3) {
+    }else if(cnt != 3) {
         /* String could not be parsed, return error */
         return -1;
     }
@@ -140,6 +140,7 @@ int pico_string_to_ipv4(const char *ipstr, uint32_t *ip)
     *ip = long_from(buf);
 
     return 0;
+
 }
 
 int pico_ipv4_valid_netmask(uint32_t mask)
@@ -157,14 +158,14 @@ int pico_ipv4_valid_netmask(uint32_t mask)
      * */
 
     for(i = 0; i < 32; i++) {
-        if ((mask_swap << i) & 0x80000000) {
-            if (end) {
+        if((mask_swap << i) & 0x80000000) {
+            if(end) {
                 pico_err = PICO_ERR_EINVAL;
                 return -1;
             }
 
             cnt++;
-        } else {
+        }else{
             end = 1;
         }
     }
@@ -174,7 +175,7 @@ int pico_ipv4_valid_netmask(uint32_t mask)
 int pico_ipv4_is_unicast(uint32_t address)
 {
     const unsigned char *addr = (unsigned char *) &address;
-    if ((addr[0] & 0xe0) == 0xe0)
+    if((addr[0] & 0xe0) == 0xe0)
         return 0; /* multicast */
 
     return 1;
@@ -183,7 +184,7 @@ int pico_ipv4_is_unicast(uint32_t address)
 int pico_ipv4_is_multicast(uint32_t address)
 {
     const unsigned char *addr = (unsigned char *) &address;
-    if ((addr[0] != 0xff) && ((addr[0] & 0xe0) == 0xe0))
+    if((addr[0] != 0xff) && ((addr[0] & 0xe0) == 0xe0))
         return 1; /* multicast */
 
     return 0;
@@ -192,7 +193,7 @@ int pico_ipv4_is_multicast(uint32_t address)
 int pico_ipv4_is_loopback(uint32_t address)
 {
     const unsigned char *addr = (unsigned char *) &address;
-    if (addr[0] == 0x7f)
+    if(addr[0] == 0x7f)
         return 1;
 
     return 0;
@@ -208,18 +209,16 @@ int pico_ipv4_is_valid_src(uint32_t address, struct pico_device *dev)
     if (pico_ipv4_is_broadcast(address)) {
         dbg("Source is a broadcast address, discard packet\n");
         return 0;
-    } else if ( pico_ipv4_is_multicast(address)) {
+    }
+    else if( pico_ipv4_is_multicast(address)) {
         dbg("Source is a multicast address, discard packet\n");
         return 0;
-    } else if (pico_ipv4_is_invalid_loopback(address, dev)) {
+    }
+    else if (pico_ipv4_is_invalid_loopback(address, dev)) {
         dbg("Source is a loopback address, discard packet\n");
         return 0;
-    } else {
-#ifdef PICO_SUPPORT_AODV
-        union pico_address src;
-        src.ip4.addr = address;
-        pico_aodv_refresh(&src);
-#endif
+    }
+    else {
         return 1;
     }
 }
@@ -382,7 +381,8 @@ static inline int8_t fragmented_check_has_morefrags(struct pico_frame **f)
         pico_tree_insert(pfrag->t, *f);
         pico_tree_insert(&pico_ipv4_fragmented_tree, pfrag);
         return 0;
-    } else {
+    }
+    else {
         reassembly_dbg("REASSEMBLY: intermediate element of a fragmented packet with id %X and offset %u\n", short_be(hdr->id), offset);
         pfrag = fragment_find_by_hdr(hdr);
         if (pfrag) {
@@ -411,7 +411,6 @@ static inline int8_t fragmented_check_is_lastfrag(struct pico_frame **f)
     uint16_t running_offset = 0;
     uint16_t offset = 0;
     uint16_t data_len = 0;
-    uint16_t frag_len = 0;
     struct pico_ipv4_hdr *f_frag_hdr = NULL, *hdr = (struct pico_ipv4_hdr *) (*f)->net_hdr;
     struct pico_ipv4_fragmented_packet *pfrag = NULL;
     struct pico_frame *f_new = NULL, *f_frag = NULL;
@@ -433,7 +432,7 @@ static inline int8_t fragmented_check_is_lastfrag(struct pico_frame **f)
         }
 
         f_new = pico_proto_ipv4.alloc(&pico_proto_ipv4, pfrag->total_len);
-        if (!f_new) {
+        if (!f_new){
             pico_ipv4_fragmented_cleanup(pfrag);
             pico_frame_discard(*f);
             return -1;
@@ -453,7 +452,8 @@ static inline int8_t fragmented_check_is_lastfrag(struct pico_frame **f)
         pico_frame_discard(f_frag);
         reassembly_dbg("REASSEMBLY: reassembled first packet of %u data bytes, offset = %u next expected offset = %u\n", data_len, offset, running_offset);
 
-        pico_tree_foreach_safe(index, pfrag->t, _tmp) {
+        pico_tree_foreach_safe(index, pfrag->t, _tmp)
+        {
             f_frag = index->keyValue;
             f_frag_hdr = (struct pico_ipv4_hdr *)f_frag->net_hdr;
             data_len = (uint16_t)(short_be(f_frag_hdr->len) - f_frag->net_len);
@@ -471,7 +471,6 @@ static inline int8_t fragmented_check_is_lastfrag(struct pico_frame **f)
             pico_frame_discard(f_frag);
             reassembly_dbg("REASSEMBLY: reassembled intermediate packet of %u data bytes, offset = %u next expected offset = %u\n", data_len, offset, running_offset);
         }
-        frag_len = pfrag->total_len;
         pico_tree_delete(&pico_ipv4_fragmented_tree, pfrag);
         PICO_FREE(pfrag);
 
@@ -482,7 +481,7 @@ static inline int8_t fragmented_check_is_lastfrag(struct pico_frame **f)
         reassembly_dbg("REASSEMBLY: reassembled last packet of %u data bytes, offset = %u\n", data_len, offset);
 
         hdr = (struct pico_ipv4_hdr *)f_new->net_hdr;
-        hdr->len = frag_len;
+        hdr->len = pfrag->total_len;
         hdr->frag = 0; /* flags cleared and no offset */
         hdr->crc = 0;
         hdr->crc = short_be(pico_checksum(hdr, f_new->net_len));
@@ -596,7 +595,6 @@ static int pico_ipv4_process_bcast_in(struct pico_frame *f)
         pico_enqueue(pico_proto_udp.q_in, f);
         return 1;
     }
-
 #endif
 
 #ifdef PICO_SUPPORT_ICMP4
@@ -606,7 +604,6 @@ static int pico_ipv4_process_bcast_in(struct pico_frame *f)
         pico_enqueue(pico_proto_icmp4.q_in, f);
         return 1;
     }
-
 #endif
     return 0;
 }
@@ -664,7 +661,8 @@ static int pico_ipv4_process_local_unicast_in(struct pico_frame *f)
 static void pico_ipv4_process_finally_try_forward(struct pico_frame *f)
 {
     struct pico_ipv4_hdr *hdr = (struct pico_ipv4_hdr *) f->net_hdr;
-    if ((pico_ipv4_is_broadcast(hdr->dst.addr))) {
+    if((pico_ipv4_is_broadcast(hdr->dst.addr)))
+    {
         /* don't forward broadcast frame, discard! */
         pico_frame_discard(f);
     } else if (pico_ipv4_forward(f) != 0) {
@@ -682,7 +680,7 @@ static int pico_ipv4_process_in(struct pico_protocol *self, struct pico_frame *f
     struct pico_ipv4_hdr *hdr = (struct pico_ipv4_hdr *) f->net_hdr;
 
     /* NAT needs transport header information */
-    if (((hdr->vhl) & 0x0F) > 5) {
+    if(((hdr->vhl) & 0x0F) > 5) {
         option_len =  (uint8_t)(4 * (((hdr->vhl) & 0x0F) - 5));
     }
 
@@ -697,7 +695,6 @@ static int pico_ipv4_process_in(struct pico_protocol *self, struct pico_frame *f
     }
 
 #endif
-
 
     /* ret == 1 indicates to continue the function */
     ret = pico_ipv4_crc_check(f);
@@ -748,13 +745,13 @@ static int pico_ipv4_process_out(struct pico_protocol *self, struct pico_frame *
 {
     IGNORE_PARAMETER(self);
     f->start = (uint8_t*) f->net_hdr;
-#ifdef PICO_SUPPORT_IPFILTER
+  #ifdef PICO_SUPPORT_IPFILTER
     if (ipfilter(f)) {
         /*pico_frame is discarded as result of the filtering*/
         return 0;
     }
 
-#endif
+  #endif
     return pico_sendto_dev(f);
 }
 
@@ -841,7 +838,8 @@ static struct pico_ipv4_route *route_find(const struct pico_ip4 *addr)
     struct pico_ipv4_route *r;
     struct pico_tree_node *index;
 
-    if (addr->addr != PICO_IP4_BCAST) {
+    if(addr->addr != PICO_IP4_BCAST)
+    {
         pico_tree_foreach_reverse(index, &Routes) {
             r = index->keyValue;
             if ((addr->addr & (r->netmask.addr)) == (r->dest.addr)) {
@@ -860,7 +858,7 @@ struct pico_ip4 pico_ipv4_route_get_gateway(struct pico_ip4 *addr)
     struct pico_ipv4_route *route;
     nullip.addr = 0U;
 
-    if (!addr) {
+    if(!addr) {
         pico_err = PICO_ERR_EINVAL;
         return nullip;
     }
@@ -878,15 +876,8 @@ struct pico_ip4 *pico_ipv4_source_find(const struct pico_ip4 *dst)
 {
     struct pico_ip4 *myself = NULL;
     struct pico_ipv4_route *rt;
-#ifdef PICO_SUPPORT_AODV
-    union pico_address node_address;
-    node_address.ip4.addr = dst->addr;
-    if (dst->addr && pico_ipv4_is_unicast(dst->addr))
-        pico_aodv_lookup(&node_address);
 
-#endif
-
-    if (!dst) {
+    if(!dst) {
         pico_err = PICO_ERR_EINVAL;
         return NULL;
     }
@@ -894,9 +885,8 @@ struct pico_ip4 *pico_ipv4_source_find(const struct pico_ip4 *dst)
     rt = route_find(dst);
     if (rt && rt->link) {
         myself = &rt->link->address;
-    } else {
+    } else
         pico_err = PICO_ERR_EHOSTUNREACH;
-    }
 
     return myself;
 }
@@ -906,7 +896,7 @@ struct pico_device *pico_ipv4_source_dev_find(const struct pico_ip4 *dst)
     struct pico_device *dev = NULL;
     struct pico_ipv4_route *rt;
 
-    if (!dst) {
+    if(!dst) {
         pico_err = PICO_ERR_EINVAL;
         return NULL;
     }
@@ -962,10 +952,12 @@ static void pico_ipv4_mcast_print_groups(struct pico_ipv4_link *mcast_link)
     ip_mcast_dbg("+  nr  |    interface     | host group | reference count | filter mode |  source  +\n");
     ip_mcast_dbg("+---------------------------------------------------------------------------------+\n");
 
-    pico_tree_foreach(index, mcast_link->MCASTGroups) {
+    pico_tree_foreach(index, mcast_link->MCASTGroups)
+    {
         g = index->keyValue;
         ip_mcast_dbg("+ %04d | %16s |  %08X  |      %05u      |      %u      | %8s +\n", i, mcast_link->dev->name, g->mcast_addr.addr, g->reference_count, g->filter_mode, "");
-        pico_tree_foreach(index2, &g->MCASTSources) {
+        pico_tree_foreach(index2, &g->MCASTSources)
+        {
             source = index2->keyValue;
             ip_mcast_dbg("+ %4s | %16s |  %8s  |      %5s      |      %s      | %08X +\n", "", "", "", "", "", source->addr);
         }
@@ -979,14 +971,16 @@ static int mcast_group_update(struct pico_mcast_group *g, struct pico_tree *MCAS
     struct pico_tree_node *index = NULL, *_tmp = NULL;
     struct pico_ip4 *source = NULL;
     /* cleanup filter */
-    pico_tree_foreach_safe(index, &g->MCASTSources, _tmp) {
+    pico_tree_foreach_safe(index, &g->MCASTSources, _tmp)
+    {
         source = index->keyValue;
         pico_tree_delete(&g->MCASTSources, source);
         PICO_FREE(source);
     }
     /* insert new filter */
     if (MCASTFilter) {
-        pico_tree_foreach(index, MCASTFilter) {
+        pico_tree_foreach(index, MCASTFilter)
+        {
             if (index->keyValue) {
                 source = PICO_ZALLOC(sizeof(struct pico_ip4));
                 if (!source) {
@@ -1013,8 +1007,8 @@ int pico_ipv4_mcast_join(struct pico_ip4 *mcast_link, struct pico_ip4 *mcast_gro
 
     if (mcast_link)
         link = pico_ipv4_link_get(mcast_link);
-
-    if (!link)
+   
+    if(!link)
         link = mcast_default_link;
 
     test.mcast_addr = *mcast_group;
@@ -1062,8 +1056,8 @@ int pico_ipv4_mcast_leave(struct pico_ip4 *mcast_link, struct pico_ip4 *mcast_gr
 
     if (mcast_link)
         link = pico_ipv4_link_get(mcast_link);
-
-    if (!link)
+    
+    if(!link)
         link = mcast_default_link;
 
     test.mcast_addr = *mcast_group;
@@ -1075,7 +1069,8 @@ int pico_ipv4_mcast_leave(struct pico_ip4 *mcast_link, struct pico_ip4 *mcast_gr
         if (reference_count && (--(g->reference_count) < 1)) {
             pico_igmp_state_change(mcast_link, mcast_group, filter_mode, MCASTFilter, PICO_IGMP_STATE_DELETE);
             /* cleanup filter */
-            pico_tree_foreach_safe(index, &g->MCASTSources, _tmp) {
+            pico_tree_foreach_safe(index, &g->MCASTSources, _tmp)
+            {
                 source = index->keyValue;
                 pico_tree_delete(&g->MCASTSources, source);
                 PICO_FREE(source);
@@ -1109,16 +1104,19 @@ static int pico_ipv4_mcast_filter(struct pico_frame *f)
 
     test.mcast_addr = hdr->dst;
 
-    pico_tree_foreach(index, &Tree_dev_link) {
+    pico_tree_foreach(index, &Tree_dev_link)
+    {
         link = index->keyValue;
         g = pico_tree_findKey(link->MCASTGroups, &test);
         if (g) {
             if (f->dev == link->dev) {
                 ip_mcast_dbg("MCAST: IP %08X is group member of current link %s\n", hdr->dst.addr, f->dev->name);
                 /* perform source filtering */
-                switch (g->filter_mode) {
+                switch (g->filter_mode)
+                {
                 case PICO_IP_MULTICAST_INCLUDE:
-                    pico_tree_foreach(index2, &g->MCASTSources) {
+                    pico_tree_foreach(index2, &g->MCASTSources)
+                    {
                         if (hdr->src.addr == ((struct pico_ip4 *)index2->keyValue)->addr) {
                             ip_mcast_dbg("MCAST: IP %08X in included interface source list\n", hdr->src.addr);
                             return 0;
@@ -1128,7 +1126,8 @@ static int pico_ipv4_mcast_filter(struct pico_frame *f)
                     return -1;
 
                 case PICO_IP_MULTICAST_EXCLUDE:
-                    pico_tree_foreach(index2, &g->MCASTSources) {
+                    pico_tree_foreach(index2, &g->MCASTSources)
+                    {
                         if (hdr->src.addr == ((struct pico_ip4 *)index2->keyValue)->addr) {
                             ip_mcast_dbg("MCAST: IP %08X in excluded interface source list\n", hdr->src.addr);
                             return -1;
@@ -1157,20 +1156,17 @@ int pico_ipv4_mcast_join(struct pico_ip4 *mcast_link, struct pico_ip4 *mcast_gro
     pico_err = PICO_ERR_EPROTONOSUPPORT;
     return -1;
 }
-
 int pico_ipv4_mcast_leave(struct pico_ip4 *mcast_link, struct pico_ip4 *mcast_group, uint8_t reference_count, uint8_t filter_mode, struct pico_tree *MCASTFilter)
 {
     pico_err = PICO_ERR_EPROTONOSUPPORT;
     return -1;
 }
-
 struct pico_ipv4_link *pico_ipv4_get_default_mcastlink(void)
 {
     pico_err = PICO_ERR_EPROTONOSUPPORT;
     return NULL;
 }
 #endif /* PICO_SUPPORT_MCAST */
-
 /* #define DEBUG_ROUTE */
 #ifdef DEBUG_ROUTE
 void dbg_route(void)
@@ -1179,7 +1175,7 @@ void dbg_route(void)
     struct pico_tree_node *index;
     int count_hosts = 0;
     dbg("==== ROUTING TABLE =====\n");
-    pico_tree_foreach(index, &Routes) {
+    pico_tree_foreach(index, &Routes){
         r = index->keyValue;
         dbg("Route to %08x/%08x, gw %08x, dev: %s, metric: %d\n", r->dest.addr, r->netmask.addr, r->gateway.addr, r->link->dev->name, r->metric);
         if (r->netmask.addr == 0xFFFFFFFF)
@@ -1204,11 +1200,10 @@ int pico_ipv4_frame_push(struct pico_frame *f, struct pico_ip4 *dst, uint8_t pro
     struct pico_tree_node *index;
 #endif
 
-    if (!f || !dst) {
+    if(!f || !dst) {
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }
-
 
     hdr = (struct pico_ipv4_hdr *) f->net_hdr;
     if (!hdr) {
@@ -1236,7 +1231,7 @@ int pico_ipv4_frame_push(struct pico_frame *f, struct pico_ip4 *dst, uint8_t pro
         if (pico_ipv4_is_multicast(dst->addr)) { /* if multicast */
             switch (proto) {
             case PICO_PROTO_UDP:
-                if (pico_udp_get_mc_ttl(f->sock, &ttl) < 0)
+                if(pico_udp_get_mc_ttl(f->sock, &ttl) < 0)
                     ttl = PICO_IP_DEFAULT_MULTICAST_TTL;
 
                 break;
@@ -1274,15 +1269,10 @@ int pico_ipv4_frame_push(struct pico_frame *f, struct pico_ip4 *dst, uint8_t pro
         1 )
         ipv4_progressive_id++;
 
-    if (f->send_ttl > 0) {
-        ttl = f->send_ttl;
-    }
-
     hdr->id = short_be(ipv4_progressive_id);
     hdr->dst.addr = dst->addr;
     hdr->src.addr = link->address.addr;
     hdr->ttl = ttl;
-    hdr->tos = f->send_tos;
     hdr->proto = proto;
     hdr->frag = short_be(PICO_IPV4_DONTFRAG);
 #ifdef PICO_SUPPORT_IPFRAG
@@ -1308,7 +1298,7 @@ int pico_ipv4_frame_push(struct pico_frame *f, struct pico_ip4 *dst, uint8_t pro
         f->dev = f->sock->dev;
     } else {
         f->dev = link->dev;
-        if (f->sock)
+        if (f->sock) 
             f->sock->dev = f->dev;
     }
 
@@ -1325,20 +1315,10 @@ int pico_ipv4_frame_push(struct pico_frame *f, struct pico_ip4 *dst, uint8_t pro
 
 #endif
 
-/* #ifdef PICO_SUPPORT_AODV */
-#if 0
-    {
-        union pico_address node_address;
-        node_address.ip4.addr = hdr->dst.addr;
-        if(hdr->dst.addr && pico_ipv4_is_unicast(hdr->dst.addr))
-            pico_aodv_lookup(&node_address);
-    }
-#endif
-
-    if (pico_ipv4_link_get(&hdr->dst)) {
+    if(pico_ipv4_link_get(&hdr->dst)) {
         /* it's our own IP */
         return pico_enqueue(&in, f);
-    } else{
+    }else{
         /* TODO: Check if there are members subscribed here */
         return pico_enqueue(&out, f);
     }
@@ -1370,14 +1350,14 @@ static int pico_ipv4_frame_sock_push(struct pico_protocol *self, struct pico_fra
 }
 
 
-int MOCKABLE pico_ipv4_route_add(struct pico_ip4 address, struct pico_ip4 netmask, struct pico_ip4 gateway, int metric, struct pico_ipv4_link *link)
+int pico_ipv4_route_add(struct pico_ip4 address, struct pico_ip4 netmask, struct pico_ip4 gateway, int metric, struct pico_ipv4_link *link)
 {
     struct pico_ipv4_route test, *new;
     test.dest.addr = address.addr;
     test.netmask.addr = netmask.addr;
     test.metric = (uint32_t)metric;
 
-    if (pico_tree_findKey(&Routes, &test)) {
+    if(pico_tree_findKey(&Routes, &test)) {
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }
@@ -1452,7 +1432,7 @@ int pico_ipv4_link_add(struct pico_device *dev, struct pico_ip4 address, struct 
     struct pico_ip4 network, gateway;
     char ipstr[30];
 
-    if (!dev) {
+    if(!dev) {
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }
@@ -1462,7 +1442,7 @@ int pico_ipv4_link_add(struct pico_device *dev, struct pico_ip4 address, struct 
     test.dev = dev;
     /** XXX: Valid netmask / unicast address test **/
 
-    if (pico_tree_findKey(&Tree_dev_link, &test)) {
+    if(pico_tree_findKey(&Tree_dev_link, &test)) {
         pico_err = PICO_ERR_EADDRINUSE;
         return -1;
     }
@@ -1523,7 +1503,8 @@ static int pico_ipv4_cleanup_routes(struct pico_ipv4_link *link)
     struct pico_tree_node *index = NULL, *tmp = NULL;
     struct pico_ipv4_route *route = NULL;
 
-    pico_tree_foreach_safe(index, &Routes, tmp) {
+    pico_tree_foreach_safe(index, &Routes, tmp)
+    {
         route = index->keyValue;
         if (link == route->link)
             pico_ipv4_route_del(route->dest, route->netmask, (int)route->metric);
@@ -1531,7 +1512,7 @@ static int pico_ipv4_cleanup_routes(struct pico_ipv4_link *link)
     return 0;
 }
 
-void MOCKABLE pico_ipv4_route_set_bcast_link(struct pico_ipv4_link *link)
+void pico_ipv4_route_set_bcast_link(struct pico_ipv4_link *link)
 {
     if (link)
         default_bcast_route.link = link;
@@ -1541,7 +1522,7 @@ int pico_ipv4_link_del(struct pico_device *dev, struct pico_ip4 address)
 {
     struct pico_ipv4_link test, *found;
 
-    if (!dev) {
+    if(!dev) {
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }
@@ -1568,7 +1549,8 @@ int pico_ipv4_link_del(struct pico_device *dev, struct pico_ip4 address)
 
         mcast_all_hosts.addr = PICO_MCAST_ALL_HOSTS;
         pico_ipv4_mcast_leave(&address, &mcast_all_hosts, 1, PICO_IP_MULTICAST_EXCLUDE, NULL);
-        pico_tree_foreach_safe(index, found->MCASTGroups, _tmp) {
+        pico_tree_foreach_safe(index, found->MCASTGroups, _tmp)
+        {
             g = index->keyValue;
             pico_tree_delete(found->MCASTGroups, g);
             PICO_FREE(g);
@@ -1598,12 +1580,13 @@ struct pico_ipv4_link *pico_ipv4_link_get(struct pico_ip4 *address)
         return found;
 }
 
-struct pico_ipv4_link *MOCKABLE pico_ipv4_link_by_dev(struct pico_device *dev)
+struct pico_ipv4_link *pico_ipv4_link_by_dev(struct pico_device *dev)
 {
     struct pico_tree_node *index = NULL;
     struct pico_ipv4_link *link = NULL;
 
-    pico_tree_foreach(index, &Tree_dev_link) {
+    pico_tree_foreach(index, &Tree_dev_link)
+    {
         link = index->keyValue;
         if (link->dev == dev)
             return link;
@@ -1620,7 +1603,8 @@ struct pico_ipv4_link *pico_ipv4_link_by_dev_next(struct pico_device *dev, struc
     if (last == NULL)
         valid = 1;
 
-    pico_tree_foreach(index, &Tree_dev_link) {
+    pico_tree_foreach(index, &Tree_dev_link)
+    {
         link = index->keyValue;
         if (link->dev == dev) {
             if (last == link)
@@ -1632,10 +1616,10 @@ struct pico_ipv4_link *pico_ipv4_link_by_dev_next(struct pico_device *dev, struc
     return NULL;
 }
 
-struct pico_device *MOCKABLE pico_ipv4_link_find(struct pico_ip4 *address)
+struct pico_device *pico_ipv4_link_find(struct pico_ip4 *address)
 {
     struct pico_ipv4_link test, *found;
-    if (!address) {
+    if(!address) {
         pico_err = PICO_ERR_EINVAL;
         return NULL;
     }
@@ -1700,7 +1684,7 @@ int pico_ipv4_rebound(struct pico_frame *f)
 {
     struct pico_ip4 dst;
     struct pico_ipv4_hdr *hdr;
-    if (!f) {
+    if(!f) {
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }
@@ -1723,15 +1707,11 @@ static int pico_ipv4_pre_forward_checks(struct pico_frame *f)
 {
     static uint16_t last_id = 0;
     static uint16_t last_proto = 0;
-    static struct pico_ip4 last_src = {
-        0
-    };
-    static struct pico_ip4 last_dst = {
-        0
-    };
+    static struct pico_ip4 last_src = {0};
+    static struct pico_ip4 last_dst = {0};
     struct pico_ipv4_hdr *hdr = (struct pico_ipv4_hdr *)f->net_hdr;
-
-    /* Decrease TTL, check if expired */
+   
+    /* Decrease TTL, check if expired */ 
     hdr->ttl = (uint8_t)(hdr->ttl - 1);
     if (hdr->ttl < 1) {
         pico_notify_ttl_expired(f);
@@ -1748,7 +1728,7 @@ static int pico_ipv4_pre_forward_checks(struct pico_frame *f)
 
     /* If this was the last forwarded packet, silently discard to prevent duplications */
     if ((last_src.addr == hdr->src.addr) && (last_id == hdr->id)
-        && (last_dst.addr == hdr->dst.addr) && (last_proto == hdr->proto)) {
+           && (last_dst.addr == hdr->dst.addr) && (last_proto == hdr->proto)) {
         return -1;
     } else {
         last_src.addr = hdr->src.addr;
@@ -1756,20 +1736,18 @@ static int pico_ipv4_pre_forward_checks(struct pico_frame *f)
         last_id = hdr->id;
         last_proto = hdr->proto;
     }
-
     return 0;
 }
 
 static int pico_ipv4_forward_check_dev(struct pico_frame *f)
 {
-    if (f->dev->eth != NULL)
+    if(f->dev->eth != NULL)
         f->len -= PICO_SIZE_ETHHDR;
 
-    if (f->len > f->dev->mtu) {
+    if(f->len > f->dev->mtu) {
         pico_notify_pkt_too_big(f);
         return -1;
     }
-
     return 0;
 }
 
@@ -1833,7 +1811,8 @@ int pico_ipv4_cleanup_links(struct pico_device *dev)
     struct pico_tree_node *index = NULL, *_tmp = NULL;
     struct pico_ipv4_link *link = NULL;
 
-    pico_tree_foreach_safe(index, &Tree_dev_link, _tmp) {
+    pico_tree_foreach_safe(index, &Tree_dev_link, _tmp)
+    {
         link = index->keyValue;
         if (dev == link->dev)
             pico_ipv4_link_del(dev, link->address);

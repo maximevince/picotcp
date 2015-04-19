@@ -1,5 +1,5 @@
 /*********************************************************************
-   PicoTCP. Copyright (c) 2012-2015 Altran Intelligent Systems. Some rights reserved.
+   PicoTCP. Copyright (c) 2012 TASS Belgium NV. Some rights reserved.
    See LICENSE and COPYING for usage.
 
    .
@@ -32,7 +32,7 @@ PACKED_STRUCT_DEF pico_udp_hdr {
 #define PICO_UDPHDR_SIZE 8
 
 struct pico_socket *pico_udp_open(void);
-uint16_t pico_udp_recv(struct pico_socket *s, void *buf, uint16_t len, void *src, uint16_t *port, struct pico_msginfo *msginfo);
+uint16_t pico_udp_recv(struct pico_socket *s, void *buf, uint16_t len, void *src, uint16_t *port);
 uint16_t pico_udp_checksum_ipv4(struct pico_frame *f);
 
 #ifdef PICO_SUPPORT_IPV6

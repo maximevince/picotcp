@@ -1,5 +1,5 @@
 /*********************************************************************
-   PicoTCP. Copyright (c) 2012-2015 Altran Intelligent Systems. Some rights reserved.
+   PicoTCP. Copyright (c) 2012 TASS Belgium NV. Some rights reserved.
    See LICENSE and COPYING for usage.
 
    Authors: Kristof Roelants, Frederik Van Slycken
@@ -229,9 +229,9 @@ static void pico_dhcp_client_timer_handler(pico_time now, void *arg)
     (void) now;
 
 
-    if (t->state != DHCP_CLIENT_TIMER_STOPPED) {
-        dhcpc = pico_dhcp_client_find_cookie(t->xid);
-        if (dhcpc && dhcpc->timer) {
+    dhcpc = pico_dhcp_client_find_cookie(t->xid);
+    if (dhcpc && dhcpc->timer) {
+        if (t->state != DHCP_CLIENT_TIMER_STOPPED) {
             t->state = DHCP_CLIENT_TIMER_STOPPED;
             if (t->type == PICO_DHCPC_TIMER_INIT) {
                 pico_dhcp_client_reinit(now, dhcpc);
@@ -342,9 +342,6 @@ static void pico_dhcp_client_start_reacquisition_timers(struct pico_dhcp_client_
 static int pico_dhcp_client_init(struct pico_dhcp_client_cookie *dhcpc)
 {
     uint16_t port = PICO_DHCP_CLIENT_PORT;
-    if (!dhcpc)
-        return -1;
-
     /* adding a link with address 0.0.0.0 and netmask 0.0.0.0,
      * automatically adds a route for a global broadcast */
     pico_ipv4_link_add(dhcpc->dev, inaddr_any, bcast_netmask);
@@ -869,23 +866,19 @@ static int8_t pico_dhcp_client_msg(struct pico_dhcp_client_cookie *dhcpc, uint8_
 
 static void pico_dhcp_client_wakeup(uint16_t ev, struct pico_socket *s)
 {
-
-    uint8_t *buf;
+    uint8_t buf[DHCP_CLIENT_MAXMSGZISE] = {
+        0
+    };
     int r = 0;
     struct pico_dhcp_hdr *hdr = NULL;
     struct pico_dhcp_client_cookie *dhcpc = NULL;
-    
+
     if (ev != PICO_SOCK_EV_RD)
         return;
 
-    buf = PICO_ZALLOC(DHCP_CLIENT_MAXMSGZISE);
-    if (!buf) {
-        return;
-    }
-
     r = pico_socket_recvfrom(s, buf, DHCP_CLIENT_MAXMSGZISE, NULL, NULL);
     if (r < 0)
-        goto out_discard_buf;
+        return;
 
     /* If the 'xid' of an arriving message does not match the 'xid'
      * of the most recent transmitted message, the message must be
@@ -893,13 +886,10 @@ static void pico_dhcp_client_wakeup(uint16_t ev, struct pico_socket *s)
     hdr = (struct pico_dhcp_hdr *)buf;
     dhcpc = pico_dhcp_client_find_cookie(hdr->xid);
     if (!dhcpc)
-        goto out_discard_buf;
+        return;
 
     dhcpc->event = (uint8_t)pico_dhcp_client_opt_parse(buf, (uint16_t)r);
     pico_dhcp_state_machine(dhcpc->event, dhcpc, buf);
-
-out_discard_buf:
-    PICO_FREE(buf);
 }
 
 void *pico_dhcp_get_identifier(uint32_t xid)

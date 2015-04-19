@@ -51,6 +51,7 @@ static int pico_vde_poll(struct pico_device *dev, int loop_score)
 
         len = vde_recv(vde->conn, buf, VDE_MTU, 0);
         if (len > 0) {
+            /* dbg("Received pkt.\n"); */
             if ((vde->lost_in == 0) || ((pico_rand() % 100) > vde->lost_in)) {
                 loop_score--;
                 pico_stack_recv(dev, buf, (uint32_t)len);
@@ -76,6 +77,8 @@ void pico_vde_set_packetloss(struct pico_device *dev, uint32_t in_pct, uint32_t 
     vde->lost_in = in_pct;
     vde->lost_out = out_pct;
 }
+
+
 
 struct pico_device *pico_vde_create(char *sock, char *name, uint8_t *mac)
 {

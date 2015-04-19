@@ -1,5 +1,6 @@
 #define EXISTING_TIMERS 5
 
+
 START_TEST (test_timers)
 {
     struct pico_timer *T[128];

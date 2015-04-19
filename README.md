@@ -1,4 +1,4 @@
-picoTCP - dns-sd
+picoTCP
 
 ---------------
 

@@ -353,28 +353,14 @@ int pico_ipv6_is_unspecified(const uint8_t addr[PICO_SIZE_IP6])
     return !memcmp(PICO_IP6_ANY, addr, PICO_SIZE_IP6);
 }
 
-int pico_ipv6_rebound(struct pico_frame *f)
-{
-    struct pico_ip6 dst = {{0}};
-    struct pico_ipv6_hdr *hdr = NULL;
-
-    if(!f)
-        return -1;
-
-    hdr = (struct pico_ipv6_hdr *)f->net_hdr;
-    if (!hdr)
-        return -1;
-
-    dst = hdr->src;
-
-    return pico_ipv6_frame_push(f, &dst, hdr->nxthdr);
-}
-
 static struct pico_ipv6_route *pico_ipv6_route_find(const struct pico_ip6 *addr)
 {
     struct pico_ipv6_route *r = NULL;
     struct pico_tree_node *index = NULL;
     int i = 0;
+
+    if (!pico_ipv6_is_localhost(addr->addr) && (pico_ipv6_is_linklocal(addr->addr) || pico_ipv6_is_multicast(addr->addr) || pico_ipv6_is_sitelocal(addr->addr)))
+        return NULL;
 
     pico_tree_foreach_reverse(index, &IPV6Routes)
     {
@@ -462,7 +448,6 @@ static int pico_ipv6_pre_forward_checks(struct pico_frame *f)
     if (pico_ipv6_forward_check_dev(f) < 0)
         return -1;
 
-    pico_sendto_dev(f);
     return 0;
 }
 
@@ -487,12 +472,10 @@ static int pico_ipv6_forward(struct pico_frame *f)
 
     f->start = f->net_hdr;
 
-    if (pico_ipv6_forward_check_dev(f) < 0)
-        return -1;
-
-    pico_sendto_dev(f);
-    return 0;
+    return pico_sendto_dev(f);
 }
+
+#define HBH_LEN(hbh) ((((hbh->ext.hopbyhop.len + 1) << 3) - 2)) /* len in bytes, minus nxthdr and len byte */
 
 int pico_ipv6_process_hopbyhop(struct pico_ipv6_exthdr *hbh, struct pico_frame *f)
 {
@@ -504,7 +487,7 @@ int pico_ipv6_process_hopbyhop(struct pico_ipv6_exthdr *hbh, struct pico_frame *
     IGNORE_PARAMETER(f);
 
     option = hbh->ext.hopbyhop.options;
-    len = (uint8_t)(((hbh->ext.hopbyhop.len + 1) << 3) - 2); /* len in bytes, minus nxthdr and len byte */
+    len = (uint8_t)HBH_LEN(hbh);
     ipv6_dbg("IPv6: hop by hop extension header length %u\n", len + 2);
     while (len) {
         switch (*option)
@@ -534,6 +517,7 @@ int pico_ipv6_process_hopbyhop(struct pico_ipv6_exthdr *hbh, struct pico_frame *
             case PICO_IPV6_EXTHDR_OPT_ACTION_DISCARD_SINM:
                 if (!pico_ipv6_is_multicast(((struct pico_ipv6_hdr *)(f->net_hdr))->dst.addr))
                     pico_icmp6_parameter_problem(f, PICO_ICMP6_PARAMPROB_IPV6OPT, ptr + (uint32_t)(option - extensions_start));
+
                 return -1;
             }
             ipv6_dbg("IPv6: option with type %u and length %u\n", *option, optlen);
@@ -545,31 +529,35 @@ int pico_ipv6_process_hopbyhop(struct pico_ipv6_exthdr *hbh, struct pico_frame *
 }
 
 
-int pico_ipv6_process_routing(struct pico_ipv6_exthdr *routing, struct pico_frame *f)
+int pico_ipv6_process_routing(struct pico_ipv6_exthdr *routing, struct pico_frame *f, uint32_t ptr)
 {
     IGNORE_PARAMETER(f);
+
+    if (routing->ext.routing.segleft == 0)
+        return 0;
 
     ipv6_dbg("IPv6: routing extension header with len %u\n", routing->ext.routing.len + 2);
     switch (routing->ext.routing.routtype) {
     case 0x00:
         /* deprecated */
-        break;
+        pico_icmp6_parameter_problem(f, PICO_ICMP6_PARAMPROB_HDRFIELD, ptr + 2);
+        return -1;
     case 0x02:
         /* routing type for MIPv6: not supported yet */
         break;
     default:
-        /* XXX: ICMP parameter problem (code 0) */
+        pico_icmp6_parameter_problem(f, PICO_ICMP6_PARAMPROB_HDRFIELD, ptr + 2);
         return -1;
     }
     return 0;
 }
 
-int pico_ipv6_process_frag(struct pico_ipv6_exthdr *fragm, struct pico_frame *f)
+
+#define IP6FRAG_OFF(x) ((x & 0xFFF8))
+#define IP6FRAG_MORE(x) ((x & 0x0001))
+
+static int pico_ipv6_frag_compare(void *ka, void *kb)
 {
-    IGNORE_PARAMETER(fragm);
-    if (!f) {
-        pico_err = PICO_ERR_EINVAL;
-        return -1;
     struct pico_frame *a = ka, *b = kb;
     if (IP6FRAG_OFF(a->frag) > IP6FRAG_OFF(b->frag))
         return 1;
@@ -628,8 +616,6 @@ static void pico_ipv6_fragments_check_complete(uint8_t proto)
             pico_ipv6_fragments_complete(bookmark, proto);
         }
     }
-    ipv6_dbg("IPv6: fragmentation extension header\n");
-    return 0;
 }
 
 static void pico_ipv6_frag_expire(pico_time now, void *arg)
@@ -716,43 +702,35 @@ static int pico_ipv6_process_destopt(struct pico_ipv6_exthdr *destopt, struct pi
 {
     uint8_t *option = NULL;
     uint8_t len = 0, optlen = 0;
-
+    opt_ptr += (uint32_t)(2u); /* Skip Dest_opts header */
     IGNORE_PARAMETER(f);
 
     option = destopt->ext.destopt.options;
     len = (uint8_t)(((destopt->ext.destopt.len + 1) << 3) - 2); /* len in bytes, minus nxthdr and len byte */
     ipv6_dbg("IPv6: destination option extension header length %u\n", len + 2);
     while (len) {
+        optlen = (uint8_t)(*(option + 1) + 2);
         switch (*option)
         {
         case PICO_IPV6_EXTHDR_OPT_PAD1:
-            ++option;
-            --len;
             break;
 
         case PICO_IPV6_EXTHDR_OPT_PADN:
-            optlen = (uint8_t)(*(option + 1) + 2); /* plus type and len byte */
-            option += optlen;
-            len = (uint8_t)(len - optlen);
             break;
 
         case PICO_IPV6_EXTHDR_OPT_SRCADDR:
-            optlen = (uint8_t)(*(option + 1) + 2); /* plus type and len byte */
-            option += optlen;
-            len = (uint8_t)(len - optlen); /* 2 = 1 byte for option type and 1 byte for option length */
             ipv6_dbg("IPv6: home address option with length %u\n", optlen);
             break;
 
         default:
-            optlen = *(option + 1);
-            ipv6_dbg("IPv6: option with type %u and length %u\n", *option, optlen + 2);
-            switch ((*option) & PICO_IPV6_EXTHDR_OPT_ACTION_MASK) {
+            ipv6_dbg("IPv6: option with type %u and length %u\n", *option, optlen);
+            switch (*option & PICO_IPV6_EXTHDR_OPT_ACTION_MASK) {
             case PICO_IPV6_EXTHDR_OPT_ACTION_SKIP:
                 break;
             case PICO_IPV6_EXTHDR_OPT_ACTION_DISCARD:
                 return -1;
             case PICO_IPV6_EXTHDR_OPT_ACTION_DISCARD_SI:
-                /* XXX: send ICMP parameter problem (code 2), pointing to the unrecognized option type */
+                pico_icmp6_parameter_problem(f, PICO_ICMP6_PARAMPROB_IPV6OPT, opt_ptr);
                 return -1;
             case PICO_IPV6_EXTHDR_OPT_ACTION_DISCARD_SINM:
                 if (!pico_ipv6_is_multicast(((struct pico_ipv6_hdr *)(f->net_hdr))->dst.addr))
@@ -760,8 +738,6 @@ static int pico_ipv6_process_destopt(struct pico_ipv6_exthdr *destopt, struct pi
 
                 return -1;
             }
-            option += optlen + 2;
-            len = (uint8_t)(len - optlen + 2); /* 2 = 1 byte for option type and 1 byte for option length */
             break;
         }
         opt_ptr += optlen;
@@ -825,7 +801,7 @@ static int pico_ipv6_extension_headers(struct pico_frame *f)
 {
     struct pico_ipv6_hdr *hdr = (struct pico_ipv6_hdr *)f->net_hdr;
     uint8_t nxthdr = hdr->nxthdr;
-    struct pico_ipv6_exthdr *exthdr = NULL;
+    struct pico_ipv6_exthdr *exthdr = NULL, *frag_hdr = NULL;
     uint32_t ptr = sizeof(struct pico_ipv6_hdr);
     uint16_t cur_optlen;
     uint32_t cur_nexthdr = 6;
@@ -835,15 +811,18 @@ static int pico_ipv6_extension_headers(struct pico_frame *f)
 
     if (pico_ipv6_check_headers_sequence(f) < 0)
         return -1;
+
     for (;; ) {
         exthdr = (struct pico_ipv6_exthdr *)(f->net_hdr + f->net_len);
+        cur_optlen = 0;
+
         switch (nxthdr) {
         case PICO_IPV6_EXTHDR_HOPBYHOP:
-            /* The Hop-by-Hop Options header,
-             * when present, must immediately follow the IPv6 header.
-             */
-            if (!is_ipv6_hdr) {
-                pico_icmp6_parameter_problem(f, PICO_ICMP6_PARAMPROB_NXTHDR, ptr);
+            if (cur_nexthdr != 6) {
+                /* The Hop-by-Hop Options header,
+                 * when present, must immediately follow the IPv6 header.
+                 */
+                pico_icmp6_parameter_problem(f, PICO_ICMP6_PARAMPROB_NXTHDR, cur_nexthdr);
                 return -1;
             }
 
@@ -855,21 +834,29 @@ static int pico_ipv6_extension_headers(struct pico_frame *f)
 
             break;
         case PICO_IPV6_EXTHDR_ROUTING:
-            f->net_len = (uint16_t)(f->net_len + ((exthdr->ext.routing.len + 1) << 3));
-            if (pico_ipv6_process_routing(exthdr, f) < 0)
+            cur_optlen = IPV6_OPTLEN(exthdr->ext.routing.len);
+            f->net_len = (uint16_t) (f->net_len + cur_optlen);
+            if (pico_ipv6_process_routing(exthdr, f, ptr) < 0)
                 return -1;
 
             break;
         case PICO_IPV6_EXTHDR_FRAG:
-            f->net_len = (uint16_t)(f->net_len + 8); /* fixed length */
-            if (pico_ipv6_process_frag(exthdr, f) < 0)
+            cur_optlen = 8u;
+            f->net_len = (uint16_t) (f->net_len + cur_optlen);
+            frag_hdr = exthdr;
+            f->frag = (uint16_t)((frag_hdr->ext.frag.om[0] << 8) + frag_hdr->ext.frag.om[1]);
+            /* If M-Flag is set, and packet is not 8B aligned, discard and alert */
+            if (IP6FRAG_MORE(f->frag) && ((short_be(hdr->len) % 8) != 0)) {
+                pico_icmp6_parameter_problem(f, PICO_ICMP6_PARAMPROB_HDRFIELD, 4);
                 return -1;
             }
 
             break;
         case PICO_IPV6_EXTHDR_DESTOPT:
-            f->net_len = (uint16_t)(f->net_len + ((exthdr->ext.destopt.len + 1) << 3));
-            if (pico_ipv6_process_destopt(exthdr, f) < 0)
+            cur_optlen = IPV6_OPTLEN(exthdr->ext.destopt.len);
+            f->net_len = (uint16_t) (f->net_len + cur_optlen);
+            must_align = 1;
+            if (pico_ipv6_process_destopt(exthdr, f, ptr) < 0)
                 return -1;
 
             break;
@@ -883,6 +870,7 @@ static int pico_ipv6_extension_headers(struct pico_frame *f)
             /* no next header */
             if (must_align && (pico_ipv6_check_aligned(f) < 0))
                 return -1;
+
             return 0;
 
         case PICO_PROTO_TCP:
@@ -907,10 +895,8 @@ static int pico_ipv6_extension_headers(struct pico_frame *f)
             return -1;
         }
         nxthdr = exthdr->nxthdr;
-        if (!is_ipv6_hdr)
-            ptr += (uint32_t)sizeof(struct pico_ipv6_exthdr);
-
-        is_ipv6_hdr = 0;
+        cur_nexthdr = ptr;
+        ptr += cur_optlen;
     }
 }
 
@@ -920,6 +906,12 @@ int pico_ipv6_process_in(struct pico_protocol *self, struct pico_frame *f)
     struct pico_ipv6_hdr *hdr = (struct pico_ipv6_hdr *)f->net_hdr;
 
     IGNORE_PARAMETER(self);
+    /* TODO: Check hop-by-hop hdr before forwarding */
+
+    if (pico_ipv6_is_unicast(&hdr->dst) && !pico_ipv6_link_get(&hdr->dst)) {
+        /* not local, try to forward. */
+        return pico_ipv6_forward(f);
+    }
 
     proto = pico_ipv6_extension_headers(f);
     if (proto <= 0) {
@@ -930,16 +922,11 @@ int pico_ipv6_process_in(struct pico_protocol *self, struct pico_frame *f)
     f->proto = (uint8_t)proto;
     ipv6_dbg("IPv6: payload %u net_len %u nxthdr %u\n", short_be(hdr->len), f->net_len, proto);
 
-
-    if (0) {
-    } else if (pico_ipv6_is_unicast(&hdr->dst)) {
+    if (pico_ipv6_is_unicast(&hdr->dst)) {
         pico_transport_receive(f, f->proto);
     } else if (pico_ipv6_is_multicast(hdr->dst.addr)) {
         /* XXX perform multicast filtering: solicited-node multicast address MUST BE allowed! */
         pico_transport_receive(f, f->proto);
-    } else {
-        /* not local, try to forward. */
-        pico_ipv6_forward(f);
     }
 
     return 0;
@@ -1005,7 +992,7 @@ static inline struct pico_ipv6_route *ipv6_pushed_frame_checks(struct pico_frame
     }
 
     route = pico_ipv6_route_find(dst);
-    if (!route) {
+    if (!route && !f->dev) {
         dbg("IPv6: route not found.\n");
         pico_err = PICO_ERR_EHOSTUNREACH;
         return NULL;
@@ -1042,6 +1029,7 @@ static inline void ipv6_push_hdr_adjust(struct pico_frame *f, struct pico_ipv6_l
     if (f->send_tos) {
         hdr->vtf |= ((uint32_t)f->send_tos << 20u);
     }
+
     /* make adjustments to defaults according to proto */
     switch (proto)
     {
@@ -1058,12 +1046,14 @@ static inline void ipv6_push_hdr_adjust(struct pico_frame *f, struct pico_ipv6_l
         icmp6_hdr->crc = short_be(pico_icmp6_checksum(f));
         break;
     }
+#ifdef PICO_SUPPORT_UDP
     case PICO_PROTO_UDP:
     {
         struct pico_udp_hdr *udp_hdr = (struct pico_udp_hdr *) f->transport_hdr;
-        udp_hdr->crc = pico_udp_checksum_ipv6(f);
+        udp_hdr->crc = short_be(pico_udp_checksum_ipv6(f));
         break;
     }
+#endif
 
     default:
         break;
@@ -1075,15 +1065,12 @@ static int ipv6_frame_push_final(struct pico_frame *f)
 {
     struct pico_ipv6_hdr *hdr = NULL;
     hdr = (struct pico_ipv6_hdr *)f->net_hdr;
-
     if(pico_ipv6_link_get(&hdr->dst)) {
         return pico_enqueue(&ipv6_in, f);
     }
     else {
         return pico_enqueue(&ipv6_out, f);
     }
-
-
 }
 
 struct pico_ipv6_link *pico_ipv6_linklocal_get(struct pico_device *dev);
@@ -1106,6 +1093,10 @@ int pico_ipv6_frame_push(struct pico_frame *f, struct pico_ip6 *src, struct pico
 
         if (link)
             goto push_final;
+    }
+
+    if (pico_ipv6_is_localhost(dst->addr)) {
+        f->dev = pico_get_device("loop");
     }
 
     route = ipv6_pushed_frame_checks(f, dst);
@@ -1200,6 +1191,7 @@ static inline struct pico_ipv6_route *ipv6_route_add_link(struct pico_ip6 gatewa
         return NULL;
     }
 
+
     return r;
 }
 
@@ -1246,11 +1238,16 @@ int pico_ipv6_route_add(struct pico_ip6 address, struct pico_ip6 netmask, struct
         }
     }
 
+    if (new->link && (pico_ipv6_is_global(address.addr)) && (!pico_ipv6_is_global(new->link->address.addr))) {
+        new->link = pico_ipv6_global_get(new->link->dev);
+    }
+
     if (!new->link) {
         pico_err = PICO_ERR_EINVAL;
         PICO_FREE(new);
         return -1;
     }
+
 
     pico_tree_insert(&IPV6Routes, new);
     pico_ipv6_dbg_route();

@@ -25,7 +25,7 @@ extern volatile uint64_t pico_tick;
 #include "pico_addressing.h"
 
 /* Maximum amount of accepted ARP requests per burst interval */
-#define PICO_ARP_MAX_RATE 25
+#define PICO_ARP_MAX_RATE 1
 /* Duration of the burst interval in milliseconds */
 #define PICO_ARP_INTERVAL 1000
 

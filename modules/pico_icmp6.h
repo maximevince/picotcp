@@ -237,7 +237,7 @@ struct pico_icmp6_stats
     struct pico_ip6 dst;
 };
 
-int pico_icmp6_ping(char *dst, int count, int interval, int timeout, int size, void (*cb)(struct pico_icmp6_stats *));
+int pico_icmp6_ping(char *dst, int count, int interval, int timeout, int size, void (*cb)(struct pico_icmp6_stats *), struct pico_device *dev);
 int pico_icmp6_ping_abort(int id);
 
 int pico_icmp6_neighbor_solicitation(struct pico_device *dev, struct pico_ip6 *dst, uint8_t type);
@@ -251,6 +251,7 @@ int pico_icmp6_ttl_expired(struct pico_frame *f);
 int pico_icmp6_packet_filtered(struct pico_frame *f);
 int pico_icmp6_parameter_problem(struct pico_frame *f, uint8_t problem, uint32_t ptr);
 int pico_icmp6_pkt_too_big(struct pico_frame *f);
+int pico_icmp6_frag_expired(struct pico_frame *f);
 
 uint16_t pico_icmp6_checksum(struct pico_frame *f);
 int pico_icmp6_router_advertisement(struct pico_device *dev, struct pico_ip6 *dst);

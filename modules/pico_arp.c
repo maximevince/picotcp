@@ -398,12 +398,11 @@ static int pico_arp_check_flooding(struct pico_frame *f, struct pico_ip4 me)
 static int pico_arp_process_in(struct pico_frame *f, struct pico_arp_hdr *hdr, struct pico_arp *found)
 {
     struct pico_ip4 me;
-    
     if (pico_arp_check_incoming_hdr(f, &me) < 0) {
         pico_frame_discard(f);
         return -1;
     }
-    
+
     if (pico_arp_check_flooding(f, me) < 0) {
         pico_frame_discard(f);
         return -1;
@@ -417,7 +416,7 @@ static int pico_arp_process_in(struct pico_frame *f, struct pico_arp_hdr *hdr, s
 
     /* If the packet is a request, send a reply */
     pico_arp_reply_on_request(f, me);
-    
+
 #ifdef DEBUG_ARP
     dbg_arp();
 #endif

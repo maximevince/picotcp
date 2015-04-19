@@ -34,6 +34,7 @@ struct pico_mcast_listen
 
 static int mcast_listen_link_cmp(struct pico_mcast_listen *a, struct pico_mcast_listen *b)
 {
+
     if (a->proto < b->proto)
         return -1;
 
@@ -569,7 +570,7 @@ static int mcast_so_addm(struct pico_socket *s, void *value)
         listen->proto = s->net->proto_number;
         pico_tree_insert(s->MCASTListen, listen);
     }
-    
+
     pico_tree_insert(&MCASTSockets, s);
     filter_mode = pico_socket_aggregate_mcastfilters((union pico_address *)&mcast_link->address, (union pico_address *)&mreq->mcast_group_addr);
     if (filter_mode < 0)
@@ -855,13 +856,13 @@ static int mcast_so_check_socket(struct pico_socket *s)
     pico_err = PICO_ERR_EINVAL;
     if (!s)
         return -1;
-    
+
     if (!s->proto)
         return -1;
 
     if (s->proto->proto_number != PICO_PROTO_UDP)
         return -1;
-    
+
     pico_err = PICO_ERR_NOERR;
     return 0;
 }
@@ -873,6 +874,7 @@ int pico_setsockopt_mcast(struct pico_socket *s, int option, void *value)
         pico_err = PICO_ERR_EOPNOTSUPP;
         return -1;
     }
+
     if (mcast_so_check_socket(s) < 0)
         return -1;
 
@@ -880,7 +882,7 @@ int pico_setsockopt_mcast(struct pico_socket *s, int option, void *value)
         pico_err = PICO_ERR_EOPNOTSUPP;
         return -1;
     }
-    
+
     return (mcast_so_calls[arrayn].call(s, value));
 }
 
@@ -909,7 +911,6 @@ int pico_udp_get_mc_ttl(struct pico_socket *s, uint8_t *ttl)
     return 0;
 }
 #else
-/* IF MCAST build flag is not set */
 int pico_udp_set_mc_ttl(struct pico_socket *s, void  *_ttl)
 {
     pico_err = PICO_ERR_EPROTONOSUPPORT;
@@ -949,6 +950,7 @@ int pico_setsockopt_mcast(struct pico_socket *s, int option, void *value)
     (void)value;
     pico_err = PICO_ERR_EPROTONOSUPPORT;
     return -1;
+
 }
 #endif /* PICO_SUPPORT_MCAST */
 

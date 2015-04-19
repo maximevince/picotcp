@@ -19,6 +19,7 @@
 #include "pico_nat.h"
 #include "pico_igmp.h"
 #include "pico_tree.h"
+#include "pico_aodv.h"
 #include "pico_socket_multicast.h"
 
 #ifdef PICO_SUPPORT_IPV4
@@ -697,6 +698,7 @@ static int pico_ipv4_process_in(struct pico_protocol *self, struct pico_frame *f
 
 #endif
 
+
     /* ret == 1 indicates to continue the function */
     ret = pico_ipv4_crc_check(f);
     if (ret < 1)
@@ -1207,6 +1209,7 @@ int pico_ipv4_frame_push(struct pico_frame *f, struct pico_ip4 *dst, uint8_t pro
         return -1;
     }
 
+
     hdr = (struct pico_ipv4_hdr *) f->net_hdr;
     if (!hdr) {
         dbg("IP header error\n");
@@ -1279,6 +1282,7 @@ int pico_ipv4_frame_push(struct pico_frame *f, struct pico_ip4 *dst, uint8_t pro
     hdr->dst.addr = dst->addr;
     hdr->src.addr = link->address.addr;
     hdr->ttl = ttl;
+    hdr->tos = f->send_tos;
     hdr->proto = proto;
     hdr->frag = short_be(PICO_IPV4_DONTFRAG);
 #ifdef PICO_SUPPORT_IPFRAG
@@ -1366,7 +1370,7 @@ static int pico_ipv4_frame_sock_push(struct pico_protocol *self, struct pico_fra
 }
 
 
-int pico_ipv4_route_add(struct pico_ip4 address, struct pico_ip4 netmask, struct pico_ip4 gateway, int metric, struct pico_ipv4_link *link)
+int MOCKABLE pico_ipv4_route_add(struct pico_ip4 address, struct pico_ip4 netmask, struct pico_ip4 gateway, int metric, struct pico_ipv4_link *link)
 {
     struct pico_ipv4_route test, *new;
     test.dest.addr = address.addr;
@@ -1527,7 +1531,7 @@ static int pico_ipv4_cleanup_routes(struct pico_ipv4_link *link)
     return 0;
 }
 
-void pico_ipv4_route_set_bcast_link(struct pico_ipv4_link *link)
+void MOCKABLE pico_ipv4_route_set_bcast_link(struct pico_ipv4_link *link)
 {
     if (link)
         default_bcast_route.link = link;

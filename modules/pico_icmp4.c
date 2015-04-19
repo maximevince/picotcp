@@ -47,6 +47,9 @@ static void ping_recv_reply(struct pico_frame *f);
 static int pico_icmp4_process_in(struct pico_protocol *self, struct pico_frame *f)
 {
     struct pico_icmp4_hdr *hdr = (struct pico_icmp4_hdr *) f->transport_hdr;
+    static int firstpkt = 1;
+    static uint16_t last_id = 0;
+    static uint16_t last_seq = 0;
     IGNORE_PARAMETER(self);
 
     if (hdr->type == PICO_ICMP_ECHO) {

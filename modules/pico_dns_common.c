@@ -225,7 +225,7 @@ pico_dns_packet_compress_name( uint8_t *name,
         return -1;
     }
     if ((name < packet) || (name > (packet + *len))) {
-        dns_dbg("Name ptr OOB. name: %ld max: %ld\n", name, packet + *len);
+        dns_dbg("Name ptr OOB. name: %p max: %p\n", name, packet + *len);
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }
@@ -1654,6 +1654,7 @@ dns_ptr_ip6_nibble_hi(uint8_t byte)
 void
 pico_dns_ipv6_set_ptr(const char *ip, char *dst)
 {
+    /* Wow, initiasing struct fields, cool */
     struct pico_ip6 ip6 = {.addr = {}};
     int i, j = 0;
     pico_string_to_ipv6(ip, ip6.addr);

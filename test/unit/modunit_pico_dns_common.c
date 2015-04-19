@@ -1068,52 +1068,209 @@ START_TEST(tc_pico_dns_decompress_name)
 END_TEST
 START_TEST(tc_pico_dns_url_get_reverse_len)
 {
-    /* TODO: Write test */
+    const char *url_ipv4 = "10.10.0.1";
+    const char *url_ipv6 = "2001:0db8:0000:0000:0000:0000:0000:0000";
+    uint16_t arpalen = 0;
+    uint16_t len = 0;
+
+    /* Try to determine the reverse length of the IPv4 URL */
+    len = pico_dns_url_get_reverse_len(url_ipv4, &arpalen, PICO_PROTO_IPV4);
+    fail_unless(len == (9 + 2) && arpalen == 13,
+                "dns_url_get_reverse_len failed with IPv4 URL!\n");
+
+    /* Try to determine the reverse length of the IPv6 URL */
+    len = pico_dns_url_get_reverse_len(url_ipv6, &arpalen, PICO_PROTO_IPV6);
+    fail_unless(len == (63 + 2) && arpalen == 9,
+                "dns_url_get_reverse_len failed with IPv4 URL!\n");
+
+    len = pico_dns_url_get_reverse_len(NULL, NULL, PICO_PROTO_IPV4);
+    fail_unless(len == 0, "dns_url_get_reverse_len with NULL-ptrs failed!\n");
 }
 END_TEST
 START_TEST(tc_pico_dns_url_to_reverse_qname)
 {
-    /* TODO: Write test */
+    const char *url_ipv4 = "10.10.0.1";
+    const char *url_ipv6 = "2001:0db8:0000:0000:0000:0000:0000:0000";
+    const char *qname = NULL;
+    char cmp_buf1[24] = { 0x01, '1',
+                          0x01, '0',
+                          0x02, '1','0',
+                          0x02, '1','0',
+                          0x07, 'i','n','-','a','d','d','r',
+                          0x04, 'a','r','p','a',
+                          0x00};
+    char cmp_buf[74] = { 0x01u, '0', 0x01u, '0', 0x01u, '0', 0x01u, '0',
+                         0x01u, '0', 0x01u, '0', 0x01u, '0', 0x01u, '0',
+                         0x01u, '0', 0x01u, '0', 0x01u, '0', 0x01u, '0',
+                         0x01u, '0', 0x01u, '0', 0x01u, '0', 0x01u, '0',
+                         0x01u, '0', 0x01u, '0', 0x01u, '0', 0x01u, '0',
+                         0x01u, '0', 0x01u, '0', 0x01u, '0', 0x01u, '0',
+                         0x01u, '8', 0x01u, 'b', 0x01u, 'd', 0x01u, '0',
+                         0x01u, '1', 0x01u, '0', 0x01u, '0', 0x01u, '2',
+                         0x03u, 'I','P','6',
+                         0x04u, 'A','R','P','A',
+                         0x00u };
+    uint16_t arpalen = 0;
+    uint16_t len = 0;
+
+    /* Try to reverse IPv4 URL */
+    qname = pico_dns_url_to_reverse_qname(url_ipv4, PICO_PROTO_IPV4);
+    fail_unless(qname != NULL, "dns_url_to_reverse_qname returned NULL!\n");
+    fail_unless(strcmp(qname, cmp_buf1) == 0,
+                "dns_url_to_reverse_qname failed with IPv4!\n");
+    PICO_FREE(qname);
+
+    /* Try to reverse IPv6 URL */
+    qname = pico_dns_url_to_reverse_qname(url_ipv6, PICO_PROTO_IPV6);
+    fail_unless(qname != NULL, "dns_url_to_reverse_qname returned NULL!\n");
+    fail_unless(strcmp(qname, cmp_buf) == 0,
+                "dns_url_to_reverse_qname failed with IPv6!\n");
+    PICO_FREE(qname);
 }
 END_TEST
 START_TEST(tc_pico_dns_qname_to_url)
 {
-    /* TODO: Write test */
+    char qname[24] = { 0x01, '1',
+                       0x01, '0',
+                       0x02, '1','0',
+                       0x02, '1','0',
+                       0x07, 'i','n','-','a','d','d','r',
+                       0x04, 'a','r','p','a',
+                       0x00 };
+    char qname2[13] = { 0x07, 'p','i','c','o','t','c','p',
+                        0x03, 'c','o','m',
+                        0x00 };
+    char qname3[14] = { 0x08, 'p','i','c','o', '\.','t','c','p',
+                        0x03, 'c','o','m',
+                        0x00 };
+    char *url = NULL;
+
+    /* Try to convert qname to url */
+    url = pico_dns_qname_to_url(qname);
+    fail_unless(url != NULL, "dns_qname_to_url returned NULL!\n");
+    fail_unless(strcmp(url, "1.0.10.10.in-addr.arpa") == 0,
+                "dns_qname_to_url failed %s!\n", url);
+    PICO_FREE(url);
+
+    /* Try to convert qname2 to url */
+    url = pico_dns_qname_to_url(qname2);
+    fail_unless(url != NULL, "dns_qname_to_url returned NULL!\n");
+    fail_unless(strcmp(url, "picotcp.com") == 0,
+                "dns_qname_to_url failed %s!\n", url);
+    PICO_FREE(url);
+
+    /* Try to convert qname2 to url */
+    url = pico_dns_qname_to_url(qname3);
+    fail_unless(url != NULL, "dns_qname_to_url returned NULL!\n");
+    fail_unless(strcmp(url, "pico.tcp.com") == 0,
+                "dns_qname_to_url failed %s!\n", url);
+    PICO_FREE(url);
 }
 END_TEST
 START_TEST(tc_pico_dns_url_to_qname)
 {
-    /* TODO: Write test */
+    char qname1[24] = { 0x01, '1',
+                        0x01, '0',
+                        0x02, '1','0',
+                        0x02, '1','0',
+                        0x07, 'i','n','-','a','d','d','r',
+                        0x04, 'a','r','p','a',
+                        0x00 };
+    char qname2[13] = { 0x07, 'p','i','c','o','t','c','p',
+                        0x03, 'c','o','m',
+                        0x00 };
+    char *qname = NULL;
+
+    /* Try to convert url to qname1 */
+    qname = pico_dns_url_to_qname("1.0.10.10.in-addr.arpa");
+    fail_unless(qname != NULL, "dns_url_to_qname returned NULL!\n");
+    fail_unless(strcmp(qname, qname1) == 0,
+                "dns_url_to_qname failed %s!\n", qname);
+    PICO_FREE(qname);
+
+    /* Try to convert url to qname2 */
+    qname = pico_dns_url_to_qname("picotcp.com");
+    fail_unless(qname != NULL, "dns_url_to_qname returned NULL!\n");
+    fail_unless(strcmp(qname, qname2) == 0,
+                "dns_url_to_qname failed %s!\n", qname);
+    PICO_FREE(qname);
 }
 END_TEST
 START_TEST(tc_pico_dns_name_to_dns_notation)
 {
-    /* TODO: Write test */
+    char qname1[13] = { 0x07, 'p','i','c','o','t','c','p',
+                        0x03, 'c','o','m',
+                        0x00 };
+    char url1[13] = { 0x00,'p','i','c','o','t','c','p','.','c','o','m',0x00 };
+    int ret = 0;
+
+    ret = pico_dns_name_to_dns_notation(url1);
+    fail_unless(ret == 0, "dns_name_to_dns_notation returned error!\n");
+    fail_unless(strcmp(url1, qname1) == 0,
+                "dns_name_to_dns_notation failed! %s\n", url1);
 }
 END_TEST
 START_TEST(tc_pico_dns_notation_to_name)
 {
-    /* TODO: Write test */
+    char qname1[13] = { 0x07, 'p','i','c','o','t','c','p',
+                        0x03, 'c','o','m',
+                        0x00 };
+    char url1[13] = { '.','p','i','c','o','t','c','p','.','c','o','m',0x00 };
+    int ret = 0;
+
+    ret = pico_dns_notation_to_name(qname1);
+    fail_unless(ret == 0, "dns_notation_to_name returned error!\n");
+    fail_unless(strcmp(url1, qname1) == 0,
+                "dns_notation_to_name failed! %s\n", qname1);
 }
 END_TEST
 START_TEST(tc_pico_dns_mirror_addr)
 {
-    /* TODO: Write test */
+    char url[12] = "192.168.0.1";
+    int8_t ret = 0;
+
+    ret = pico_dns_mirror_addr(url);
+    fail_unless(ret == 0, "dns_mirror_addr returned error!\n");
+    fail_unless(strcmp(url, "1.0.168.192") == 0,
+                "dns_mirror_addr failed!\n");
 }
 END_TEST
 START_TEST(tc_dns_ptr_ip6_nibble_lo)
 {
-    /* TODO: Write test */
+    uint8_t byte = 0x34;
+    char nibble_lo = 0;
+
+    nibble_lo = dns_ptr_ip6_nibble_lo(byte);
+    fail_unless(nibble_lo == '4', "dns_ptr_ip6_nibble_lo failed!\n");
 }
 END_TEST
 START_TEST(tc_dns_ptr_ip6_nibble_hi)
 {
-    /* TODO: Write test */
+    uint8_t byte = 0x34;
+    char nibble_hi = 0;
+
+    nibble_hi = dns_ptr_ip6_nibble_hi(byte);
+    fail_unless(nibble_hi == '3', "dns_ptr_ip6_nibble_hi failed! '%c'\n",
+                nibble_hi);
 }
 END_TEST
 START_TEST(tc_pico_dns_ipv6_set_ptr)
 {
-    /* TODO: Write test */
+    const char *url_ipv6 = "2001:0db8:0000:0000:0000:0000:0000:0000";
+
+    char cmpbuf[65] = { '0', '.', '0', '.', '0', '.', '0', '.',
+                        '0', '.', '0', '.', '0', '.', '0', '.',
+                        '0', '.', '0', '.', '0', '.', '0', '.',
+                        '0', '.', '0', '.', '0', '.', '0', '.',
+                        '0', '.', '0', '.', '0', '.', '0', '.',
+                        '0', '.', '0', '.', '0', '.', '0', '.',
+                        '8', '.', 'b', '.', 'd', '.', '0', '.',
+                        '1', '.', '0', '.', '0', '.', '2', '.', 0x00 };
+    char buf[65] = {};
+
+    pico_dns_ipv6_set_ptr(url_ipv6, buf);
+    fail_unless(strcmp(buf, cmpbuf) == 0,
+                "dns_ipv6_set_ptr failed!\n");
 }
 END_TEST
 

@@ -15,12 +15,15 @@ void mdns_getname_callback(char *str, void *arg)
     
 }
 
-void mdns_getaddr_callback(char *str, void *arg)
+void mdns_getaddr_callback( pico_mdns_record_vector *vector,
+                            char *str,
+                            void *arg )
 {
-    if (!str)
-        printf("Getaddr: timeout occurred!\n");
-    else
-        printf("Getaddr callback called, str: %s\n", str);
+    if (!vector) {
+        printf("Get record failed!\n");
+    }
+
+    printf("Get record succeeded!\n");
 }
 
 void mdns_claimed_callback( pico_mdns_record_vector *vector,
@@ -38,8 +41,9 @@ void mdns_init_callback( pico_mdns_record_vector *vector,
     struct pico_mdns_record *hostname_record = NULL;
     struct pico_mdns_record *test = NULL;
     char *hostname = NULL;
-    char *name = "_kerberos._udp.local";
-    char *pointer = "jelle._kerberos._udp.local";
+    char *name = "vlees.local";
+    char *pointer = "vlees.local";
+    struct pico_ip4 ip = {0xFFFF00FF};
 
     /* Get the first record in the vector */
     hostname_record = pico_mdns_record_vector_get(vector, 0);
@@ -50,13 +54,16 @@ void mdns_init_callback( pico_mdns_record_vector *vector,
     printf("Initialised with hostname: %s\n", hostname);
 
     test = pico_mdns_record_create(name,
-                                   (void *)pointer,
-                                   PICO_DNS_TYPE_PTR,
+                                   &ip,
+                                   PICO_DNS_TYPE_A,
                                    120,
                                    PICO_MDNS_RECORD_SHARED);
 
     pico_mdns_record_vector_add(&rvector, test);
     pico_mdns_claim(rvector, mdns_claimed_callback, NULL);
+
+    pico_mdns_getrecord("_kerberos._udp.local", PICO_DNS_TYPE_PTR,
+                        mdns_getaddr_callback, NULL);
 
     PICO_FREE(hostname);
 }

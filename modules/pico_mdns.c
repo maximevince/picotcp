@@ -98,7 +98,7 @@ struct pico_mdns_cookie
     uint8_t count;                      // Times to send the query
     uint8_t type;                       // QUERY/ANNOUNCE/PROBE/ANSWER
     uint8_t status;                     // Active status
-    struct pico_timer *timer;           // For timer events
+    uint8_t timeout;                    // Timeout counter
     struct pico_timer *send_timer;      // For sending events
     void (*callback)(pico_mdns_record_vector *,
                      char *,
@@ -479,7 +479,7 @@ pico_mdns_cookie_create( pico_dns_question_vector qvector,
     cookie->count = count;
     cookie->type = type;
     cookie->status = PICO_MDNS_COOKIE_STATUS_INACTIVE;
-    cookie->timer = NULL;
+    cookie->timeout = 10u;
     cookie->send_timer = NULL;
     cookie->callback = callback;
     cookie->arg = arg;
@@ -586,11 +586,10 @@ pico_mdns_cookie_apply_spt( struct pico_mdns_cookie *cookie,
         mdns_dbg("My record is lexographically later! Yay!\n");
         cookie->status = PICO_MDNS_COOKIE_STATUS_ACTIVE;
     } else if (ret == 0) {
-        pico_timer_cancel(cookie->timer);
+        cookie->timeout = 10u;
         cookie->count = 3;
-        cookie->timer = pico_timer_add(1000,
-                                       pico_mdns_send_probe_packet,
-                                       (void *)cookie);
+        cookie->send_timer = pico_timer_add(1000, pico_mdns_send_probe_packet,
+                                            (void *)cookie);
         mdns_dbg("Probing postponed with 1s because of S.P.T.\n");
     } else {
         mdns_dbg("Checking for lexographically later failed!\n");
@@ -745,8 +744,8 @@ pico_mdns_cookie_resolve_conflict( struct pico_mdns_cookie *cookie,
     
     /* Step 1b: Stop timer events if cookie contains no other questions */
     if (pico_dns_question_vector_count(&(cookie->qvector)) == 0) {
-        pico_timer_cancel(cookie->timer);
-        cookie->timer = NULL;
+        pico_timer_cancel(cookie->send_timer);
+        cookie->send_timer = NULL;
         mdns_dbg("Stopped timer events for conflicting cookie.\n");
     }
     
@@ -830,41 +829,6 @@ pico_mdns_cookie_resolve_conflict( struct pico_mdns_cookie *cookie,
     PICO_FREE(url);
     
     return 0;
-}
-
-/* ****************************************************************************
- *  Callback for the timeout timer of a query cookie
- * ****************************************************************************/
-static void
-pico_mdns_timeout(pico_time now, void *_arg)
-{
-    struct pico_mdns_cookie *cookie = NULL;
-    
-    IGNORE_PARAMETER(now);
-    
-    /* Check params */
-    if (!_arg) {
-        pico_err = PICO_ERR_EINVAL;
-        return;
-    }
-    
-    cookie = (struct pico_mdns_cookie *)_arg;
-    
-    /* Call callback */
-    if (cookie->callback) {
-        cookie->callback(NULL, NULL, cookie->arg);
-    }
-    
-    /* Delete cookie */
-    if (pico_mdns_cookie_tree_del_cookie(cookie) < 0) {
-        mdns_dbg("Could not delete cookie after timeout!\n");
-        return;
-    }
-    
-    mdns_dbg("Query cookie timed out, deleted!\n");
-    
-    /* TODO: If the request was for a reconfirmation of a record,
-     flush the corresponding record after the timeout */
 }
 
 // MARK: MDNS QUESTION UTILITIES
@@ -1924,10 +1888,16 @@ pico_mdns_cache_add_record( struct pico_dns_record *record )
     return 0;
 }
 
+int pico_mdns_flush_cache(void)
+{
+    return 0;
+}
+
 static void
 pico_mdns_tick( pico_time now, void *_arg )
 {
     struct pico_mdns_record *node_record = NULL;
+    struct pico_mdns_cookie *node_cookie = NULL;
     struct pico_tree_node *node = NULL;
     char *url = NULL;
     uint32_t original = 0, current = 0, rnd = 0;
@@ -1959,7 +1929,7 @@ pico_mdns_tick( pico_time now, void *_arg )
             else
                 mdns_dbg("Deleted record '%s'.\n", url);
 
-        /* Cache refresh at 80 or 85/90/95% of TTL + 2% rnd */
+            /* Cache refresh at 80 or 85/90/95% of TTL + 2% rnd */
         } else if (
             ((original - current == ((original * (80 + rnd)) / 100)) ? 1 : 0) ||
             ((original - current == ((original * (85 + rnd)) / 100)) ? 1 : 0) ||
@@ -1975,13 +1945,33 @@ pico_mdns_tick( pico_time now, void *_arg )
 
     PICO_FREE(url);
 
+    pico_tree_foreach(node, &Cookies) {
+        node_cookie = node->keyValue;
+
+        /* Update the timeout counter */
+        node_cookie->timeout--;
+
+        if (node_cookie->timeout == 0) {
+            /* Call callback */
+            if (node_cookie->callback) {
+                node_cookie->callback(NULL, NULL, node_cookie->arg);
+            }
+
+            /* Delete cookie */
+            if (pico_mdns_cookie_tree_del_cookie(node_cookie) < 0) {
+                mdns_dbg("Could not delete cookie after timeout!\n");
+                return;
+            }
+            
+            mdns_dbg("Query cookie timed out, deleted!\n");
+
+            /* TODO: If the request was for a reconfirmation of a record,
+             flush the corresponding record after the timeout */
+        }
+    }
+    
     /* Schedule new tick */
     pico_timer_add(PICO_MDNS_RR_TTL_TICK, pico_mdns_tick, NULL);
-}
-
-int pico_mdns_flush_cache(void)
-{
-    return 0;
 }
 
 // MARK: ASYNCHRONOUS MDNS RECEPTION
@@ -2107,7 +2097,6 @@ pico_mdns_handle_single_answer( struct pico_dns_record *answer,
             }
             
             /* Cancel timeout-event and delete found cookie */
-            pico_timer_cancel(found->timer);
             if (pico_mdns_cookie_tree_del_cookie(found) < 0) {
                 mdns_dbg("Could not delete query cookie!\n");
                 PICO_FREE(url);
@@ -2686,8 +2675,8 @@ pico_mdns_send_query_packet( pico_time now, void *arg )
         mdns_dbg("DONE - Sent query.\n");
     } else {
         mdns_dbg("DONE - Duplicate query suppressed.\n");
-        if (query_cookie->timer)
-            pico_timer_cancel(query_cookie->timer);
+        if (query_cookie->send_timer)
+            pico_timer_cancel(query_cookie->send_timer);
         pico_mdns_cookie_tree_del_cookie(query_cookie);
     }
 }
@@ -2737,19 +2726,13 @@ pico_mdns_getrecord_generic( const char *url, uint16_t type,
         return -1;
     }
     
-    /* Set the timeout timer for the cookie */
-    query_cookie->timer = pico_timer_add(PICO_MDNS_QUERY_TIMEOUT,
-                                         pico_mdns_timeout,
-                                         (void *)query_cookie);
-    
     /* RFC:
      *  a Multicast DNS querier SHOULD
      *  also delay the first query of the series by a randomly chosen amount
      *  in the range 20-120 ms.
      */
-    query_cookie->send_timer = pico_timer_add((pico_rand() % 120) + 20,
-                                              pico_mdns_send_query_packet,
-                                              (void *)query_cookie);
+    pico_timer_add((pico_rand() % 120) + 20, pico_mdns_send_query_packet,
+                   (void *)query_cookie);
     
     return 0;
 }
@@ -2835,7 +2818,7 @@ pico_mdns_send_announcement_packet( pico_time now, void *arg )
          *  responses, one second apart.
          */
         if (cookie->count > 0)
-            cookie->timer = pico_timer_add(1000,
+            cookie->send_timer = pico_timer_add(1000,
                                            pico_mdns_send_announcement_packet,
                                            (void *)cookie);
         else
@@ -2961,8 +2944,8 @@ pico_mdns_send_probe_packet( pico_time now, void *arg )
          *  250 ms after the first query, the host should send a second;
          *  then, 250 ms after that, a third.
          */
-        cookie->timer = pico_timer_add(250, pico_mdns_send_probe_packet,
-                                       (void *)cookie);
+        cookie->send_timer = pico_timer_add(250, pico_mdns_send_probe_packet,
+                                            (void *)cookie);
     } else {
         mdns_dbg("DONE - Probing.\n");
         for (i = 0; i < cookie->rvector.count; i++) {
@@ -3076,9 +3059,9 @@ static int pico_mdns_probe( void (*callback)(pico_mdns_record_vector *,
          *  When the host is ready to send his probe query he SHOULD delay it's
          *  transmission with a randomly chosen time between 0 and 250 ms.
          */
-        probe_cookie->timer = pico_timer_add(pico_rand() % 250,
-                                             pico_mdns_send_probe_packet,
-                                             (void *)probe_cookie);
+        probe_cookie->send_timer = pico_timer_add(pico_rand() % 250,
+                                                  pico_mdns_send_probe_packet,
+                                                  (void *)probe_cookie);
         
         mdns_dbg("DONE - Started probing.\n");
     }

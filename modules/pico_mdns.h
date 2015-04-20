@@ -24,8 +24,6 @@
 struct pico_mdns_record
 {
     struct pico_dns_record *record; // DNS Resource Record
-    struct pico_timer *timer;       // Used For Timer events
-    uint32_t expiration;            // Used For Timer events
     uint32_t current_ttl;           // Current TTL
     uint8_t flags;                  // Resource Record flags
     uint8_t claim_id;               // Claim ID number

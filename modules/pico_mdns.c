@@ -1493,7 +1493,7 @@ pico_mdns_record_tree_find_records( const char *url,
  * ****************************************************************************/
 static struct pico_mdns_record *
 pico_mdns_record_tree_find_record( struct pico_mdns_record *record,
-                                       struct pico_tree *tree )
+                                   struct pico_tree *tree )
 {
     struct pico_mdns_record *node_record = NULL;
     struct pico_tree_node *node = NULL;
@@ -1562,8 +1562,8 @@ pico_mdns_record_tree_del_records_by_url( const char *url,
  * ****************************************************************************/
 static int
 pico_mdns_record_tree_del_records( const char *url,
-                                       uint16_t type,
-                                       struct pico_tree *tree )
+                                   uint16_t type,
+                                   struct pico_tree *tree )
 {
     struct pico_mdns_record test_record;
     struct pico_mdns_record *node_record = NULL;
@@ -1604,7 +1604,7 @@ pico_mdns_record_tree_del_records( const char *url,
  * ****************************************************************************/
 static int
 pico_mdns_record_tree_del_record( struct pico_mdns_record *record,
-                                      struct pico_tree *tree )
+                                  struct pico_tree *tree )
 {
     struct pico_mdns_record *found = NULL;
     
@@ -1633,7 +1633,7 @@ pico_mdns_record_tree_del_record( struct pico_mdns_record *record,
  * ****************************************************************************/
 static int
 pico_mdns_record_tree_add_record( struct pico_mdns_record *record,
-                                      struct pico_tree *tree)
+                                  struct pico_tree *tree)
 {
     struct pico_mdns_record *found = NULL;
     
@@ -1938,66 +1938,128 @@ pico_mdns_cache_add_record( struct pico_dns_record *record )
 }
 
 static void
-pico_mdns_cache_tick( pico_time now, void *_arg )
+pico_mdns_cache_record_timeout( struct pico_mdns_record *record )
 {
-    struct pico_mdns_record *record = NULL;
+
+}
+
+static void
+pico_mdns_tick( pico_time now, void *_arg )
+{
+    struct pico_mdns_record *node_record = NULL;
+    struct pico_tree_node *node = NULL;
     char *url = NULL;
     uint32_t original = 0, current = 0, rnd = 0;
-    
-    IGNORE_PARAMETER(now);
-    
-    /* Check params */
-    if (!_arg) {
-        pico_err = PICO_ERR_EINVAL;
-        return;
-    }
-    
-    /* Parse the argument in a mDNS res record */
-    record = (struct pico_mdns_record *)_arg;
-    
-    /* Parse the rname to an url for a second */
-    url = pico_dns_qname_to_url(record->record->rname);
 
-    
-    /* Update the current TTL */
-    record->current_ttl--;
-    
+    IGNORE_PARAMETER(now);
+    IGNORE_PARAMETER(_arg);
+
     pico_mdns_print_cache();
-    
-    current = record->current_ttl;
-    original = long_be(record->record->rsuffix->rttl);
-    rnd = pico_rand() % 3;
-    
-    /* Schedule a new timer event */
-    if (current < 1) {
-        if (pico_mdns_record_tree_del_record(record, &Cache) < 0)
-            mdns_dbg("Could not delete record '%s' from cache!\n", url);
-        else
-            mdns_dbg("Deleted record '%s'.\n", url);
-        PICO_FREE(url);
-        return;
-    } else if (
-        /* Continuous querying: cache refresh at 80 or 85/90/95% of TTL + 2% rnd
-         */
-        ((original - current == ((original * (80 + rnd)) / 100)) ? 1 : 0) ||
-        ((original - current == ((original * (85 + rnd)) / 100)) ? 1 : 0) ||
-        ((original - current == ((original * (90 + rnd)) / 100)) ? 1 : 0) ||
-        ((original - current == ((original * (95 + rnd)) / 100)) ? 1 : 0)) {
-        /* Reconfirm record */
-        if (pico_mdns_getrecord_generic(url,
-                                short_be(record->record->rsuffix->rtype),
+
+    /* Check for expired cache records */
+    pico_tree_foreach(node, &Cache) {
+        node_record = node->keyValue;
+
+        /* Update current ttl */
+        node_record->current_ttl--;
+
+        /* Parse the rname to an url for a second */
+        url = pico_dns_qname_to_url(node_record->record->rname);
+
+        /* Determine original and current ttl */
+        current = node_record->current_ttl;
+        original = long_be(node_record->record->rsuffix->rttl);
+        rnd = pico_rand() % 3;
+
+        /* Schedule a new timer event */
+        if (current < 1) {
+            if (pico_mdns_record_tree_del_record(node_record, &Cache) < 0)
+                mdns_dbg("Could not delete record '%s' from cache!\n", url);
+            else
+                mdns_dbg("Deleted record '%s'.\n", url);
+
+        /* Cache refresh at 80 or 85/90/95% of TTL + 2% rnd */
+        } else if (
+            ((original - current == ((original * (80 + rnd)) / 100)) ? 1 : 0) ||
+            ((original - current == ((original * (85 + rnd)) / 100)) ? 1 : 0) ||
+            ((original - current == ((original * (90 + rnd)) / 100)) ? 1 : 0) ||
+            ((original - current == ((original * (95 + rnd)) / 100)) ? 1 : 0)) {
+            /* Reconfirm record */
+            if (pico_mdns_getrecord_generic(url,
+                                short_be(node_record->record->rsuffix->rtype),
                                 NULL, NULL) < 0)
-        {
-            mdns_dbg("Could not reconfirm record '%s'!\n", url);
+                mdns_dbg("Could not reconfirm record '%s'!\n", url);
         }
     }
-    
+
     PICO_FREE(url);
-    
-    /* Schedule new timer event in 1 second */
-    record->timer = pico_timer_add(PICO_MDNS_RR_TTL_TICK,
-                                   pico_mdns_cache_tick,
-                                   (void *)record);
+
+    /* Schedule new tick */
+    pico_timer_add(PICO_MDNS_RR_TTL_TICK, pico_mdns_tick, NULL);
+}
+
+static void
+pico_mdns_cache_tick( pico_time now, void *_arg )
+{
+    IGNORE_PARAMETER(now);
+    IGNORE_PARAMETER(_arg);
+//    
+//    /* Check params */
+//    if (!_arg) {
+//        pico_err = PICO_ERR_EINVAL;
+//        return;
+//    }
+//    
+//    /* Parse the argument in a mDNS res record */
+//    record = (struct pico_mdns_record *)_arg;
+//    
+//    /* Parse the rname to an url for a second */
+//    url = pico_dns_qname_to_url(record->record->rname);
+//    
+//    /* Update the current TTL */
+//    record->current_ttl--;
+//    
+//    pico_mdns_print_cache();
+//    
+//    current = record->current_ttl;
+//    original = long_be(record->record->rsuffix->rttl);
+//    rnd = pico_rand() % 3;
+//    
+//    /* Schedule a new timer event */
+//    if (current < 1) {
+//        if (pico_mdns_record_tree_del_record(record, &Cache) < 0)
+//            mdns_dbg("Could not delete record '%s' from cache!\n", url);
+//        else
+//            mdns_dbg("Deleted record '%s'.\n", url);
+//        PICO_FREE(url);
+//        return;
+//    } else if (
+//        /* Continuous querying: cache refresh at 80 or 85/90/95% of TTL + 2% rnd
+//         */
+//        ((original - current == ((original * (80 + rnd)) / 100)) ? 1 : 0) ||
+//        ((original - current == ((original * (85 + rnd)) / 100)) ? 1 : 0) ||
+//        ((original - current == ((original * (90 + rnd)) / 100)) ? 1 : 0) ||
+//        ((original - current == ((original * (95 + rnd)) / 100)) ? 1 : 0)) {
+//        /* Reconfirm record */
+//        if (pico_mdns_getrecord_generic(url,
+//                                short_be(record->record->rsuffix->rtype),
+//                                NULL, NULL) < 0)
+//        {
+//            mdns_dbg("Could not reconfirm record '%s'!\n", url);
+//        }
+//    }
+//    
+//    PICO_FREE(url);
+//    
+//    /* Schedule new timer event in 1 second */
+//    record->timer = pico_timer_add(PICO_MDNS_RR_TTL_TICK,
+//                                   pico_mdns_cache_tick,
+//                                   (void *)record);
+}
+
+int pico_mdns_flush_cache(void)
+{
+    return 0;
 }
 
 // MARK: ASYNCHRONOUS MDNS RECEPTION
@@ -2662,13 +2724,6 @@ _\nREAD EVENT!\n");
         mdns_dbg("Socket Error received. Bailing out.\n");
         return;
     }
-}
-
-// MARK: CACHE FUNCTIONS
-
-int pico_mdns_flush_cache(void)
-{
-    return 0;
 }
 
 // MARK: ADDRESS RESOLUTION
@@ -3367,6 +3422,8 @@ pico_mdns_init( const char *_hostname,
         mdns_dbg("Setting hostname returned error\n");
         return -1;
     }
+
+    pico_timer_add(PICO_MDNS_RR_TTL_TICK, pico_mdns_cache_tick, NULL);
     
     return 0;
 }

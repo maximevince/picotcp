@@ -617,6 +617,43 @@ pico_dns_question_vector_get( pico_dns_question_vector *vector,
 }
 
 /* ****************************************************************************
+ *  Removes a DNS question from a DNS question vector at a certain index
+ * ****************************************************************************/
+int
+pico_dns_question_vector_remove( pico_dns_question_vector *vector,
+                                 uint16_t index)
+{
+    struct pico_dns_question **new_questions = NULL;
+    uint16_t i = 0;
+
+    /* Check params */
+    if (!vector) return -1;
+    if (index >= vector->count) return -1;
+
+    if (vector->count - 1u)
+        new_questions = PICO_ZALLOC(sizeof(struct pico_dns_question *) *
+                                    (vector->count - 1u));
+
+    /* Move up subsequent records */
+    for (i = index; i < (vector->count - 1); i++) {
+        vector->questions[i] = vector->questions[i + 1];
+        vector->questions[i + 1] = NULL;
+    }
+    vector->count--;
+
+    /* Copy records */
+    for (i = 0; i < vector->count; i++)
+        new_questions[i] = vector->questions[i];
+
+    /* Free the previous array */
+    PICO_FREE(vector->questions);
+
+    /* Set the records array to the new one */
+    vector->questions = new_questions;
+    return 0;
+}
+
+/* ****************************************************************************
  *  Deletes a DNS question from a DNS question vector at a certain index
  * ****************************************************************************/
 int
@@ -683,7 +720,7 @@ pico_dns_question_vector_destroy( pico_dns_question_vector *vector )
 }
 
 /* ****************************************************************************
- *  Finds a DNS question in a DNS question
+ *  Finds a DNS question in a DNS question vector
  * ****************************************************************************/
 struct pico_dns_question *
 pico_dns_question_vector_find_name( pico_dns_question_vector *vector,
@@ -706,6 +743,36 @@ pico_dns_question_vector_find_name( pico_dns_question_vector *vector,
     }
     
     return NULL;
+}
+
+/* ****************************************************************************
+ *  Deletes a DNS question from a DNS question vector
+ * ****************************************************************************/
+int
+pico_dns_question_vector_del_name( pico_dns_question_vector *vector,
+                                   char *name )
+{
+    struct pico_dns_question *question = NULL;
+    uint16_t i = 0;
+
+    /* Check params */
+    if (!vector || !name) {
+        pico_err = PICO_ERR_EINVAL;
+        return -1;
+    }
+
+    /* Iterate over the vector an compare names */
+    for (i = 0; i < pico_dns_question_vector_count(vector); i++) {
+        question = pico_dns_question_vector_get(vector, i);
+        if (strcmp(question->qname, name) == 0) {
+            if (pico_dns_question_vector_delete(vector, i) < 0) {
+                dns_dbg("Could not delete question from probe cookie!\n");
+                return -1;
+            }
+        }
+    }
+
+    return 0;
 }
 
 /* ****************************************************************************
@@ -968,9 +1035,12 @@ pico_dns_record_create( const char *url,
     {
         case PICO_DNS_TYPE_A: datalen = PICO_SIZE_IP4; break;
         case PICO_DNS_TYPE_AAAA: datalen = PICO_SIZE_IP6; break;
-        case PICO_DNS_TYPE_PTR: datalen =
-                        (uint16_t)(pico_dns_client_strlen(rdata) + 2u); break;
-        default: datalen = (uint16_t)(strlen(rdata)); break;
+        case PICO_DNS_TYPE_PTR:
+            datalen = (uint16_t)(pico_dns_client_strlen(rdata) + 2u);
+            break;
+        default:
+            datalen = (uint16_t)(strlen(rdata));
+            break;
     }
     
     /* Allocate space for the record and subfields */

@@ -101,11 +101,7 @@ pico_mdns_claim( pico_mdns_record_vector record_vector,
  *  A record for the local address of the bound socket.
  * ****************************************************************************/
 int
-pico_mdns_set_hostname( const char *url,
-                        void (*callback)(pico_mdns_record_vector *,
-                                         char *,
-                                         void *),
-                        void *arg );
+pico_mdns_set_hostname( const char *url, void *arg );
 
 /* ****************************************************************************
  *  Returns the hostname for this machine

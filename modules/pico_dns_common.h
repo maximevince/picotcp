@@ -207,7 +207,14 @@ struct pico_dns_question *
 pico_dns_question_vector_get( pico_dns_question_vector *vector, uint16_t index);
 
 /* ****************************************************************************
- *  Deletes a DNS question from a DNS question vector at a certain index
+ *  Removes a DNS question from a DNS question vector at a certain index
+ * ****************************************************************************/
+int
+pico_dns_question_vector_remove( pico_dns_question_vector *vector,
+                                 uint16_t index);
+
+/* ****************************************************************************
+ *  Deletes a DNS question a DNS question vector at a certain index
  * ****************************************************************************/
 int
 pico_dns_question_vector_delete( pico_dns_question_vector *vector,
@@ -225,6 +232,13 @@ pico_dns_question_vector_destroy( pico_dns_question_vector *vector );
 struct pico_dns_question *
 pico_dns_question_vector_find_name( pico_dns_question_vector *vector,
                                     char *qname );
+
+/* ****************************************************************************
+ *  Deletes a DNS question from a DNS question vector
+ * ****************************************************************************/
+int
+pico_dns_question_vector_del_name( pico_dns_question_vector *vector,
+                                   char *name );
 
 /* ****************************************************************************
  *  Returns the size in bytes of all the DNS questions contained in a DNS

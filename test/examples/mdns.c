@@ -8,29 +8,26 @@
 
 #ifdef PICO_SUPPORT_MDNS
 
-#define DEBUG(s, args...) printf("pico_err: %d: %s", pico_err, s, ##args)
-
-void mdns_getname_callback(char *str, void *arg)
-{
-    
-}
-
-void mdns_getaddr_callback( pico_mdns_record_vector *vector,
-                            char *str,
-                            void *arg )
+void mdns_getrecord_callback( pico_mdns_record_vector *vector,
+                              char *str,
+                              void *arg )
 {
     if (!vector) {
-        printf("Get record failed!\n");
+        printf("Returned NULL-ptr!\n");
+        return;
     }
-
-    printf("Get record succeeded!\n");
+    if (pico_mdns_record_vector_count(vector) > 0) {
+        printf("Get record succeeded!\n");
+    } else {
+        printf("No records found!\n");
+    }
 }
 
 void mdns_claimed_callback( pico_mdns_record_vector *vector,
                             char *str,
                             void *arg )
 {
-    printf("Claimed: %s\n", str);
+    printf("Claimed records\n");
 }
 
 void mdns_init_callback( pico_mdns_record_vector *vector,
@@ -41,7 +38,7 @@ void mdns_init_callback( pico_mdns_record_vector *vector,
     struct pico_mdns_record *hostname_record = NULL;
     struct pico_mdns_record *test = NULL;
     char *hostname = NULL;
-    char *name = "_kerberos._udp.local";
+    char *name = "_http._tcp.local";
     char *pointer = "jelle._http._tcp.local";
     struct pico_ip4 ip = {0xFFFF00FF};
 
@@ -63,7 +60,7 @@ void mdns_init_callback( pico_mdns_record_vector *vector,
     pico_mdns_claim(rvector, mdns_claimed_callback, NULL);
 
     pico_mdns_getrecord("_http._tcp.local", PICO_DNS_TYPE_PTR,
-                        mdns_getaddr_callback, NULL);
+                        mdns_getrecord_callback, NULL);
 
     PICO_FREE(hostname);
 }

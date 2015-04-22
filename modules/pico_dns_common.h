@@ -231,14 +231,14 @@ pico_dns_question_vector_destroy( pico_dns_question_vector *vector );
  * ****************************************************************************/
 struct pico_dns_question *
 pico_dns_question_vector_find_name( pico_dns_question_vector *vector,
-                                    char *qname );
+                                    const char *qname );
 
 /* ****************************************************************************
  *  Deletes a DNS question from a DNS question vector
  * ****************************************************************************/
 int
 pico_dns_question_vector_del_name( pico_dns_question_vector *vector,
-                                   char *name );
+                                   const char *name );
 
 /* ****************************************************************************
  *  Returns the size in bytes of all the DNS questions contained in a DNS

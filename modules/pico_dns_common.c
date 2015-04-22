@@ -147,15 +147,16 @@ pico_dns_fill_packet_question_section( pico_dns_packet *packet,
 
     destination_qname = (char *)((uint8_t *)packet +
                                  sizeof(struct pico_dns_header));
-    destination_qsuffix = (struct pico_dns_question_suffix *)
-                          (destination_qname + question->qname_length);
 
     for (i = 0; i < pico_dns_question_vector_count(vector); i++) {
         question = pico_dns_question_vector_get(vector, i);
 
         /* Copy the qname of the question into the packet */
-        memcpy(destination_qname, question->qname, question->qname_length + 1u);
-        
+        strcpy(destination_qname, question->qname);
+
+        destination_qsuffix = (struct pico_dns_question_suffix *)
+        (destination_qname + question->qname_length);
+
         /* Copy the qtype and qclass fields */
         destination_qsuffix->qtype = question->qsuffix->qtype;
         destination_qsuffix->qclass = question->qsuffix->qclass;
@@ -163,8 +164,6 @@ pico_dns_fill_packet_question_section( pico_dns_packet *packet,
         /* Set the destination pointers correctly */
         destination_qname = (char *)((uint8_t *) destination_qsuffix +
                                      sizeof(struct pico_dns_question_suffix));
-        destination_qsuffix = (struct pico_dns_question_suffix *)
-                              (destination_qname + question->qname_length);
     }
 
     return 0;
@@ -724,7 +723,7 @@ pico_dns_question_vector_destroy( pico_dns_question_vector *vector )
  * ****************************************************************************/
 struct pico_dns_question *
 pico_dns_question_vector_find_name( pico_dns_question_vector *vector,
-                                    char *name )
+                                    const char *name )
 {
     struct pico_dns_question *question = NULL;
     uint16_t i = 0;
@@ -750,7 +749,7 @@ pico_dns_question_vector_find_name( pico_dns_question_vector *vector,
  * ****************************************************************************/
 int
 pico_dns_question_vector_del_name( pico_dns_question_vector *vector,
-                                   char *name )
+                                   const char *name )
 {
     struct pico_dns_question *question = NULL;
     uint16_t i = 0;

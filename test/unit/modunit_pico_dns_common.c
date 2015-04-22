@@ -50,7 +50,7 @@ START_TEST(tc_pico_dns_fill_packet_rr_sections)
     pico_dns_question_vector qvector = {0};
     pico_dns_record_vector anvector = {0}, nsvector = {0}, arvector = {0};
     struct pico_dns_record *record = NULL;
-    char *rname = (char *)"picotcp.com";
+    const char *rname = "picotcp.com";
     uint8_t rdata[4] = { 10, 10, 0, 1 };
     uint8_t cmp_buf[39] = { 0x00u, 0x00u,
                             0x00u, 0x00u,
@@ -104,8 +104,8 @@ START_TEST(tc_pico_dns_fill_packet_question_section)
     pico_dns_packet *packet = NULL;
     pico_dns_question_vector qvector = {0};
     struct pico_dns_question *a = NULL, *b = NULL;
-    char *qurl = (char *)"picotcp.com";
-    uint8_t cmp_buf[46] = { 0x00u, 0x00u,
+    const char *qurl = "picotcp.com";
+    uint8_t cmp_buf[45] = { 0x00u, 0x00u,
                             0x00u, 0x00u,
                             0x00u, 0x00u,
                             0x00u, 0x00u,
@@ -116,7 +116,7 @@ START_TEST(tc_pico_dns_fill_packet_question_section)
                             0x00u,
                             0x00u, 0x01u,
                             0x00u, 0x01u,
-                            0x07u, 'p','i','c','o','t','c','p',
+                            0x06u, 'g','o','o','g','l','e',
                             0x03u, 'c','o','m',
                             0x00u,
                             0x00u, 0x01u,
@@ -128,7 +128,8 @@ START_TEST(tc_pico_dns_fill_packet_question_section)
                                  PICO_DNS_CLASS_IN, 0);
     fail_if(NULL == a, "dns_question_create failed!\n");
     pico_dns_question_vector_add(&qvector, a);
-    b = pico_dns_question_create(qurl, &len, PICO_PROTO_IPV4, PICO_DNS_TYPE_A,
+    b = pico_dns_question_create("google.com", &len, PICO_PROTO_IPV4,
+                                 PICO_DNS_TYPE_A,
                                  PICO_DNS_CLASS_IN, 0);
     fail_if(NULL == b, "dns_question_create failed!\n");
     pico_dns_question_vector_add(&qvector, b);
@@ -142,7 +143,7 @@ START_TEST(tc_pico_dns_fill_packet_question_section)
     fail_if(pico_dns_fill_packet_question_section(packet, &qvector),
             "Filling of rr sections failed!\n");
 
-    fail_unless(memcmp((void *)packet, (void *)cmp_buf, 46) == 0,
+    fail_unless(memcmp((void *)packet, (void *)cmp_buf, 45) == 0,
                 "Filling of question section went wrong!\n");
     PICO_FREE(packet);
 }
@@ -150,8 +151,8 @@ END_TEST
 /* MARK: DNS packet compression */
 START_TEST(tc_pico_dns_packet_compress_find_ptr)
 {
-    uint8_t *data = "abcdef\5local\0abcdef\4test\5local";
-    uint8_t *name = "\5local";
+    uint8_t *data = (uint8_t *)"abcdef\5local\0abcdef\4test\5local";
+    uint8_t *name = (uint8_t *)"\5local";
     uint16_t len = 31;
     uint8_t *ptr = NULL;
 
@@ -242,7 +243,7 @@ START_TEST(tc_pico_dns_question_fill_qsuffix)
 END_TEST
 START_TEST(tc_pico_dns_question_copy)
 {
-    char *qurl = (char *)"picotcp.com";
+    const char *qurl = "picotcp.com";
     uint16_t len = 0;
     struct pico_dns_question *a = pico_dns_question_create(qurl, &len,
                                                            PICO_PROTO_IPV4,
@@ -262,7 +263,7 @@ START_TEST(tc_pico_dns_question_copy)
 END_TEST
 START_TEST(tc_pico_dns_question_delete)
 {
-    char *qurl = (char *)"picotcp.com";
+    const char *qurl = "picotcp.com";
     uint16_t len = 0;
     int ret = 0;
     struct pico_dns_question *a = pico_dns_question_create(qurl, &len,
@@ -278,9 +279,9 @@ START_TEST(tc_pico_dns_question_delete)
 END_TEST
 START_TEST(tc_pico_dns_question_create)
 {
-    char *qurl = (char *)"picotcp.com";
-    char *qurl2 = (char *)"1.2.3.4";
-    char *qurl3 = (char *)"2001:0db8:0000:0000:0000:0000:0000:0000";
+    const char *qurl = "picotcp.com";
+    const char *qurl2 = "1.2.3.4";
+    const char *qurl3 = "2001:0db8:0000:0000:0000:0000:0000:0000";
     char buf[13] = { 0x07u, 'p','i','c','o','t','c','p',
                      0x03u, 'c','o','m',
                      0x00u };
@@ -353,7 +354,7 @@ END_TEST
 START_TEST(tc_pico_dns_question_vector_count)
 {
     pico_dns_question_vector qvector = { 0 };
-    char *qurl = (char *)"picotcp.com";
+    const char *qurl = "picotcp.com";
     uint16_t len = 0;
 
     struct pico_dns_question *a = pico_dns_question_create(qurl, &len,
@@ -376,7 +377,7 @@ END_TEST
 START_TEST(tc_pico_dns_question_vector_add)
 {
     pico_dns_question_vector qvector = { 0 };
-    char *qurl = (char *)"picotcp.com";
+    const char *qurl = "picotcp.com";
     uint16_t len = 0;
     int ret = 0;
 
@@ -396,7 +397,7 @@ END_TEST
 START_TEST(tc_pico_dns_question_vector_add_copy)
 {
     pico_dns_question_vector qvector = { 0 };
-    char *qurl = (char *)"picotcp.com";
+    const char *qurl = "picotcp.com";
     uint16_t len = 0;
     int ret = 0;
 
@@ -422,7 +423,7 @@ END_TEST
 START_TEST(tc_pico_dns_question_vector_get)
 {
     pico_dns_question_vector qvector = { 0 };
-    char *qurl = (char *)"picotcp.com";
+    const char *qurl = "picotcp.com";
     uint16_t len = 0;
     int ret = 0;
     struct pico_dns_question *b = NULL;
@@ -448,7 +449,7 @@ END_TEST
 START_TEST(tc_pico_dns_question_vector_delete)
 {
     pico_dns_question_vector qvector = { 0 };
-    char *qurl = (char *)"picotcp.com";
+    const char *qurl = "picotcp.com";
     uint16_t len = 0;
     int ret = 0;
 
@@ -476,23 +477,20 @@ END_TEST
 START_TEST(tc_pico_dns_question_vector_destroy)
 {
     pico_dns_question_vector qvector = { 0 };
-    char *qurl = (char *)"picotcp.com";
+    struct pico_dns_question *b = NULL;
+    const char *qurl = "picotcp.com";
     uint16_t len = 0;
     int ret = 0;
 
-    struct pico_dns_question *a = pico_dns_question_create(qurl, &len,
-                                                           PICO_PROTO_IPV4,
-                                                           PICO_DNS_TYPE_A,
-                                                           PICO_DNS_CLASS_IN,
-                                                           0);
+    struct pico_dns_question *a = NULL;
+
+    a = pico_dns_question_create(qurl, &len, PICO_PROTO_IPV4, PICO_DNS_TYPE_A,
+                                 PICO_DNS_CLASS_IN, 0);
     fail_if(!a, "dns_question_create failed!\n");
     ret = pico_dns_question_vector_add(&qvector, a);
     fail_unless(ret == 0, "dns_question_vector_add returned error!\n");
-    struct pico_dns_question *b = pico_dns_question_create(qurl, &len,
-                                                           PICO_PROTO_IPV4,
-                                                           PICO_DNS_TYPE_A,
-                                                           PICO_DNS_CLASS_IN,
-                                                           0);
+    b = pico_dns_question_create(qurl, &len, PICO_PROTO_IPV4, PICO_DNS_TYPE_A,
+                                 PICO_DNS_CLASS_IN, 0);
     fail_if(!b, "dns_question_create failed!\n");
     ret = pico_dns_question_vector_add(&qvector, b);
     fail_unless(ret == 0, "dns_question_vector_add returned error!\n");
@@ -507,8 +505,8 @@ END_TEST
 START_TEST(tc_pico_dns_question_vector_find_name)
 {
     pico_dns_question_vector qvector = { 0 };
-    char *qurl = (char *)"picotcp.com";
-    char *qurl2 = (char *)"google.com";
+    const char *qurl = "picotcp.com";
+    const char *qurl2 = "google.com";
     uint16_t len = 0;
     int ret = 0;
     struct pico_dns_question *a = NULL, *b = NULL, *c = NULL;
@@ -543,8 +541,8 @@ END_TEST
 START_TEST(tc_pico_dns_question_vector_size)
 {
     pico_dns_question_vector qvector = { 0 };
-    char *qurl = (char *)"picotcp.com";
-    char *qurl2 = (char *)"google.com";
+    const char *qurl = "picotcp.com";
+    const char *qurl2 = "google.com";
     uint16_t len = 0;
     int ret = 0;
     struct pico_dns_question *a = NULL, *b = NULL;
@@ -577,8 +575,8 @@ START_TEST(tc_pico_dns_query_create)
 {
     pico_dns_packet *packet = NULL;
     pico_dns_question_vector qvector = { 0 };
-    char *qurl = (char *)"picotcp.com";
-    char *qurl2 = (char *)"google.com";
+    const char *qurl = "picotcp.com";
+    const char *qurl2 = "google.com";
     uint8_t buf[42] = { 0x00u, 0x00u,
                         0x00u, 0x00u,
                         0x00u, 0x02u,
@@ -611,7 +609,7 @@ START_TEST(tc_pico_dns_query_create)
 
     packet = pico_dns_query_create(&qvector, NULL, NULL, NULL, &len);
     fail_if(packet == NULL, "dns_query_create returned NULL!\n");
-    fail_unless(memcmp(buf, (void *)packet, 42),
+    fail_unless(0 == memcmp(buf, (void *)packet, 42),
                 "dns_query_created failed!\n");
 }
 END_TEST
@@ -632,10 +630,10 @@ END_TEST
 START_TEST(tc_pico_dns_record_copy_flat)
 {
     struct pico_dns_record *record = NULL;
-    char *url = (char *)"picotcp.com";
+    const char *url = "picotcp.com";
     uint8_t rdata[4] = { 10, 10, 0, 1 };
     uint8_t buf[128] = { 0 };
-    uint8_t ptr = NULL;
+    uint8_t *ptr = NULL;
     uint8_t cmp_buf[27] = { 0x07, 'p','i','c','o','t','c','p',
                             0x03, 'c','o','m',
                             0x00,
@@ -651,7 +649,7 @@ START_TEST(tc_pico_dns_record_copy_flat)
                                     PICO_DNS_CLASS_IN, 120);
     fail_if(!record, "dns_record_create failed!\n");
 
-    ptr = buf + 20;
+    *ptr = buf + 20;
 
     /* Try to copy the record to a flat buffer */
     ret = pico_dns_record_copy_flat(record, &ptr);
@@ -667,7 +665,7 @@ END_TEST
 START_TEST(tc_pico_dns_record_copy)
 {
     struct pico_dns_record *a = NULL, *b = NULL;
-    char *url = (char *)"picotcp.com";
+    const char *url = "picotcp.com";
     uint8_t rdata[4] = { 10, 10, 0, 1 };
     uint16_t len = 0;
 
@@ -700,7 +698,7 @@ END_TEST
 START_TEST(tc_pico_dns_record_delete)
 {
     struct pico_dns_record *a = NULL;
-    char *url = (char *)"picotcp.com";
+    const char *url = "picotcp.com";
     uint8_t rdata[4] = { 10, 10, 0, 1 };
     uint16_t len = 0;
     int ret = 0;
@@ -718,10 +716,9 @@ END_TEST
 START_TEST(tc_pico_dns_record_create)
 {
     struct pico_dns_record *a = NULL;
-    char *url = (char *)"picotcp.com";
+    const char *url = "picotcp.com";
     uint8_t rdata[4] = { 10, 10, 0, 1 };
-    uint16_t len = 0, i = 0;
-    int ret = 0;
+    uint16_t len = 0;
 
     a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
@@ -757,10 +754,9 @@ START_TEST(tc_pico_dns_record_vector_count)
 {
     pico_dns_record_vector rvector = { 0 };
     struct pico_dns_record *a = NULL;
-    char *url = (char *)"picotcp.com";
+    const char *url = "picotcp.com";
     uint8_t rdata[4] = { 10, 10, 0, 1 };
-    uint16_t len = 0, i = 0;
-    int ret = 0;
+    uint16_t len = 0;
 
     a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
@@ -768,10 +764,10 @@ START_TEST(tc_pico_dns_record_vector_count)
 
     fail_unless(pico_dns_record_vector_count(&rvector) == 0,
                 "question vector count should be 0\n");
-    pico_dns_question_vector_add(&rvector, a);
+    pico_dns_record_vector_add(&rvector, a);
     fail_unless(pico_dns_record_vector_count(&rvector) == 1,
                 "question vector count should be 1\n");
-    pico_dns_question_vector_delete(&rvector, 0);
+    pico_dns_record_vector_delete(&rvector, 0);
     fail_unless(pico_dns_record_vector_count(&rvector) == 0,
                 "question vector count should be 0\n");
 }
@@ -780,9 +776,9 @@ START_TEST(tc_pico_dns_record_vector_add)
 {
     pico_dns_record_vector rvector = { 0 };
     struct pico_dns_record *a = NULL;
-    char *url = (char *)"picotcp.com";
+    const char *url = "picotcp.com";
     uint8_t rdata[4] = { 10, 10, 0, 1 };
-    uint16_t len = 0, i = 0;
+    uint16_t len = 0;
     int ret = 0;
 
     a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
@@ -799,9 +795,9 @@ START_TEST(tc_pico_dns_record_vector_add_copy)
 {
     pico_dns_record_vector rvector = { 0 };
     struct pico_dns_record *a = NULL, *b = NULL;
-    char *url = (char *)"picotcp.com";
+    const char *url = "picotcp.com";
     uint8_t rdata[4] = { 10, 10, 0, 1 };
-    uint16_t len = 0, i = 0;
+    uint16_t len = 0;
     int ret = 0;
 
     a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
@@ -834,9 +830,9 @@ START_TEST(tc_pico_dns_record_vector_get)
 {
     pico_dns_record_vector rvector = { 0 };
     struct pico_dns_record *a = NULL, *b = NULL;
-    char *url = (char *)"picotcp.com";
+    const char *url = "picotcp.com";
     uint8_t rdata[4] = { 10, 10, 0, 1 };
-    uint16_t len = 0, i = 0;
+    uint16_t len = 0;
     int ret = 0;
 
     a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
@@ -863,9 +859,9 @@ START_TEST(tc_pico_dns_record_vector_delete)
 {
     pico_dns_record_vector rvector = { 0 };
     struct pico_dns_record *a = NULL;
-    char *url = (char *)"picotcp.com";
+    const char *url = "picotcp.com";
     uint8_t rdata[4] = { 10, 10, 0, 1 };
-    uint16_t len = 0, i = 0;
+    uint16_t len = 0;
     int ret = 0;
 
     a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
@@ -891,9 +887,9 @@ START_TEST(tc_pico_dns_record_vector_destroy)
 {
     pico_dns_record_vector rvector = { 0 };
     struct pico_dns_record *a = NULL, *b = NULL;
-    char *url = (char *)"picotcp.com";
+    const char *url = "picotcp.com";
     uint8_t rdata[4] = { 10, 10, 0, 1 };
-    uint16_t len = 0, i = 0;
+    uint16_t len = 0;
     int ret = 0;
 
     a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
@@ -921,9 +917,9 @@ START_TEST(tc_pico_dns_record_vector_size)
 {
     pico_dns_record_vector rvector = { 0 };
     struct pico_dns_record *a = NULL, *b = NULL;
-    char *url = (char *)"picotcp.com";
+    const char *url = "picotcp.com";
     uint8_t rdata[4] = { 10, 10, 0, 1 };
-    uint16_t len = 0, i = 0;
+    uint16_t len = 0;
     int ret = 0;
 
     a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
@@ -955,8 +951,8 @@ START_TEST(tc_pico_dns_answer_create)
     pico_dns_packet *packet = NULL;
     pico_dns_record_vector rvector = { 0 };
     struct pico_dns_record *a = NULL, *b = NULL;
-    char *url = (char *)"picotcp.com";
-    char *url2 = (char *)"google.com";
+    const char *url = "picotcp.com";
+    const char *url2 = "google.com";
     uint8_t rdata[4] = { 10, 10, 0, 1 };
     uint16_t len = 0;
     int ret = 0;
@@ -996,7 +992,7 @@ START_TEST(tc_pico_dns_answer_create)
     /* Try to create an answer packet */
     packet = pico_dns_answer_create(&rvector, NULL, NULL, &len);
     fail_if (packet == NULL, "dns_answer_create returned NULL!\n");
-    fail_unless(memcmp((void *)packet, (void *)buf, 62) == 0,
+    fail_unless(0 == memcmp((void *)packet, (void *)buf, 62),
                 "dns_answer_create failed!\n");
 }
 END_TEST
@@ -1110,8 +1106,6 @@ START_TEST(tc_pico_dns_url_to_reverse_qname)
                          0x03u, 'I','P','6',
                          0x04u, 'A','R','P','A',
                          0x00u };
-    uint16_t arpalen = 0;
-    uint16_t len = 0;
 
     /* Try to reverse IPv4 URL */
     qname = pico_dns_url_to_reverse_qname(url_ipv4, PICO_PROTO_IPV4);

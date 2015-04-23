@@ -7,7 +7,7 @@
 #include "pico_dns_client.h"
 #include "pico_dns_common.h"
 #include "pico_tree.h"
-#include "pico_dev_mock.h"
+#include "pico_dev_mock.c"
 #include "modules/pico_mdns.c"
 #include "check.h"
 

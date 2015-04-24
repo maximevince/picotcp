@@ -918,11 +918,12 @@ pico_mdns_question_create( const char *url,
  * ****************************************************************************/
 static struct pico_dns_record *
 pico_mdns_dns_record_create( const char *url,
-                            void *_rdata,
-                            uint16_t *len,
-                            uint16_t rtype,
-                            uint32_t rttl,
-                            uint8_t flags )
+                             void *_rdata,
+                             uint16_t datalen,
+                             uint16_t *len,
+                             uint16_t rtype,
+                             uint32_t rttl,
+                             uint8_t flags )
 {
     uint16_t rclass = short_be(PICO_DNS_CLASS_IN);  // rclass
 
@@ -936,7 +937,8 @@ pico_mdns_dns_record_create( const char *url,
     rclass = short_be(rclass);
 
     /* Create a resource record as you would with plain DNS */
-    return pico_dns_record_create(url, _rdata, len, rtype, rclass, rttl);
+    return pico_dns_record_create(url, _rdata, datalen, len,
+                                  rtype, rclass, rttl);
 }
 
 static int
@@ -1124,6 +1126,7 @@ pico_mdns_record_copy( struct pico_mdns_record *record )
 struct pico_mdns_record *
 pico_mdns_record_create( const char *url,
                          void *_rdata,
+                         uint16_t datalen,
                          uint16_t rtype,
                          uint32_t rttl,
                          uint8_t flags )
@@ -1146,8 +1149,8 @@ pico_mdns_record_create( const char *url,
     }
 
     /* Create a new record at the end of the list */
-    record->record = pico_mdns_dns_record_create(url, _rdata, &len, rtype, rttl,
-                                                 flags);
+    record->record = pico_mdns_dns_record_create(url, _rdata, datalen, &len,
+                                                 rtype, rttl, flags);
     if (!((record)->record)) {
         mdns_dbg("Creating mDNS resource record failed!\n");
         PICO_FREE(record);
@@ -1507,7 +1510,7 @@ pico_mdns_record_tree_find_url_type( const char *url,
         return cache_hits;
     }
     /* Create a test record */
-    test_record.record = pico_dns_record_create(url, &rdata, &len, rtype,
+    test_record.record = pico_dns_record_create(url, &rdata, 1, &len, rtype,
                                                 PICO_DNS_CLASS_IN, 0);
     /* Iterate over the Cache-tree */
     pico_tree_foreach(node, tree) {
@@ -1612,7 +1615,7 @@ pico_mdns_record_tree_del_url_type( const char *url,
     }
 
     /* Create a test record */
-    test_record.record = pico_dns_record_create(url, &rdata, &len, type,
+    test_record.record = pico_dns_record_create(url, &rdata, 1, &len, type,
                                                 PICO_DNS_CLASS_IN, 0);
 
     /* Iterate over the tree */
@@ -1708,7 +1711,7 @@ pico_mdns_my_records_find_url_type( const char *url,
     }
 
     /* Create a test record */
-    test_record.record = pico_dns_record_create(url, &rdata, &len, type,
+    test_record.record = pico_dns_record_create(url, &rdata, 1, &len, type,
                                                 PICO_DNS_CLASS_IN, 0);
     /* Iterate over the Cache-tree */
     pico_tree_foreach(node, &MyRecords) {
@@ -3402,8 +3405,8 @@ pico_mdns_set_hostname( const char *url, void *arg )
 
     /* Create an A record for hostname */
     record = pico_mdns_record_create(hostname,
-                                     (void*)&(mdns_sock_ipv4->local_addr.ip4.addr),
-                                     PICO_DNS_TYPE_A, PICO_MDNS_DEFAULT_TTL,
+                                (void*)&(mdns_sock_ipv4->local_addr.ip4.addr),
+                                     4, PICO_DNS_TYPE_A, PICO_MDNS_DEFAULT_TTL,
                                      (PICO_MDNS_RECORD_UNIQUE |
                                       PICO_MDNS_RECORD_HOSTNAME));
     if (!record) {

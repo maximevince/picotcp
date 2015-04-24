@@ -50,10 +50,8 @@ void mdns_init_callback( pico_mdns_record_vector *vector,
 
     printf("Initialised with hostname: %s\n", hostname);
 
-    test = pico_mdns_record_create(name,
-                                   pointer,
-                                   PICO_DNS_TYPE_PTR,
-                                   120,
+    test = pico_mdns_record_create(name, pointer, strlen(pointer),
+                                   PICO_DNS_TYPE_PTR, 120,
                                    PICO_MDNS_RECORD_SHARED);
 
     pico_mdns_record_vector_add(&rvector, test);

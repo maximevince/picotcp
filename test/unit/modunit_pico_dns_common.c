@@ -70,7 +70,7 @@ START_TEST(tc_pico_dns_fill_packet_rr_sections)
     int ret = 0;
 
     /* Create a new A record */
-    record = pico_dns_record_create(rname, rdata, &len, PICO_DNS_TYPE_A,
+    record = pico_dns_record_create(rname, rdata, 4, &len, PICO_DNS_TYPE_A,
                                     PICO_DNS_CLASS_IN, 120);
     fail_if(!record, "dns_record_create failed!\n");
 
@@ -645,7 +645,8 @@ START_TEST(tc_pico_dns_record_copy_flat)
     uint16_t len = 0;
     int ret = 0;
 
-    record = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    record = pico_dns_record_create(url, (void *)rdata, 4,
+                                    &len, PICO_DNS_TYPE_A,
                                     PICO_DNS_CLASS_IN, 120);
     fail_if(!record, "dns_record_create failed!\n");
 
@@ -669,7 +670,7 @@ START_TEST(tc_pico_dns_record_copy)
     uint8_t rdata[4] = { 10, 10, 0, 1 };
     uint16_t len = 0;
 
-    a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    a = pico_dns_record_create(url, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                     PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create failed!\n");
 
@@ -703,7 +704,7 @@ START_TEST(tc_pico_dns_record_delete)
     uint16_t len = 0;
     int ret = 0;
 
-    a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    a = pico_dns_record_create(url, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create failed!\n");
 
@@ -720,7 +721,7 @@ START_TEST(tc_pico_dns_record_create)
     uint8_t rdata[4] = { 10, 10, 0, 1 };
     uint16_t len = 0;
 
-    a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    a = pico_dns_record_create(url, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create returned NULL!\n");
     fail_unless(strcmp(a->rname, "\x7picotcp\x3com"),
@@ -736,6 +737,8 @@ START_TEST(tc_pico_dns_record_create)
                 "dns_record_create failed setting rdlenth!\n");
     fail_unless(memcmp(a->rdata, rdata, 4) == 0,
                 "dns_record_create failed setting rdata!\n");
+
+    /* TODO: Test PTR records */
 
     pico_dns_record_delete(&a);
 }
@@ -758,7 +761,7 @@ START_TEST(tc_pico_dns_record_vector_count)
     uint8_t rdata[4] = { 10, 10, 0, 1 };
     uint16_t len = 0;
 
-    a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    a = pico_dns_record_create(url, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create returned NULL!\n");
 
@@ -781,7 +784,7 @@ START_TEST(tc_pico_dns_record_vector_add)
     uint16_t len = 0;
     int ret = 0;
 
-    a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    a = pico_dns_record_create(url, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create returned NULL!\n");
 
@@ -800,7 +803,7 @@ START_TEST(tc_pico_dns_record_vector_add_copy)
     uint16_t len = 0;
     int ret = 0;
 
-    a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    a = pico_dns_record_create(url, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create returned NULL!\n");
 
@@ -835,7 +838,7 @@ START_TEST(tc_pico_dns_record_vector_get)
     uint16_t len = 0;
     int ret = 0;
 
-    a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    a = pico_dns_record_create(url, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create returned NULL!\n");
 
@@ -864,7 +867,7 @@ START_TEST(tc_pico_dns_record_vector_delete)
     uint16_t len = 0;
     int ret = 0;
 
-    a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    a = pico_dns_record_create(url, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create returned NULL!\n");
 
@@ -892,10 +895,10 @@ START_TEST(tc_pico_dns_record_vector_destroy)
     uint16_t len = 0;
     int ret = 0;
 
-    a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    a = pico_dns_record_create(url, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create returned NULL!\n");
-    b = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    b = pico_dns_record_create(url, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create returned NULL!\n");
     ret = pico_dns_record_vector_add(&rvector, a);
@@ -922,10 +925,10 @@ START_TEST(tc_pico_dns_record_vector_size)
     uint16_t len = 0;
     int ret = 0;
 
-    a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    a = pico_dns_record_create(url, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create returned NULL!\n");
-    b = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    b = pico_dns_record_create(url, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create returned NULL!\n");
     ret = pico_dns_record_vector_add(&rvector, a);
@@ -978,10 +981,10 @@ START_TEST(tc_pico_dns_answer_create)
                         0x00u, 0x04u,
                         0x0Au, 0x0Au, 0x00u, 0x01u};
 
-    a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    a = pico_dns_record_create(url, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create returned NULL!\n");
-    b = pico_dns_record_create(url2, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    b = pico_dns_record_create(url2, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create returned NULL!\n");
     ret = pico_dns_record_vector_add(&rvector, a);

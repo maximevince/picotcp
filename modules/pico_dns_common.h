@@ -281,6 +281,7 @@ pico_dns_record_delete( struct pico_dns_record **rr );
 struct pico_dns_record *
 pico_dns_record_create( const char *url,
                         void *_rdata,
+                        uint16_t datalen,
                         uint16_t *len,
                         uint16_t rtype,
                         uint16_t rclass,

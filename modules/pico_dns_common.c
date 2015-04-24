@@ -1015,33 +1015,25 @@ pico_dns_record_delete( struct pico_dns_record **rr )
 struct pico_dns_record *
 pico_dns_record_create( const char *url,
                         void *_rdata,
+                        uint16_t datalen,
                         uint16_t *len,
                         uint16_t rtype,
                         uint16_t rclass,
                         uint32_t rttl )
 {
-    struct pico_dns_record *record = NULL;  /* record to return */
-    uint16_t slen, datalen;                         /* some lenghts */
+    struct pico_dns_record *record = NULL;
+    uint16_t slen;
     
     /* Cast the void pointer to a char pointer */
     char *rdata = (char *)_rdata;
     
     /* Get length + 2 for .-prefix en trailing zero-byte */
     slen = (uint16_t)(pico_dns_client_strlen(url) + 2u);
-    
-    /* Determine the length of rdata */
-    switch (rtype)
-    {
-        case PICO_DNS_TYPE_A: datalen = PICO_SIZE_IP4; break;
-        case PICO_DNS_TYPE_AAAA: datalen = PICO_SIZE_IP6; break;
-        case PICO_DNS_TYPE_PTR:
-            datalen = (uint16_t)(pico_dns_client_strlen(rdata) + 2u);
-            break;
-        default:
-            datalen = (uint16_t)(strlen(rdata));
-            break;
-    }
-    
+
+    /* We want DNS notation with PTR records */
+    if (rtype == PICO_DNS_TYPE_PTR)
+        datalen = (uint16_t)(datalen + 2u);
+
     /* Allocate space for the record and subfields */
     record = PICO_ZALLOC(sizeof(struct pico_dns_record));
     record->rname = PICO_ZALLOC(slen);
@@ -1064,14 +1056,13 @@ pico_dns_record_create( const char *url,
     
     /* Fill in the resource record suffix */
     pico_dns_record_fill_suffix(record->rsuffix, rtype, rclass, rttl, datalen);
-    
-    /* Fill in the rdata */
-    if (rtype != PICO_DNS_TYPE_PTR) {
+
+    /* Fill in rdata */
+    if (rtype == PICO_DNS_TYPE_PTR) {
+        memcpy(record->rdata + 1, rdata, datalen - 2u);
+        pico_dns_name_to_dns_notation((char *)(record->rdata));
+    } else
         memcpy(record->rdata, rdata, datalen);
-    } else {
-        memcpy(record->rdata + 1u, rdata, strlen(rdata));
-        pico_dns_name_to_dns_notation((char *)record->rdata);
-    }
 
     return record;
 }

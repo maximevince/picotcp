@@ -46,6 +46,7 @@ typedef struct
 struct pico_mdns_record *
 pico_mdns_record_create( const char *url,
                          void *_rdata,
+                         uint16_t datalen,
                          uint16_t rtype,
                          uint32_t rttl,
                          uint8_t flags );

@@ -118,10 +118,10 @@ START_TEST(tc_mdns_cmp)
     printf("*********************** starting %s * \n", __func__);
 
     /* Create test records */
-    a.record = pico_dns_record_create(url1, &rdata, &len, PICO_DNS_TYPE_A,
+    a.record = pico_dns_record_create(url1, &rdata, 4, &len, PICO_DNS_TYPE_A,
                                       PICO_DNS_CLASS_IN, 0);
     fail_if(!a.record, "Record A could not be created!\n");
-    b.record = pico_dns_record_create(url1, &rdata, &len, PICO_DNS_TYPE_A,
+    b.record = pico_dns_record_create(url1, &rdata, 4, &len, PICO_DNS_TYPE_A,
                                       PICO_DNS_CLASS_IN, 0);
     fail_if(!b.record, "Record B could not be created!\n");
 
@@ -132,10 +132,10 @@ START_TEST(tc_mdns_cmp)
     pico_dns_record_delete(&(b.record));
 
     /* Create different test records */
-    a.record = pico_dns_record_create(url1, &rdata, &len, PICO_DNS_TYPE_PTR,
+    a.record = pico_dns_record_create(url1, &rdata, 4, &len, PICO_DNS_TYPE_PTR,
                                       PICO_DNS_CLASS_IN, 0);
     fail_if(!a.record, "Record A could not be created!\n");
-    b.record = pico_dns_record_create(url1, &rdata, &len, PICO_DNS_TYPE_A,
+    b.record = pico_dns_record_create(url1, &rdata, 4, &len, PICO_DNS_TYPE_A,
                                       PICO_DNS_CLASS_IN, 0);
     fail_if(!b.record, "Record B could not be created!\n");
 
@@ -146,10 +146,10 @@ START_TEST(tc_mdns_cmp)
     pico_dns_record_delete(&(b.record));
 
     /* Create different test records */
-    a.record = pico_dns_record_create(url3, &rdata, &len, PICO_DNS_TYPE_A,
+    a.record = pico_dns_record_create(url3, &rdata, 4, &len, PICO_DNS_TYPE_A,
                                       PICO_DNS_CLASS_IN, 0);
     fail_if(!a.record, "Record A could not be created!\n");
-    b.record = pico_dns_record_create(url1, &rdata, &len, PICO_DNS_TYPE_A,
+    b.record = pico_dns_record_create(url1, &rdata, 4, &len, PICO_DNS_TYPE_A,
                                       PICO_DNS_CLASS_IN, 0);
     fail_if(!b.record, "Record B could not be created!\n");
 
@@ -206,19 +206,19 @@ START_TEST(tc_mdns_cookie_cmp)
     fail_if(!question2, "Could not create question 5!\n");
 
     /* Create test records */
-    record1.record = pico_dns_record_create(url1, &rdata, &len,
+    record1.record = pico_dns_record_create(url1, &rdata, 4, &len,
                                             PICO_DNS_TYPE_A,
                                             PICO_DNS_CLASS_IN, 0);
     fail_if(!record1.record, "Record 1 could not be created!\n");
-    record2.record = pico_dns_record_create(url1, &rdata, &len,
+    record2.record = pico_dns_record_create(url1, &rdata, 4, &len,
                                             PICO_DNS_TYPE_PTR,
                                             PICO_DNS_CLASS_IN, 0);
     fail_if(!record2.record, "Record 2 could not be created!\n");
-    record3.record = pico_dns_record_create(url2, &rdata, &len,
+    record3.record = pico_dns_record_create(url2, &rdata, 4, &len,
                                             PICO_DNS_TYPE_A,
                                             PICO_DNS_CLASS_IN, 0);
     fail_if(!record3.record, "Record 3 could not be created!\n");
-    record4.record = pico_dns_record_create(url4, &rdata, &len,
+    record4.record = pico_dns_record_create(url4, &rdata, 4, &len,
                                             PICO_DNS_TYPE_A,
                                             PICO_DNS_CLASS_IN, 0);
     fail_if(!record4.record, "Record 3 could not be created!\n");
@@ -541,14 +541,14 @@ START_TEST(tc_mdns_cookie_find_record)
     printf("*********************** starting %s * \n", __func__);
 
     /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
-    record1 = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_PTR, 0,
+    record1 = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_PTR, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
 
-    record2 = pico_mdns_record_create(url1, &rdata, PICO_DNS_TYPE_AAAA, 0,
+    record2 = pico_mdns_record_create(url1, &rdata, 4, PICO_DNS_TYPE_AAAA, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record2, "Record could not be created!\n");
 
@@ -587,19 +587,19 @@ START_TEST(tc_mdns_cookie_apply_spt)
     printf("*********************** starting %s * \n", __func__);
 
     /* Create test records */
-    record1.record = pico_dns_record_create(url1, &rdata, &len,
+    record1.record = pico_dns_record_create(url1, &rdata, 4, &len,
                                             PICO_DNS_TYPE_A,
                                             PICO_DNS_CLASS_IN, 0);
     fail_if(!record1.record, "Record 1 could not be created!\n");
-    record2.record = pico_dns_record_create(url2, &rdata2, &len,
+    record2.record = pico_dns_record_create(url2, &rdata2, 4, &len,
                                             PICO_DNS_TYPE_A,
                                             PICO_DNS_CLASS_IN, 0);
     fail_if(!record2.record, "Record 2 could not be created!\n");
-    record3.record = pico_dns_record_create(url1, &rdata2, &len,
+    record3.record = pico_dns_record_create(url1, &rdata2, 4, &len,
                                             PICO_DNS_TYPE_A,
                                             PICO_DNS_CLASS_IN, 0);
     fail_if(!record3.record, "Record 3 could not be created!\n");
-    record4.record = pico_dns_record_create(url2, &rdata, &len,
+    record4.record = pico_dns_record_create(url2, &rdata, 4, &len,
                                             PICO_DNS_TYPE_A,
                                             PICO_DNS_CLASS_IN, 0);
     fail_if(!record4.record, "Record 4 could not be created!\n");
@@ -696,7 +696,7 @@ START_TEST(tc_mdns_cookie_resolve_conflict)
                                         PICO_DNS_TYPE_A,
                                         PICO_DNS_CLASS_IN, 0);
     fail_if(!question, "Question could not be created!\n");
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!(record->record), "Record could not be created!\n");
 
@@ -790,7 +790,7 @@ START_TEST(tc_mdns_dns_record_create)
 
     printf("*********************** starting %s * \n", __func__);
     a = pico_mdns_dns_record_create(url,
-                                    (void *)rdata,
+                                    (void *)rdata, 4,
                                     &len,
                                     PICO_DNS_TYPE_A,
                                     120,
@@ -822,7 +822,7 @@ START_TEST(tc_mdns_record_resolve_conflict)
     int ret = 0;
 
     printf("*********************** starting %s * \n", __func__);
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!(record->record), "Record could not be created!\n");
     /* Need to initialise the stack to allow timer scheduling IMPORTANT! */
@@ -850,19 +850,19 @@ START_TEST(tc_mdns_record_am_i_lexi_later)
     printf("*********************** starting %s * \n", __func__);
 
     /* Create test records */
-    record1.record = pico_dns_record_create(url1, &rdata, &len,
+    record1.record = pico_dns_record_create(url1, &rdata, 4, &len,
                                             PICO_DNS_TYPE_A,
                                             PICO_DNS_CLASS_IN, 0);
     fail_if(!record1.record, "Record 1 could not be created!\n");
-    record2.record = pico_dns_record_create(url2, &rdata2, &len,
+    record2.record = pico_dns_record_create(url2, &rdata2, 4, &len,
                                             PICO_DNS_TYPE_A,
                                             PICO_DNS_CLASS_IN, 0);
     fail_if(!record2.record, "Record 2 could not be created!\n");
-    record3.record = pico_dns_record_create(url1, &rdata2, &len,
+    record3.record = pico_dns_record_create(url1, &rdata2, 4, &len,
                                             PICO_DNS_TYPE_A,
                                             PICO_DNS_CLASS_IN, 0);
     fail_if(!record3.record, "Record 3 could not be created!\n");
-    record4.record = pico_dns_record_create(url2, &rdata, &len,
+    record4.record = pico_dns_record_create(url2, &rdata, 4, &len,
                                             PICO_DNS_TYPE_A,
                                             PICO_DNS_CLASS_IN, 0);
     fail_if(!record4.record, "Record 4 could not be created!\n");
@@ -888,7 +888,7 @@ START_TEST(tc_mdns_record_create_from_dns)
 
     printf("*********************** starting %s * \n", __func__);
     a = pico_mdns_dns_record_create(url,
-                                    (void *)rdata,
+                                    (void *)rdata, 4,
                                     &len,
                                     PICO_DNS_TYPE_A,
                                     120,
@@ -924,7 +924,7 @@ START_TEST(tc_mdns_record_copy_with_new_name)
 
     printf("*********************** starting %s * \n", __func__);
     /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!(record->record), "Record could not be created!\n");
 
@@ -950,7 +950,7 @@ START_TEST(tc_mdns_record_copy)
 
     printf("*********************** starting %s * \n", __func__);
     /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!(record->record), "Record could not be created!\n");
 
@@ -980,7 +980,7 @@ START_TEST(tc_mdns_record_create)
     struct pico_ip4 rdata = {long_be(0x00FFFFFF)};
     printf("*********************** starting %s * \n", __func__);
     /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!(record->record), "Record could not be created!\n");
     fail_unless(0 == strcmp(record->record->rname, "\3foo\5local"),
@@ -1000,7 +1000,7 @@ START_TEST(tc_mdns_record_delete)
 
     printf("*********************** starting %s * \n", __func__);
     /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!(record->record), "Record could not be created!\n");
 
@@ -1039,10 +1039,10 @@ START_TEST(tc_mdns_record_vector_count)
 
     printf("*********************** starting %s * \n", __func__);
     /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
-    record1 = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record1 = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
 
@@ -1070,10 +1070,10 @@ START_TEST(tc_mdns_record_vector_add)
 
     printf("*********************** starting %s * \n", __func__);
     /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
-    record1 = pico_mdns_record_create(url2, &rdata, PICO_DNS_TYPE_A, 0,
+    record1 = pico_mdns_record_create(url2, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
 
@@ -1100,10 +1100,10 @@ START_TEST(tc_mdns_record_vector_get)
 
     printf("*********************** starting %s * \n", __func__);
     /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
-    record1 = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record1 = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
 
@@ -1133,10 +1133,10 @@ START_TEST(tc_mdns_record_vector_delete)
 
     printf("*********************** starting %s * \n", __func__);
     /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
-    record1 = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record1 = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
 
@@ -1168,10 +1168,10 @@ START_TEST(tc_mdns_record_vector_destroy)
 
     printf("*********************** starting %s * \n", __func__);
     /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
-    record1 = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record1 = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
 
@@ -1199,10 +1199,10 @@ START_TEST(tc_mdns_record_vector_append)
 
     printf("*********************** starting %s * \n", __func__);
     /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
-    record1 = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record1 = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
 
@@ -1232,14 +1232,14 @@ START_TEST(tc_mdns_record_vector_del_record)
     printf("*********************** starting %s * \n", __func__);
 
     /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
-    record1 = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_PTR, 0,
+    record1 = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_PTR, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
 
-    record2 = pico_mdns_record_create(url, &rdata1, PICO_DNS_TYPE_A, 0,
+    record2 = pico_mdns_record_create(url, &rdata1, 4, PICO_DNS_TYPE_A, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record2, "Record could not be created!\n");
 
@@ -1279,24 +1279,26 @@ void add_records( void )
     const char *url1 = "bar.local";
 
     /* Create an A record with URL */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
 
     /* Create 2 PTR records to URL */
-    record1 = pico_mdns_record_create(url, url, PICO_DNS_TYPE_PTR, 0,
+    record1 = pico_mdns_record_create(url, url, strlen(url),
+                                      PICO_DNS_TYPE_PTR, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
 
     /* Simulate that this record is probed */
     record1->flags |= PICO_MDNS_RECORD_PROBED;
 
-    record2 = pico_mdns_record_create(url, url1, PICO_DNS_TYPE_PTR, 0,
+    record2 = pico_mdns_record_create(url, url1, strlen(url1),
+                                      PICO_DNS_TYPE_PTR, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record2, "Record could not be created!\n");
 
     /* Create a totally different record */
-    record3 = pico_mdns_record_create(url1, &rdata1, PICO_DNS_TYPE_A, 0,
+    record3 = pico_mdns_record_create(url1, &rdata1, 4, PICO_DNS_TYPE_A, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record2, "Record could not be created!\n");
 
@@ -1395,20 +1397,22 @@ START_TEST(tc_mdns_record_tree_find_record)
     printf("*********************** starting %s * \n", __func__);
 
     /* Create an A record with URL */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
 
     /* Create 2 PTR records to URL */
-    record1 = pico_mdns_record_create(url, url, PICO_DNS_TYPE_PTR, 0,
+    record1 = pico_mdns_record_create(url, url, strlen(url),
+                                      PICO_DNS_TYPE_PTR, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
-    record2 = pico_mdns_record_create(url, url1, PICO_DNS_TYPE_PTR, 0,
+    record2 = pico_mdns_record_create(url, url1, strlen(url1),
+                                      PICO_DNS_TYPE_PTR, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record2, "Record could not be created!\n");
 
     /* Create a totally different record */
-    record3 = pico_mdns_record_create(url1, &rdata1, PICO_DNS_TYPE_A, 0,
+    record3 = pico_mdns_record_create(url1, &rdata1, 4, PICO_DNS_TYPE_A, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record2, "Record could not be created!\n");
 
@@ -1440,20 +1444,22 @@ START_TEST(tc_mdns_record_tree_del_url)
     printf("*********************** starting %s * \n", __func__);
 
     /* Create an A record with URL */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
 
     /* Create 2 PTR records to URL */
-    record1 = pico_mdns_record_create(url, url, PICO_DNS_TYPE_PTR, 0,
+    record1 = pico_mdns_record_create(url, url, strlen(url),
+                                      PICO_DNS_TYPE_PTR, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
-    record2 = pico_mdns_record_create(url, url1, PICO_DNS_TYPE_PTR, 0,
+    record2 = pico_mdns_record_create(url, url1, strlen(url1),
+                                      PICO_DNS_TYPE_PTR, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record2, "Record could not be created!\n");
 
     /* Create a totally different record */
-    record3 = pico_mdns_record_create(url1, &rdata1, PICO_DNS_TYPE_A, 0,
+    record3 = pico_mdns_record_create(url1, &rdata1, 4, PICO_DNS_TYPE_A, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record2, "Record could not be created!\n");
 
@@ -1527,20 +1533,23 @@ START_TEST(tc_mdns_record_tree_del_record)
     printf("*********************** starting %s * \n", __func__);
 
     /* Create an A record with URL */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
 
     /* Create 2 PTR records to URL */
-    record1 = pico_mdns_record_create(url, url, PICO_DNS_TYPE_PTR, 0,
+    record1 = pico_mdns_record_create(url, url, strlen(url),
+                                      PICO_DNS_TYPE_PTR, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
-    record2 = pico_mdns_record_create(url, url1, PICO_DNS_TYPE_PTR, 0,
+    record2 = pico_mdns_record_create(url, url1, strlen(url1),
+                                      PICO_DNS_TYPE_PTR, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record2, "Record could not be created!\n");
 
     /* Create a totally different record */
-    record3 = pico_mdns_record_create(url1, &rdata1, PICO_DNS_TYPE_A, 0,
+    record3 = pico_mdns_record_create(url1, &rdata1, 4,
+                                      PICO_DNS_TYPE_A, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record2, "Record could not be created!\n");
 
@@ -1666,20 +1675,22 @@ START_TEST(tc_mdns_my_records_claimed)
     printf("*********************** starting %s * \n", __func__);
 
     /* Create an A record with URL */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
 
     /* Create 2 PTR records to URL */
-    record1 = pico_mdns_record_create(url, url, PICO_DNS_TYPE_PTR, 0,
+    record1 = pico_mdns_record_create(url, url, strlen(url),
+                                      PICO_DNS_TYPE_PTR, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
-    record2 = pico_mdns_record_create(url, url1, PICO_DNS_TYPE_PTR, 0,
+    record2 = pico_mdns_record_create(url, url1, strlen(url1),
+                                      PICO_DNS_TYPE_PTR, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record2, "Record could not be created!\n");
 
     /* Create a totally different record */
-    record3 = pico_mdns_record_create(url1, &rdata1, PICO_DNS_TYPE_A, 0,
+    record3 = pico_mdns_record_create(url1, &rdata1, 4, PICO_DNS_TYPE_A, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record2, "Record could not be created!\n");
 
@@ -1782,10 +1793,10 @@ START_TEST(tc_mdns_answer_create)
 
     printf("*********************** starting %s * \n", __func__);
 
-    a = pico_dns_record_create(url, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    a = pico_dns_record_create(url, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create returned NULL!\n");
-    b = pico_dns_record_create(url2, (void *)rdata, &len, PICO_DNS_TYPE_A,
+    b = pico_dns_record_create(url2, (void *)rdata, 4, &len, PICO_DNS_TYPE_A,
                                PICO_DNS_CLASS_IN, 120);
     fail_if(!a, "dns_record_create returned NULL!\n");
     ret = pico_dns_record_vector_add(&rvector, a);
@@ -1813,7 +1824,7 @@ START_TEST(tc_mdns_cache_add_record)
     printf("*********************** starting %s * \n", __func__);
 
     /* Create an A record with URL */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 80,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 80,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
 
@@ -1839,7 +1850,7 @@ START_TEST(tc_mdns_cache_flush)
     printf("*********************** starting %s * \n", __func__);
 
     /* Create an A record with URL */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 80,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 80,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
 
@@ -1888,11 +1899,11 @@ START_TEST(tc_mdns_handle_data_as_questions)
     fail_if(packet == NULL, "mdns_query_create returned NULL!\n");
 
     /* Create records for answers */
-    record1 = pico_mdns_record_create(qurl, &rdata, PICO_DNS_TYPE_A, 120,
+    record1 = pico_mdns_record_create(qurl, &rdata, 4, PICO_DNS_TYPE_A, 120,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "mdns_record_create returned NULL!\n");
     record1->flags |= 0xC0;
-    record2 = pico_mdns_record_create(qurl2, &rdata1, PICO_DNS_TYPE_A, 120,
+    record2 = pico_mdns_record_create(qurl2, &rdata1, 4, PICO_DNS_TYPE_A, 120,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record2, "mdns_record_created returned NULL!\n");
     record2->flags |= 0xC0;
@@ -1924,10 +1935,10 @@ START_TEST(tc_mdns_handle_data_as_answers)
 
     printf("*********************** starting %s * \n", __func__);
 
-    a = pico_mdns_record_create(url, (void *)rdata, PICO_DNS_TYPE_A, 120,
+    a = pico_mdns_record_create(url, (void *)rdata, 4, PICO_DNS_TYPE_A, 120,
                                 PICO_MDNS_RECORD_UNIQUE);
     fail_if(!a, "dns_record_create returned NULL!\n");
-    b = pico_mdns_record_create(url2, (void *)rdata, PICO_DNS_TYPE_A, 120,
+    b = pico_mdns_record_create(url2, (void *)rdata, 4, PICO_DNS_TYPE_A, 120,
                                 PICO_MDNS_RECORD_SHARED);
     fail_if(!a, "dns_record_create returned NULL!\n");
     ret = pico_dns_record_vector_add(&rvector, a->record);
@@ -1961,10 +1972,10 @@ START_TEST(tc_mdns_handle_data_as_authorities)
 
     printf("*********************** starting %s * \n", __func__);
 
-    a = pico_mdns_record_create(url, (void *)rdata, PICO_DNS_TYPE_A, 120,
+    a = pico_mdns_record_create(url, (void *)rdata, 4, PICO_DNS_TYPE_A, 120,
                                 PICO_MDNS_RECORD_UNIQUE);
     fail_if(!a, "dns_record_create returned NULL!\n");
-    b = pico_mdns_record_create(url2, (void *)rdata, PICO_DNS_TYPE_A, 120,
+    b = pico_mdns_record_create(url2, (void *)rdata, 4, PICO_DNS_TYPE_A, 120,
                                 PICO_MDNS_RECORD_SHARED);
     fail_if(!a, "dns_record_create returned NULL!\n");
     ret = pico_dns_record_vector_add(&rvector, a->record);
@@ -2020,7 +2031,7 @@ START_TEST(tc_mdns_getrecord)
     printf("*********************** starting %s * \n", __func__);
 
     /* Create an A record with URL */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 80,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 80,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
 
@@ -2059,10 +2070,10 @@ START_TEST(tc_mdns_send_announcement_packet)
 
     printf("*********************** starting %s * \n", __func__);
     /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
-    record1 = pico_mdns_record_create(url2, &rdata, PICO_DNS_TYPE_A, 0,
+    record1 = pico_mdns_record_create(url2, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
 
@@ -2103,10 +2114,10 @@ START_TEST(tc_mdns_send_probe_packet)
 
     printf("*********************** starting %s * \n", __func__);
     /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
-    record1 = pico_mdns_record_create(url2, &rdata, PICO_DNS_TYPE_A, 0,
+    record1 = pico_mdns_record_create(url2, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
 
@@ -2147,10 +2158,10 @@ START_TEST(tc_mdns_claim)
 
     printf("*********************** starting %s * \n", __func__);
     /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, PICO_DNS_TYPE_A, 0,
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
-    record1 = pico_mdns_record_create(url2, &rdata, PICO_DNS_TYPE_A, 0,
+    record1 = pico_mdns_record_create(url2, &rdata, 4, PICO_DNS_TYPE_A, 0,
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
 

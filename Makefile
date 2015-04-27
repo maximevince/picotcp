@@ -32,6 +32,7 @@ DHCP_CLIENT?=1
 DHCP_SERVER?=1
 DNS_CLIENT?=1
 MDNS?=1
+DNS_SD?=1
 SNTP_CLIENT?=1
 IPFILTER?=1
 CRC?=1
@@ -244,6 +245,9 @@ ifneq ($(DNS_CLIENT),0)
 endif
 ifneq ($(MDNS),0)
   include rules/mdns.mk
+endif
+ifneq ($(DNS_SD),0)
+include rules/dns_sd.mk
 endif
 ifneq ($(IPFILTER),0)
   include rules/ipfilter.mk

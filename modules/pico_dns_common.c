@@ -215,8 +215,11 @@ pico_dns_packet_compress_name( uint8_t *name,
     uint8_t *lbl_iterator = NULL;    // To iterate over labels
     uint8_t *compression_ptr = NULL; // PTR to somewhere else in the packet
     uint8_t *offset = NULL;          // PTR after compression pointer
-    uint16_t ptr = 0;                // DNS name compression pointer
-    uint8_t lbl_length = 0;          // Temporary lable length
+    uint8_t *ptr_after_str = NULL;
+    uint8_t *last_byte = NULL;
+    uint8_t *i = NULL;
+    uint16_t ptr = 0;
+    uint16_t difference = 0;
     
     /* Check params */
     if (!name || !packet || !len) {
@@ -235,14 +238,13 @@ pico_dns_packet_compress_name( uint8_t *name,
         /* Try to find a compression pointer with current name */
         compression_ptr = pico_dns_packet_compress_find_ptr(lbl_iterator,
                                                             packet + 12, *len);
-
         /* If name can be compressed */
         if (compression_ptr) {
+            /* Point to place after current string */
+            ptr_after_str = lbl_iterator + strlen((char *)lbl_iterator) + 1u;
+
             /* Calculate the compression pointer value */
             ptr = (uint16_t)(compression_ptr - packet);
-            
-            /* Temporarily store the current label length */
-            lbl_length = *lbl_iterator;
             
             /* Set the compression pointer in the packet */
             *lbl_iterator = (uint8_t)(0xC0 | (uint8_t)(ptr >> 8));
@@ -250,17 +252,15 @@ pico_dns_packet_compress_name( uint8_t *name,
 
             /* Move up the rest of the packet data to right after the pointer */
             offset = lbl_iterator + 2;
-            
-            /* Move to the next length-label, until a zero-byte */
-            lbl_iterator += lbl_length + 1;
-            while (*lbl_iterator != '\0')
-                lbl_iterator = lbl_iterator + *(lbl_iterator) + 1;
-            
-            /* Copy data after zero-byte, to location right after pointer,
-             previously set in offset */
-            memcpy(offset, lbl_iterator + 1,
-                   (size_t)(((uint8_t *)packet + *len) - lbl_iterator));
-            *len = (uint16_t)(*len - (lbl_iterator - offset + 1));
+
+            /* Move up left over data */
+            difference = (uint16_t)(ptr_after_str - offset);
+            last_byte = packet + *len;
+            for (i = ptr_after_str; i <= last_byte; i++)
+                *(i - difference) = *i;
+
+            /* Update length */
+            *len = (uint16_t)(*len - difference);
             break;
         }
         
@@ -308,8 +308,7 @@ pico_dns_packet_compress( pico_dns_packet *packet, uint16_t *len )
         /* Move to next question */
         iterator = (uint8_t *)(iterator +
                                pico_dns_namelen_comp((char *)iterator) +
-                               sizeof(struct pico_dns_question_suffix) +
-                               1u);
+                               sizeof(struct pico_dns_question_suffix) + 1u);
     }
 
     /* Then onto the answers */
@@ -319,7 +318,7 @@ pico_dns_packet_compress( pico_dns_packet *packet, uint16_t *len )
             pico_dns_packet_compress_name(iterator, packet_buf, len);
         else {
             if (i > 0)
-                /* Otherwise don't don't compress first iterator */
+                /* Otherwise don't compress first iterator */
                 pico_dns_packet_compress_name(iterator, packet_buf, len);
         }
 
@@ -328,11 +327,10 @@ pico_dns_packet_compress( pico_dns_packet *packet, uint16_t *len )
                   (iterator + pico_dns_namelen_comp((char *)iterator) + 1u);
         
         /* Move to next res record */
-        iterator = (uint8_t *)((uint8_t *)rsuffix +
-                               sizeof(struct pico_dns_record_suffix) +
-                               short_be(rsuffix->rdlength));
+        iterator = (uint8_t *)rsuffix + sizeof(struct pico_dns_record_suffix) +
+                    short_be(rsuffix->rdlength);
     }
-    
+
     /* Then onto the authorities */
     for (i = 0; i < nscount; i++) {
         if (qdcount > 0 || ancount > 0)
@@ -347,9 +345,8 @@ pico_dns_packet_compress( pico_dns_packet *packet, uint16_t *len )
                   (iterator + pico_dns_namelen_comp((char *)iterator) + 1u);
 
         /* Move to next res record */
-        iterator = (uint8_t *)((uint8_t *)rsuffix +
-                               sizeof(struct pico_dns_record_suffix) +
-                               short_be(rsuffix->rdlength));
+        iterator = (uint8_t *)rsuffix + sizeof(struct pico_dns_record_suffix) +
+                    short_be(rsuffix->rdlength);
     }
 
     /* Then onto the additionals */
@@ -369,9 +366,8 @@ pico_dns_packet_compress( pico_dns_packet *packet, uint16_t *len )
                   (iterator + pico_dns_namelen_comp((char *)iterator) + 1u);
 
         /* Move to next res record */
-        iterator = (uint8_t *)((uint8_t *)rsuffix +
-                               sizeof(struct pico_dns_record_suffix) +
-                               short_be(rsuffix->rdlength));
+        iterator = (uint8_t *)rsuffix + sizeof(struct pico_dns_record_suffix) +
+                    short_be(rsuffix->rdlength);
     }
     
     return 0;
@@ -1330,14 +1326,12 @@ pico_dns_namelen_comp( char *name )
     
     /* Just count until the zero-byte */
     while (*ptr != '\0' && !(*ptr & 0xC0)) {
-        /* Move to next length-label */
         ptr += (uint8_t) *ptr + 1;
     }
-    
-    len = (uint16_t) (ptr - (uint8_t *)name);
-    if(*ptr != '\0') {
+
+    len = (uint16_t)(ptr - (uint8_t *)name);
+    if(*ptr != '\0')
         len++;
-    }
     
     return len;
 }

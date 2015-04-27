@@ -190,12 +190,12 @@ START_TEST(tc_pico_dns_packet_compress_name)
 END_TEST
 START_TEST(tc_pico_dns_packet_compress)
 {
-    uint8_t buf[46] = { 0x00u, 0x00u,
+    uint8_t buf[83] = { 0x00u, 0x00u,
+                        0x00u, 0x00u,
+                        0x00u, 0x01u,
                         0x00u, 0x00u,
                         0x00u, 0x02u,
                         0x00u, 0x00u,
-                        0x00u, 0x00u,
-                        0x00u, 0x00u,
                         0x07u, 'p','i','c','o','t','c','p',
                         0x03u, 'c','o','m',
                         0x00u,
@@ -205,12 +205,23 @@ START_TEST(tc_pico_dns_packet_compress)
                         0x03u, 'c','o','m',
                         0x00u,
                         0x00u, 0x01u,
-                        0x00u, 0x01u};
-    uint8_t cmp_buf[35] = { 0x00u, 0x00u,
+                        0x00u, 0x01u,
+                        0x00u, 0x00u, 0x00, 0x0A,
+                        0x00u, 0x04u,
+                        0x0Au, 0x0Au, 0x0A, 0x0A,
+                        0x07u, 'p','i','c','o','t','c','p',
+                        0x03u, 'c','o','m',
+                        0x00u,
+                        0x00u, 0x01u,
+                        0x00u, 0x01u,
+                        0x00u, 0x00u, 0x00, 0x0A,
+                        0x00u, 0x04u,
+                        0x0Au, 0x0Au, 0x0A, 0x0A};
+    uint8_t cmp_buf[61] = { 0x00u, 0x00u,
+                            0x00u, 0x00u,
+                            0x00u, 0x01u,
                             0x00u, 0x00u,
                             0x00u, 0x02u,
-                            0x00u, 0x00u,
-                            0x00u, 0x00u,
                             0x00u, 0x00u,
                             0x07u, 'p','i','c','o','t','c','p',
                             0x03u, 'c','o','m',
@@ -219,15 +230,25 @@ START_TEST(tc_pico_dns_packet_compress)
                             0x00u, 0x01u,
                             0xC0u, 0x0Cu,
                             0x00u, 0x01u,
-                            0x00u, 0x01u};
+                            0x00u, 0x01u,
+                            0x00u, 0x00u, 0x00, 0x0A,
+                            0x00u, 0x04u,
+                            0x0Au, 0x0Au, 0x0A, 0x0A,
+                            0xC0u, 0x0Cu,
+                            0x00u, 0x01u,
+                            0x00u, 0x01u,
+                            0x00u, 0x00u, 0x00, 0x0A,
+                            0x00u, 0x04u,
+                            0x0Au, 0x0Au, 0x0A, 0x0A};
     pico_dns_packet *packet = (pico_dns_packet *)buf;
-    uint16_t len = 46;
+    uint16_t len = 83;
     int ret = 0;
 
     ret = pico_dns_packet_compress(packet, &len);
+
     fail_unless(ret == 0, "dns_packet_compress returned error!\n");
-    fail_unless(len == (46 - 11), "packet_compress returned length %u!\n", len);
-    fail_unless(memcmp(buf, cmp_buf, 35) == 0, "packet_compress_name failed!\n");
+    fail_unless(len == (83 - 22), "packet_compress returned length %u!\n", len);
+    fail_unless(memcmp(packet, cmp_buf, 61) == 0, "packet_compress_name failed!\n");
 }
 END_TEST
 /* MARK: DNS question functions */

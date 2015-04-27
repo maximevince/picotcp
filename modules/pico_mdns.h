@@ -2,7 +2,7 @@
  *  PicoTCP. Copyright (c) 2014 TASS Belgium NV. Some rights reserved.
  *  See LICENSE and COPYING for usage.
  *  .
- *  Author: Toon Stegen
+ *  Author: Toon Stegen, Jelle De Vleeschouwer
  * ****************************************************************************/
 #ifndef INCLUDE_PICO_MDNS
 #define INCLUDE_PICO_MDNS

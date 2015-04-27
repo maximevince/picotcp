@@ -55,6 +55,7 @@ void app_mcastreceive(char *args);
 void app_ping(char *args);
 void app_dhcp_server(char *args);
 void app_dhcp_client(char *args);
+void app_dns_sd(char *arg, struct pico_ipv4_link *link);
 void app_mdns(char *arg, struct pico_ipv4_link *link);
 void app_sntp(char *args);
 void app_tftp(char *args);
@@ -563,6 +564,12 @@ int main(int argc, char **argv)
 #else
                 app_dhcp_client(args);
 #endif
+            } else IF_APPNAME("dns_sd") {
+#ifndef PICO_SUPPORT_DNS_SD
+                return 0;
+#else
+                app_dns_sd(args, pico_ipv4_link_by_dev(dev));
+#endif
             } else IF_APPNAME("mdns") {
 #ifndef PICO_SUPPORT_MDNS
                 return 0;
@@ -570,7 +577,7 @@ int main(int argc, char **argv)
                 app_mdns(args, pico_ipv4_link_by_dev(dev));
 #endif
 #ifdef PICO_SUPPORT_SNTP_CLIENT
-            }else IF_APPNAME("sntp") {
+            } else IF_APPNAME("sntp") {
                 app_sntp(args);
 #endif
             } else IF_APPNAME("bcast") {

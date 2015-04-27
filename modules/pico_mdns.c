@@ -2,7 +2,7 @@
  *  PicoTCP. Copyright (c) 2014 TASS Belgium NV. Some rights reserved.
  *  See LICENSE and COPYING for usage.
  *  .
- *  Author: Toon Stegen
+ *  Author: Toon Stegen, Jelle De Vleeschouwer
  * ****************************************************************************/
 
 /* picoTCP */
@@ -18,8 +18,8 @@
 #ifdef PICO_SUPPORT_MDNS
 
 /* --- Debugging --- */
-#define DEBUG 1
-#define DEBUG_CACHE 1
+#define DEBUG 0
+#define DEBUG_CACHE 0
 
 #if DEBUG == 0
 #define mdns_dbg(...) do {} while(0)
@@ -776,7 +776,7 @@ pico_mdns_cookie_resolve_conflict( struct pico_mdns_cookie *cookie,
     pico_mdns_record_vector rvector = { 0 };
     struct pico_mdns_record *record = NULL;
     struct pico_mdns_record *new_record = NULL;
-    char *new_name = NULL, *url = NULL, *new_url = NULL;
+    char *new_name = NULL, *url = NULL;
     uint16_t i = 0;
 
     /* Check params */
@@ -1258,7 +1258,7 @@ pico_mdns_record_vector_add( pico_mdns_record_vector *vector,
  * ****************************************************************************/
 struct pico_mdns_record *
 pico_mdns_record_vector_get( pico_mdns_record_vector *vector,
-                            uint16_t index )
+                             uint16_t index )
 {
     /* Check params */
     if (!vector)
@@ -1276,7 +1276,7 @@ pico_mdns_record_vector_get( pico_mdns_record_vector *vector,
  * ****************************************************************************/
 static int
 pico_mdns_record_vector_remove( pico_mdns_record_vector *vector,
-                               uint16_t index )
+                                uint16_t index )
 {
     struct pico_mdns_record **new_records = NULL;
     uint16_t i = 0;
@@ -1314,7 +1314,7 @@ pico_mdns_record_vector_remove( pico_mdns_record_vector *vector,
  * ****************************************************************************/
 static int
 pico_mdns_record_vector_delete( pico_mdns_record_vector *vector,
-                               uint16_t index )
+                                uint16_t index )
 {
     struct pico_mdns_record **new_records = NULL;
     uint16_t i = 0;
@@ -2787,6 +2787,8 @@ pico_mdns_recv(void *buf, int buflen, struct pico_ip4 peer)
              authcount,
              addcount);
 
+    IGNORE_PARAMETER(addcount);
+
     /* Determine what kind of DNS packet we have to deal with */
     if ((qdcount > 0)) {
         if (authcount > 0) {
@@ -3436,6 +3438,13 @@ pico_mdns_set_hostname( const char *url, void *arg )
 const char *
 pico_mdns_get_hostname( void )
 {
+    /* Check if module is initialised */
+    if (!mdns_sock_ipv4) {
+    mdns_dbg("mDNS socket not initialised, did you call 'pico_mdns_init()'?\n");
+        pico_err = PICO_ERR_EINVAL;
+        return NULL;
+    }
+
     return (const char *)hostname;
 }
 

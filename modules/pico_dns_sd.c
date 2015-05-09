@@ -16,6 +16,13 @@
 #define dns_sd_dbg dbg
 #endif
 
+/* --- PROTOTYPES --- */
+key_value_pair_t *
+pico_dns_sd_kv_vector_get( kv_vector *vector, uint16_t index );
+int
+pico_dns_sd_kv_vector_erase( kv_vector *vector );
+/* -------------------*/
+
 typedef PACKED_STRUCT_DEF pico_dns_srv_record_prefix
 {
     uint16_t priority;
@@ -23,6 +30,17 @@ typedef PACKED_STRUCT_DEF pico_dns_srv_record_prefix
     uint16_t port;
 } pico_dns_srv_record;
 
+struct register_argument {
+    struct pico_mdns_record *ptr_record;
+    void (*callback)(pico_mdns_record_vector *,
+                     char *,
+                     void *);
+    void *arg;
+};
+
+/* ****************************************************************************
+ *  Determines resulting string length of a key-value pair vector
+ * ****************************************************************************/
 static uint16_t
 pico_dns_sd_kv_vector_strlen( kv_vector *vector )
 {
@@ -95,6 +113,9 @@ pico_dns_sd_srv_record_create( const char *url,
                                    ttl, flags);
 }
 
+/* ****************************************************************************
+ *  Creates an mDNS record with the TXT record format
+ * ****************************************************************************/
 static struct pico_mdns_record *
 pico_dns_sd_txt_record_create( const char *url,
                                kv_vector key_value_pairs,
@@ -149,10 +170,19 @@ pico_dns_sd_txt_record_create( const char *url,
                                    flags);
 }
 
+/* ****************************************************************************
+ *  Creates a single key-value pair struct
+ * ****************************************************************************/
 static key_value_pair_t *
-pico_dns_sd_kv_create( char *key, char *value )
+pico_dns_sd_kv_create( const char *key, const char *value )
 {
     key_value_pair_t *kv_pair = NULL;
+
+    /* Chekc params */
+    if (!key) {
+        pico_err = PICO_ERR_EINVAL;
+        return NULL;
+    }
 
     /* Provide space for the new pair */
     kv_pair = (key_value_pair_t *)PICO_ZALLOC(sizeof(key_value_pair_t));
@@ -186,6 +216,9 @@ pico_dns_sd_kv_create( char *key, char *value )
     return kv_pair;
 }
 
+/* ****************************************************************************
+ *  Deletes a single key-value pair struct
+ * ****************************************************************************/
 static int
 pico_dns_sd_kv_delete( key_value_pair_t **kv_pair )
 {
@@ -208,16 +241,19 @@ pico_dns_sd_kv_delete( key_value_pair_t **kv_pair )
     return 0;
 }
 
+/* ****************************************************************************
+ *  Returns the length of the first label in an URL
+ * ****************************************************************************/
 static uint16_t
-pico_dns_sd_first_label_length( const char *name )
+pico_dns_sd_first_label_length( const char *url )
 {
     const char *i = NULL;
     uint16_t len = 0;
 
-    if (!name)
+    if (!url)
         return 0;
 
-    i = name;
+    i = url;
     while (*i != '.' && *i != '\0') {
         ++i;
         ++len;
@@ -227,7 +263,7 @@ pico_dns_sd_first_label_length( const char *name )
 }
 
 /* ****************************************************************************
- *  Returns 0 when the type is correctly formatted and it's label lengths fall
+ *  Returns 0 when the type is correctly formatted and it's label lengths are
  *  in the allowed boundaries
  * ****************************************************************************/
 static int
@@ -235,32 +271,41 @@ pico_dns_sd_check_type_format( const char *type )
 {
     uint16_t first_lbl_length = 0;
 
-    /* First of all check if the total length is larger than 22 bytes */
-    if (strlen(type) > 22)
+    /* Check params */
+    if (!type)
         return -1;
 
     /* Then check if the first label is larger than 17 bytes */
     first_lbl_length = pico_dns_sd_first_label_length(type);
-    if (first_lbl_length > (uint16_t) 17u) {
-        /* Check if second label == '_sub' */
-        if (memcmp(type + first_lbl_length + 1, "_sub", 4) == 0) {
-            if (first_lbl_length > 63)
-                return -1;
-            type = type + first_lbl_length + 4;
 
-            /* Determine real type length */
-            first_lbl_length = pico_dns_sd_first_label_length(type);
-            if (first_lbl_length > (uint16_t) 17u)
-                return -1;
-        } else
+    /* Check if there is a subtype present */
+    if (memcmp(type + first_lbl_length + 1, "_sub", 4) == 0) {
+        /* Check the subtype's length */
+        if (first_lbl_length > 63)
+            return -1;
+
+        /* Get the length of the service name */
+        first_lbl_length = pico_dns_sd_first_label_length(type +
+                                                          first_lbl_length + 6);
+    } else {
+        /* Check if type is not greater then 21 bytes (22 - 1, since the length
+           byte of the service name isn't included yet) */
+        if (strlen(type) > (size_t) 21)
             return -1;
     }
+
+    /* Check if the service name is not greater then 16 bytes (17 - 1) */
+    if (first_lbl_length > (uint16_t) 16u)
+        return -1;
 
     return 0;
 }
 
+/* ****************************************************************************
+ *  Returns 0 when the instance name is of the correct length
+ * ****************************************************************************/
 static int
-pico_dns_sd_check_instance_name_format( const char *name)
+pico_dns_sd_check_instance_name_format( const char *name )
 {
     /* First of all check if the total length is larger than 63 bytes */
     if (strlen(name) > 63)
@@ -268,6 +313,9 @@ pico_dns_sd_check_instance_name_format( const char *name)
     return 0;
 }
 
+/* ****************************************************************************
+ *  Append the instance name and service type to create a .local service url.
+ * ****************************************************************************/
 static char *
 pico_dns_sd_create_service_url( const char *name,
                                 const char *type )
@@ -313,31 +361,53 @@ pico_dns_sd_create_service_url( const char *name,
 }
 
 static void
-pico_dns_sd_service_registered_callback( pico_mdns_record_vector *records,
-                                         char *str,
-                                         void *arg )
-{
-    IGNORE_PARAMETER(records);
-    IGNORE_PARAMETER(str);
-    IGNORE_PARAMETER(arg);
-}
-
-static void
 pico_dns_sd_claimed_callback( pico_mdns_record_vector *records,
                               char *str,
                               void *arg )
 {
     pico_mdns_record_vector rvector = {0};
+    struct register_argument *arguments = NULL;
+    struct pico_mdns_record *ptr_record = NULL;
+    char *rname = NULL;
 
-    IGNORE_PARAMETER(records);
     IGNORE_PARAMETER(str);
 
-    pico_mdns_record_vector_add(&rvector, (struct pico_mdns_record *)arg);
+    /* Parse in the PTR record */
+    if (!arg || !records) {
+        pico_err = PICO_ERR_EINVAL;
+        return;
+    }
+    arguments = (struct register_argument *)arg;
+    ptr_record = arguments->ptr_record;
 
-    if (pico_mdns_claim(rvector, pico_dns_sd_service_registered_callback,
-                        NULL) < 0) {
+    /* Get the rname of the claimed records */
+    rname = pico_mdns_record_vector_get(records, 0)->record->rname;
+    if (strcmp(rname, (char*)(ptr_record->record->rdata)) != 0) {
+        /* Update rdata */
+        PICO_FREE(ptr_record->record->rdata);
+        ptr_record->record->rdata = NULL;
+
+        /* Provide space for the updated name */
+        ptr_record->record->rdata = (uint8_t *)PICO_ZALLOC(strlen(rname) + 1);
+        if (!(ptr_record->record->rdata)) {
+            pico_err = PICO_ERR_ENOMEM;
+            return;
+        }
+        /* Copy in the the updated name */
+        strcpy((char *)(ptr_record->record->rdata), rname);
+        /* Update rdlength */
+        ptr_record->record->rsuffix->rdlength = short_be((uint16_t)
+                                                         (strlen(rname) + 1u));
+    }
+
+    /* Claim the PTR record */
+    pico_mdns_record_vector_add(&rvector, ptr_record);
+    if (pico_mdns_claim(rvector, arguments->callback, arguments->arg)
+        < 0) {
         dns_sd_dbg("Trying to claim PTR record failed!\n");
     }
+
+    PICO_FREE(arguments);
 }
 
 /* ****************************************************************************
@@ -365,13 +435,18 @@ int
 pico_dns_sd_register_service( const char *name,
                               const char *type,
                               uint16_t port,
-                              kv_vector txt_data,
-                              uint16_t ttl)
+                              kv_vector *txt_data,
+                              uint16_t ttl,
+                              void (*callback)(pico_mdns_record_vector *,
+                                               char *,
+                                               void *),
+                              void *arg)
 {
     pico_mdns_record_vector rvector = {0};
     struct pico_mdns_record *srv_record = NULL;
     struct pico_mdns_record *txt_record = NULL;
     struct pico_mdns_record *ptr_record = NULL;
+    struct register_argument *arguments = NULL;
     const char *hostname = pico_mdns_get_hostname();
 
     /* Try to create a service URL to create records with */
@@ -381,14 +456,27 @@ pico_dns_sd_register_service( const char *name,
         return -1;
     }
 
+    /* Check other params */
+    if (!txt_data) {
+        dns_sd_dbg("No key-value pair vector passed!\n");
+        return -1;
+    }
+
     dns_sd_dbg("Target: %s\n", hostname);
 
     /* Create the SRV record */
     srv_record = pico_dns_sd_srv_record_create(url, 0, 0, port, hostname,
                                                ttl, PICO_MDNS_RECORD_UNIQUE);
     /* Create the TXT record */
-    txt_record = pico_dns_sd_txt_record_create(url, txt_data, ttl,
+    txt_record = pico_dns_sd_txt_record_create(url, *txt_data, ttl,
                                                PICO_MDNS_RECORD_UNIQUE);
+
+    /* Erase the key-value pair vector, it's no longer needed */
+    if (pico_dns_sd_kv_vector_erase(txt_data) < 0) {
+        dns_sd_dbg("Could not erase key-value pair vector!\n");
+        return -1;
+    }
+
     /* Create the shared PTR record */
     ptr_record = pico_mdns_record_create((char *)(url + strlen(name) + 1u),
                                          (void *)url, (uint16_t)strlen(url),
@@ -398,8 +486,19 @@ pico_dns_sd_register_service( const char *name,
     pico_mdns_record_vector_add(&rvector, srv_record);
     pico_mdns_record_vector_add(&rvector, txt_record);
 
+    /* Provide space for argument struct */
+    arguments = PICO_ZALLOC(sizeof(struct register_argument));
+    if (!arguments) {
+        pico_err = PICO_ERR_ENOMEM;
+        return -1;
+    }
+
+    arguments->ptr_record = ptr_record;
+    arguments->callback = callback;
+    arguments->arg = arg;
+
     if (pico_mdns_claim(rvector, pico_dns_sd_claimed_callback,
-                        (void *)ptr_record) < 0) {
+                        (void *)arguments) < 0) {
         dns_sd_dbg("Trying to claim SRV and TXT records failed!\n");
         return -1;
     }
@@ -421,6 +520,11 @@ pico_dns_sd_browse_service( const char *type,
                                              void *),
                             void *arg )
 {
+    /* TODO: (Implement this) */
+    IGNORE_PARAMETER(type);
+    IGNORE_PARAMETER(callback);
+    IGNORE_PARAMETER(arg);
+    return 0;
 }
 
 /* ****************************************************************************
@@ -438,17 +542,6 @@ pico_dns_sd_kv_vector_init( kv_vector *vector )
     vector->pairs = NULL;
     vector->count = 0;
     return 0;
-}
-
-/* ****************************************************************************
- *  Get the count of key-value pairs contained in the vector
- * ****************************************************************************/
-uint16_t
-pico_dns_sd_kv_vector_count( kv_vector *vector )
-{
-    if (!vector)
-        return 0;
-    return vector->count;
 }
 
 /* ****************************************************************************
@@ -511,4 +604,26 @@ pico_dns_sd_kv_vector_get( kv_vector *vector, uint16_t index )
         return vector->pairs[index];
 
     return NULL;
+}
+
+/* ****************************************************************************
+ *  Erase all the contents of a key
+ * ****************************************************************************/
+int
+pico_dns_sd_kv_vector_erase( kv_vector *vector )
+{
+    uint16_t i = 0;
+
+    /* Iterate over each key-value pair */
+    for (i = 0; i < vector->count; i++) {
+        if (pico_dns_sd_kv_delete(&(vector->pairs[i])) < 0) {
+            dns_sd_dbg("Could not delete key-value pairs from vector");
+            return -1;
+        }
+    }
+
+    vector->pairs = NULL;
+    vector->count = 0;
+
+    return 0;
 }

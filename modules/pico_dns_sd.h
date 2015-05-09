@@ -35,16 +35,19 @@ pico_dns_sd_init( const char *_hostname,
 
 /* ****************************************************************************
  *  Register a service on in the '.local'-domain of a certain type. Port number
- *  Needs to be provided and can't be 0. The key-value pair vector should at
- *  at least contain 1 key-value pair with 'textvers'-key. Otherwise, the 
- *  service will not be registered.
+ *  Needs to be provided and can't be 0. The key-value pair vector passed in
+ *  will be erased so you can no longer use it after registering the service.
  * ****************************************************************************/
 int
 pico_dns_sd_register_service( const char *name,
                               const char *type,
                               uint16_t port,
-                              kv_vector txt_data,
-                              uint16_t ttl );
+                              kv_vector *txt_data,
+                              uint16_t ttl,
+                              void (*callback)(pico_mdns_record_vector *,
+                                               char *,
+                                               void *),
+                              void *arg );
 
 /* ****************************************************************************
  *  Browse for a service of a certain type on the '.local' domain. Calls
@@ -67,21 +70,10 @@ int
 pico_dns_sd_kv_vector_init( kv_vector *vector );
 
 /* ****************************************************************************
- *  Get the count of key-value pairs contained in the vector
- * ****************************************************************************/
-uint16_t
-pico_dns_sd_kv_vector_count( kv_vector *vector );
-
-/* ****************************************************************************
  *  Add a key-value pair to the key-value pair vector
  * ****************************************************************************/
 int
 pico_dns_sd_kv_vector_add( kv_vector *vector, char *key, char *value );
 
-/* ****************************************************************************
- *  Gets a key-value pair from the key-value pair vector
- * ****************************************************************************/
-key_value_pair_t *
-pico_dns_sd_kv_vector_get( kv_vector *vector, uint16_t index );
 
 #endif /* _INCLUDE_PICO_DNS_SD */

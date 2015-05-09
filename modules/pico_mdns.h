@@ -12,7 +12,8 @@
 
 /* ********************************* CONFIG ***********************************/
 #define PICO_MDNS_PROBE_UNICAST 0            /* Probe queries as QU-questions */
-#define PICO_MDNS_DEFAULT_TTL 30             /* Default TTL of mDNS records   */
+#define PICO_MDNS_DEFAULT_TTL 60             /* Default TTL of mDNS records   */
+#define PICO_MDNS_CONTINUOUS_REFRESH 0	     /* Continuously update cache     */
 /* ****************************************************************************/
 
 #define PICO_MDNS_DEST_ADDR4 "224.0.0.251"

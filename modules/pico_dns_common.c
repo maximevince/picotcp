@@ -1567,7 +1567,6 @@ pico_dns_url_to_qname( const char *url )
         return NULL;
     }
     strcpy(temp, url);
-    pico_to_lowercase(temp);
     
     /* Provide space for the qname */
     qname = PICO_ZALLOC(strlen(url) + 2u);

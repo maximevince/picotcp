@@ -3246,6 +3246,7 @@ static int pico_mdns_probe( void (*callback)(pico_mdns_record_vector *,
 
     /* Find my records that need to pass the probing step first */
     rvector = pico_mdns_my_records_find_to_probe();
+
     if (pico_mdns_record_vector_count(&rvector)) {
         /* Iterate over the found records */
         for (i = 0; i < pico_mdns_record_vector_count(&rvector); i++) {

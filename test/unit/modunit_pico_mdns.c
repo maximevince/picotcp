@@ -1220,54 +1220,6 @@ START_TEST(tc_mdns_record_vector_append)
     printf("*********************** ending %s * \n", __func__);
 }
 END_TEST
-START_TEST(tc_mdns_record_vector_del_record)
-{
-    pico_mdns_record_vector rvector = {0};
-    struct pico_mdns_record *record = NULL, *record1 = NULL, *record2 = NULL;
-    struct pico_ip4 rdata = {long_be(0x00FFFFFF)};
-    struct pico_ip4 rdata1 = {long_be(0xFFFFFFFF)};
-    const char *url = "foo.local";
-    int ret = 0;
-
-    printf("*********************** starting %s * \n", __func__);
-
-    /* Create a record */
-    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
-                                     PICO_MDNS_RECORD_UNIQUE);
-    fail_if(!record, "Record could not be created!\n");
-    record1 = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_PTR, 0,
-                                      PICO_MDNS_RECORD_UNIQUE);
-    fail_if(!record1, "Record could not be created!\n");
-
-    record2 = pico_mdns_record_create(url, &rdata1, 4, PICO_DNS_TYPE_A, 0,
-                                      PICO_MDNS_RECORD_UNIQUE);
-    fail_if(!record2, "Record could not be created!\n");
-
-    /* Some test vectors */
-    pico_mdns_record_vector_add(&rvector, record);
-    pico_mdns_record_vector_add(&rvector, record1);
-
-    /* Try to del record which isn't in the vector */
-    ret = pico_mdns_record_vector_del_record(&rvector, record2);
-    fail_unless(0 == ret,
-                "mdns_record_vector_del_record failed with unkown rr!\n");
-    fail_unless(2 == rvector.count,
-                "mdns_record_vector_del_record delete wrong record!\n");
-
-    pico_mdns_record_vector_add(&rvector, record2);
-    ret = pico_mdns_record_vector_del_record(&rvector, record2);
-    fail_unless(0 == ret, "mdns_record_vector_del_record failed!\n");
-    fail_unless(2 == rvector.count,
-                "mdns_record_vector_del_record failed wrong count!\n");
-
-    ret = pico_mdns_record_vector_del_record(&rvector, record);
-    fail_unless(0 == ret, "mdns_record_vector_del_record failed!\n");
-    fail_unless(record1 == pico_mdns_record_vector_get(&rvector, 0),
-                "mdns_record_vector_del_record failed!\n");
-
-    printf("*********************** ending %s * \n", __func__);
-}
-END_TEST
 /* MARK: Record tree functions */
 void add_records( void )
 {
@@ -2252,7 +2204,6 @@ Suite *pico_suite(void)
     TCase *TCase_mdns_record_vector_delete = tcase_create("Unit test for mdns_record_vector_delete");
     TCase *TCase_mdns_record_vector_destroy = tcase_create("Unit test for mdns_record_vector_destroy");
     TCase *TCase_mdns_record_vector_append = tcase_create("Unit test for mdns_record_vector_append");
-    TCase *TCase_mdns_record_vector_del_record = tcase_create("Unit test for mdns_record_vector_del_record");
 
     /* Record tree functions */
     TCase *TCase_mdns_record_tree_find_url = tcase_create("Unit test for mdns_record_tree_find_url");
@@ -2369,9 +2320,6 @@ Suite *pico_suite(void)
     tcase_add_test(TCase_mdns_record_vector_destroy, tc_mdns_record_vector_destroy);
     suite_add_tcase(s, TCase_mdns_record_vector_destroy);
     tcase_add_test(TCase_mdns_record_vector_append, tc_mdns_record_vector_append);
-    suite_add_tcase(s, TCase_mdns_record_vector_append);
-    tcase_add_test(TCase_mdns_record_vector_del_record, tc_mdns_record_vector_del_record);
-    suite_add_tcase(s, TCase_mdns_record_vector_del_record);
 
     /* Record tree functions */
     tcase_add_test(TCase_mdns_record_tree_find_url, tc_mdns_record_tree_find_url);

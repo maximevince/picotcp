@@ -5,7 +5,7 @@
 
    .
 
-   Authors: Toon Stegen
+   Authors: Toon Stegen, Jelle De Vleeschouwer
  *********************************************************************/
 
 #ifndef INCLUDE_PICO_DNS_COMMON

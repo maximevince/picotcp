@@ -4,7 +4,7 @@
  *
  *  .
  *
- *  Authors: Toon Stegen
+ *  Authors: Toon Stegen, Jelle De Vleeschouwer
  * ****************************************************************************/
 #include "pico_config.h"
 #include "pico_stack.h"
@@ -16,8 +16,8 @@
 #include "pico_dns_client.h"
 #include "pico_tree.h"
 
-//#define dns_dbg(...) do {} while(0)
-#define dns_dbg dbg
+#define dns_dbg(...) do {} while(0)
+//#define dns_dbg dbg
 
 // MARK: PROTOTYPES
 static int
@@ -1358,7 +1358,8 @@ pico_dns_namelen_uncomp( char *name, pico_dns_packet *packet )
         /* Check if the first bit of the data is set - '|1|1|P|P|...|P|P|' */
         if(*ptr & 0xC0) {
             /* Move ptr to the pointer location */
-            comp_ptr = (uint16_t)(((((uint16_t)*ptr ) << 8) & 0x3F00) | (uint16_t) *(ptr + 1));
+            comp_ptr = (uint16_t)(((((uint16_t)*ptr ) << 8) & 0x3F00) |
+                                  (uint16_t) *(ptr + 1));
             ptr = buf + comp_ptr;
         } else {
             /* Add the label length to the total length */
@@ -1384,9 +1385,8 @@ pico_dns_decompress_name( char *name, pico_dns_packet *packet )
     uint16_t ptr = 0;
     
     /* Provide storage for the uncompressed name */
-    decompressed_name = PICO_ZALLOC((size_t)
-                                    (pico_dns_namelen_uncomp(name,
-                                                             packet)));
+    decompressed_name = PICO_ZALLOC((size_t) (pico_dns_namelen_uncomp(name,
+                                                                      packet)));
     if(!decompressed_name) {
         pico_err = PICO_ERR_ENOMEM;
         return NULL;

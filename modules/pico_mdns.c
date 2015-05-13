@@ -111,11 +111,11 @@ struct pico_mdns_cookie
  *  MARK: PROTOTYPES                                                          */
 static int
 pico_mdns_record_am_i_lexi_later( struct pico_mdns_record *my_record,
-                                 struct pico_mdns_record *peer_record);
+                                  struct pico_mdns_record *peer_record);
 
 static struct pico_mdns_record *
 pico_mdns_record_copy_with_new_name( struct pico_mdns_record *record,
-                                    const char *new_rname );
+                                     const char *new_rname );
 
 static struct pico_mdns_record *
 pico_mdns_record_copy( struct pico_mdns_record *record );
@@ -131,29 +131,28 @@ static int
 pico_mdns_record_vector_destroy( pico_mdns_record_vector *vector );
 
 static int
-pico_mdns_record_tree_del_url( const char *url,
-                                         struct pico_tree *tree );
+pico_mdns_record_tree_del_url( const char *url, struct pico_tree *tree );
 
 static int
 pico_mdns_record_tree_del_record( struct pico_mdns_record *record,
-                                 struct pico_tree *tree );
+                                  struct pico_tree *tree );
 
 static int
 pico_mdns_getrecord_generic( const char *url, uint16_t type,
-                            void (*callback)(pico_mdns_record_vector *,
-                                             char *,
-                                             void *),
-                            void *arg);
+                             void (*callback)(pico_mdns_record_vector *,
+                                              char *,
+                                              void *),
+                             void *arg);
 
 static void
 pico_mdns_send_probe_packet( pico_time now, void *arg );
 
 static int
 pico_mdns_reclaim( pico_mdns_record_vector record_vector,
-                  void (*callback)(pico_mdns_record_vector *,
-                                   char *,
-                                   void *),
-                  void *arg );
+                   void (*callback)(pico_mdns_record_vector *,
+                                    char *,
+                                    void *),
+                   void *arg );
 /*  EOF PROTOTYPES
  * ****************************************************************************/
 
@@ -3223,6 +3222,53 @@ pico_mdns_send_probe_packet( pico_time now, void *arg )
 }
 
 /* ****************************************************************************
+ *  Utility functions to add a new probe question to the question vector, if a
+ *  name is already in the vector, it will not be appended again.
+ * ****************************************************************************/
+static int
+pico_mdns_add_probe_question( pico_dns_question_vector *vector,
+                              char *name )
+{
+    struct pico_dns_question *found = NULL, *new = NULL;
+    char *url = NULL;
+    uint16_t qlen = 0;
+    uint8_t flags = 0;
+
+    /* Try to find an existing question in the vector */
+    found = pico_dns_question_vector_find_name(vector, name);
+    if (!found) {
+        /* Set the flags */
+        if (PICO_MDNS_PROBE_UNICAST)
+            flags = (PICO_MDNS_QUESTION_FLAG_PROBE |
+                     PICO_MDNS_QUESTION_FLAG_UNICAST_RES);
+        else
+            flags = PICO_MDNS_QUESTION_FLAG_PROBE;
+
+        /* Convert name to URL */
+        url = pico_dns_qname_to_url(name);
+        if (!url)
+            return -1;
+
+        /* Create a new probe question */
+        new = pico_mdns_question_create(url, &qlen, PICO_PROTO_IPV4,
+                                        PICO_DNS_TYPE_ANY, flags, 0);
+
+        /* Free memory */
+        PICO_FREE(url);
+        url = NULL;
+
+        /* Append probe question to question list */
+        if (pico_dns_question_vector_add(vector, new) < 0) {
+            mdns_dbg("Could not add question to question vector!\n");
+            return -1;
+        }
+    }
+
+    return 0;
+}
+/* TODO: ADD UNIT TEST ^^^ */
+
+/* ****************************************************************************
  *  Try to find any of my records that need to be probed, and probe them
  * ****************************************************************************/
 static int pico_mdns_probe( void (*callback)(pico_mdns_record_vector *,
@@ -3231,12 +3277,10 @@ static int pico_mdns_probe( void (*callback)(pico_mdns_record_vector *,
                             void *arg )
 {
     struct pico_mdns_cookie *probe_cookie = NULL;
+    struct pico_mdns_record *record = NULL;
     pico_dns_question_vector qvector = { 0 };
     pico_mdns_record_vector rvector = { 0 };
-    struct pico_mdns_record *record = NULL;
-    struct pico_dns_question *found = NULL, *new = NULL;
-    char *url = NULL;
-    uint16_t i = 0, qlen = 0;
+    uint16_t i = 0;
 
     /* Check params */
     if (!callback) {
@@ -3252,40 +3296,11 @@ static int pico_mdns_probe( void (*callback)(pico_mdns_record_vector *,
         for (i = 0; i < pico_mdns_record_vector_count(&rvector); i++) {
             record = pico_mdns_record_vector_get(&rvector, i);
             /* Find a probe question for the record name */
-            found = pico_dns_question_vector_find_name(&qvector,
-                                                       record->record->rname);
-            if (!found) {
-                url = pico_dns_qname_to_url(record->record->rname);
-                if (!url)
-                    continue;
 
-                /* Create a new probe question */
-                if (PICO_MDNS_PROBE_UNICAST) {
-                    new = pico_mdns_question_create(url, &qlen, PICO_PROTO_IPV4,
-                                                    PICO_DNS_TYPE_ANY,
-                                                    (PICO_MDNS_QUESTION_FLAG_PROBE |
-                                                     PICO_MDNS_QUESTION_FLAG_UNICAST_RES),
-                                                    0);
-                } else {
-                    new = pico_mdns_question_create(url, &qlen, PICO_PROTO_IPV4,
-                                                    PICO_DNS_TYPE_ANY,
-                                                    PICO_MDNS_QUESTION_FLAG_PROBE,
-                                                    0);
-                }
-
-                mdns_dbg("New question '%s' with type: %d and class: %d\n",
-                         url, short_be(new->qsuffix->qtype),
-                         short_be(new->qsuffix->qclass));
-
-                /* Free memory */
-                PICO_FREE(url);
-                url = NULL;
-
-                /* Append probe question to question list */
-                if (pico_dns_question_vector_add(&qvector, new) < 0) {
-                    mdns_dbg("Could not add question to question vector!\n");
-                    continue;
-                }
+            if (pico_mdns_add_probe_question(&qvector, record->record->rname)
+                < 0) {
+                mdns_dbg("Could not add probe question to vector!\n");
+                return -1;
             }
         }
 
@@ -3302,16 +3317,12 @@ static int pico_mdns_probe( void (*callback)(pico_mdns_record_vector *,
             mdns_dbg("Could not append cookie to Cookies!\n");
             return -1;
         }
-        mdns_dbg("Added cookie to Cookie-tree!\n");
 
-        /* RFC:
-         *  When the host is ready to send his probe query he SHOULD delay it's
-         *  transmission with a randomly chosen time between 0 and 250 ms.
-         */
+        /*  When the host is ready to send his probe query he SHOULD delay it's
+            transmission with a randomly chosen time between 0 and 250 ms. */
         probe_cookie->send_timer = pico_timer_add(pico_rand() % 250,
                                                   pico_mdns_send_probe_packet,
                                                   (void *)probe_cookie);
-
         mdns_dbg("DONE - Started probing.\n");
     }
 
@@ -3429,12 +3440,12 @@ pico_mdns_set_hostname( const char *url, void *arg )
         return -1;
     }
 
+    /* TODO: Create a reverse resolution record */
+
     /* Add the record a vector */
     if (pico_mdns_record_vector_add(&vector, record) < 0) {
         mdns_dbg("Could not add hostname record to vector!\n");
     }
-
-    /* TODO: Create a reverse resolution record */
 
     /* Try to claim the record */
     if (pico_mdns_claim(vector, init_callback, arg) < 0) {

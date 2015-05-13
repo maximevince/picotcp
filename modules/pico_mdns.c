@@ -205,6 +205,8 @@ static int
 pico_mdns_cmp_name_type( struct pico_mdns_record *a,
                          struct pico_mdns_record *b )
 {
+    uint16_t a_type = 0, b_type = 0;
+
     /* Check params */
     if (!a || !b)
         return -2;
@@ -219,12 +221,13 @@ pico_mdns_cmp_name_type( struct pico_mdns_record *a,
     if (!(a->record->rsuffix) && b->record->rsuffix)
         return -1;
 
+    a_type = short_be(a->record->rsuffix->rtype);
+    b_type = short_be(b->record->rsuffix->rtype);
+
     /* First, compare the rrtypes */
-    if(short_be(a->record->rsuffix->rtype) <
-       short_be(b->record->rsuffix->rtype))
+    if(a_type < b_type)
         return -1;
-    if(short_be(b->record->rsuffix->rtype) <
-       short_be(a->record->rsuffix->rtype))
+    if(b_type < a_type)
         return 1;
 
     /* Then, compare the rrnames */
@@ -277,7 +280,7 @@ pico_mdns_cookie_cmp( void *ka, void *kb )
     struct pico_mdns_record *ra = NULL;
     struct pico_mdns_record *rb = NULL;
     int ret = 0;
-    uint16_t i = 0, j = 0;
+    uint16_t i = 0, j = 0, a_type = 0, b_type = 0;
 
     /* Parse in the cookies */
     a = (struct pico_mdns_cookie *)ka;
@@ -291,10 +294,13 @@ pico_mdns_cookie_cmp( void *ka, void *kb )
         qa = pico_dns_question_vector_get(&(a->qvector), i);
         qb = pico_dns_question_vector_get(&(b->qvector), j);
 
+        a_type = short_be(qa->qsuffix->qtype);
+        b_type = short_be(qb->qsuffix->qtype);
+
         /* First, compare the qtypes */
-        if(short_be(qa->qsuffix->qtype) < short_be(qb->qsuffix->qtype))
+        if(a_type < b_type)
             return -1;
-        if(short_be(qb->qsuffix->qtype) < short_be(qa->qsuffix->qtype))
+        if(b_type < a_type)
             return 1;
 
         /* Then compare qnames */
@@ -647,7 +653,8 @@ pico_mdns_is_suffix_present( char rname[],
                         suffix_is_present = 0;
                     }
                 } else {
-                    (*suffix)[s_i++] = *i;
+                    if (s_i < 5)
+                        (*suffix)[s_i++] = *i;
                 }
             }
         }
@@ -977,6 +984,8 @@ static int
 pico_mdns_record_am_i_lexi_later( struct pico_mdns_record *my_record,
                                   struct pico_mdns_record *peer_record)
 {
+    uint16_t my_type = 0, peer_type = 0, my_class = 0, peer_class = 0;
+
     /* Check params */
     if (!my_record || !peer_record) {
         pico_err = PICO_ERR_EINVAL;
@@ -984,13 +993,16 @@ pico_mdns_record_am_i_lexi_later( struct pico_mdns_record *my_record,
     }
 
     /* First, check class */
-    if (short_be(my_record->record->rsuffix->rclass) >
-        short_be(peer_record->record->rsuffix->rclass))
+    my_class = short_be(my_record->record->rsuffix->rclass);
+    peer_class = short_be(peer_record->record->rsuffix->rclass);
+    if (my_class > peer_class)
         return 1;
 
+
     /* Then, check type */
-    if (short_be(my_record->record->rsuffix->rtype) >
-        short_be(peer_record->record->rsuffix->rtype))
+    my_type = short_be(my_record->record->rsuffix->rtype);
+    peer_type = short_be(peer_record->record->rsuffix->rtype);
+    if (my_type > peer_type)
         return 1;
 
     /* At last, check rdata */
@@ -1042,9 +1054,14 @@ pico_mdns_record_copy_with_new_name( struct pico_mdns_record *record,
 
     /* Copy the record */
     copy = pico_mdns_record_copy(record);
+    if (!copy) {
+        mdns_dbg("Could not copy record!\n");
+        return NULL;
+    }
 
     /* Free the copied rname */
-    PICO_FREE(copy->record->rname);
+    if (copy->record)
+        PICO_FREE(copy->record->rname);
 
     /* Provide a new string */
     copy->record->rname = PICO_ZALLOC(strlen(new_rname) + 1);
@@ -1260,11 +1277,15 @@ pico_mdns_record_vector_remove( pico_mdns_record_vector *vector,
     if (index >= vector->count) return 0;
 
     if (vector->count - 1u)
-        new_records = PICO_ZALLOC(sizeof(struct pico_mdpicons_record *) *
+        new_records = PICO_ZALLOC(sizeof(struct pico_mdns_record *) *
                                   (vector->count - 1u));
+    if (vector->count != 0 && !new_records) {
+        pico_err = PICO_ERR_ENOMEM;
+        return -1;
+    }
 
     /* Move up subsequent records */
-    for (i = index; i < (vector->count - 1); i++) {
+    for (i = index; i < (uint16_t)(vector->count - 1); i++) {
         vector->records[i] = vector->records[i + 1];
         vector->records[i + 1] = NULL;
     }
@@ -1303,8 +1324,12 @@ pico_mdns_record_vector_delete( pico_mdns_record_vector *vector,
 
     vector->count--;
     if (vector->count)
-        new_records = PICO_ZALLOC(sizeof(struct pico_mdpicons_record *) *
+        new_records = PICO_ZALLOC(sizeof(struct pico_mdns_record *) *
                                   vector->count);
+    if (vector->count != 0 && !new_records) {
+        pico_err = PICO_ERR_ENOMEM;
+        return -1;
+    }
 
     /* Move up subsequent records */
     for (i = index; i < vector->count; i++) {
@@ -1412,11 +1437,12 @@ pico_mdns_record_tree_find_url( const char *url,
 
     /* We need the FQDN to compare */
     rname = pico_dns_url_to_qname(url);
+    if (!rname)
+        return cache_hits;
 
     /* Iterate over the Cache-tree */
     pico_tree_foreach(node, tree) {
         node_record = node->keyValue;
-
         if (strcmp(node_record->record->rname, rname) == 0) {
             /* Add the record to the an mDNS res record vector */
             if (pico_mdns_record_vector_add(&cache_hits, node_record) < 0) {
@@ -1425,7 +1451,7 @@ pico_mdns_record_tree_find_url( const char *url,
             }
         }
     }
-
+    PICO_FREE(rname);
     return cache_hits;
 }
 
@@ -1467,6 +1493,12 @@ pico_mdns_record_tree_find_url_type( const char *url,
                 }
             }
         }
+    }
+
+    /* Delete the test DNS record */
+    if (pico_dns_record_delete(&(test_record.record)) < 0) {
+        mdns_dbg("Could not delete DNS test record!\n");
+        return cache_hits;
     }
 
     return cache_hits;
@@ -1577,6 +1609,12 @@ pico_mdns_record_tree_del_url_type( const char *url,
         }
     }
 
+    /* Delete the test DNS record */
+    if (pico_dns_record_delete(&(test_record.record)) < 0) {
+        mdns_dbg("Could not delete DNS test record!\n");
+        return -1;
+    }
+
     return 0;
 }
 
@@ -1659,6 +1697,12 @@ pico_mdns_my_records_find_url_type( const char *url,
         node_record = node->keyValue;
         if (pico_mdns_cmp_name_type(node_record, &test_record) == 0)
             return node_record;
+    }
+
+    /* Delete the test DNS record */
+    if (pico_dns_record_delete(&(test_record.record)) < 0) {
+        mdns_dbg("Could not delete DNS test record!\n");
+        return NULL;
     }
 
     return NULL;
@@ -2011,10 +2055,11 @@ pico_mdns_cache_add_record( struct pico_mdns_record *record )
 
     /* See if the record is already contained in the cache */
     found = pico_mdns_record_tree_find_record(record, &Cache);
-    if (found)
+    if (found) {
         pico_mdns_cache_update_ttl(found,
                                    long_be(record->record->rsuffix->rttl));
-    else {
+        return 1;
+    } else {
         /* Convert the rname to an URL */
         url = pico_dns_qname_to_url(record->record->rname);
         if (!url) {
@@ -2387,7 +2432,7 @@ pico_mdns_handle_single_authority( struct pico_mdns_record *answer )
         return -1;
     }
 
-    mdns_dbg("Authority RCVD for '%s'\n", answer->record-rname);
+    mdns_dbg("Authority RCVD for '%s'\n", answer->record->rname);
 
     /* Find currently active probe cookie */
     found = pico_mdns_cookie_tree_find_query_cookie(answer->record->rname);
@@ -2432,7 +2477,11 @@ pico_mdns_handle_data_as_questions ( uint8_t **ptr,
     uint16_t i = 0;
 
     /* Check params */
-    if (!ptr && !(*ptr)) {
+    if (!ptr) {
+        pico_err = PICO_ERR_EINVAL;
+        return anvector;
+    }
+    if (!(*ptr) || !packet) {
         pico_err = PICO_ERR_EINVAL;
         return anvector;
     }
@@ -2469,7 +2518,11 @@ pico_mdns_handle_data_as_answers_generic( uint8_t **ptr,
     uint16_t i = 0;
 
     /* Check params */
-    if (!ptr && !(*ptr)) {
+    if (!ptr) {
+        pico_err = PICO_ERR_EINVAL;
+        return -1;
+    }
+    if (!(*ptr) || !packet) {
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }
@@ -2490,6 +2543,8 @@ pico_mdns_handle_data_as_answers_generic( uint8_t **ptr,
 
         /* Make an mDNS record copy from the answer */
         copy = pico_dns_record_copy(&answer);
+        if (!copy)
+            return -1;
         PICO_FREE(copy->rname);
         copy->rname = pico_dns_decompress_name(answer.rname, packet);
         mdns_answer = pico_mdns_record_create_from_dns(copy);
@@ -2506,7 +2561,9 @@ pico_mdns_handle_data_as_answers_generic( uint8_t **ptr,
                 break;
             default:
                 pico_mdns_handle_single_answer(mdns_answer);
-                pico_mdns_cache_add_record(mdns_answer);
+                if (pico_mdns_cache_add_record(mdns_answer)) {
+                    pico_mdns_record_delete(&mdns_answer);
+                }
                 break;
         }
 
@@ -2656,7 +2713,11 @@ pico_mdns_apply_known_answer_suppression( pico_mdns_record_vector *vector,
     uint16_t i = 0, j = 0;
 
     /* Check params */
-    if (!data && !(*data)) {
+    if (!data) {
+        pico_err = PICO_ERR_EINVAL;
+        return -1;
+    }
+    if (!(*data) || !vector || !packet) {
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }

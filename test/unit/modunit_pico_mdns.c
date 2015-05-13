@@ -2004,7 +2004,7 @@ START_TEST(tc_mdns_cache_add_record)
     found = pico_mdns_record_tree_find_record(record, &Cache);
     fail_unless((int)found, "mdns_cache_add_record failed!\n");
     ret = pico_mdns_cache_add_record(record);
-    fail_unless(0 == ret,
+    fail_unless(1 == ret,
                 "mdns_cache_add_record returned error!\n");
 
     printf("*********************** ending %s * \n", __func__);
@@ -2303,7 +2303,7 @@ START_TEST(tc_mdns_getrecord)
     found = pico_mdns_record_tree_find_record(record, &Cache);
     fail_unless((int)found, "mdns_cache_add_record failed!\n");
     ret = pico_mdns_cache_add_record(record);
-    fail_unless(0 == ret,
+    fail_unless(1 == ret,
                 "mdns_cache_add_record returned error!\n");
 
     /* Init */

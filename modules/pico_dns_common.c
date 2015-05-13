@@ -482,6 +482,8 @@ pico_dns_question_create( const char *url,
     } else {
         qname = pico_dns_url_to_qname(url);
     }
+    if (!qname)
+        return NULL;
     slen = (uint16_t)(strlen(qname) + 1u);
     
     /* Allocate space for the question and the subfields */
@@ -611,12 +613,10 @@ pico_dns_question_vector_get( pico_dns_question_vector *vector,
     return NULL;
 }
 
-/* ****************************************************************************
- *  Removes a DNS question from a DNS question vector at a certain index
- * ****************************************************************************/
-int
-pico_dns_question_vector_remove( pico_dns_question_vector *vector,
-                                 uint16_t index)
+static int
+pico_dns_question_vector_del_generic( pico_dns_question_vector *vector,
+                                      uint16_t index,
+                                      uint8_t delete )
 {
     struct pico_dns_question **new_questions = NULL;
     uint16_t i = 0;
@@ -625,16 +625,27 @@ pico_dns_question_vector_remove( pico_dns_question_vector *vector,
     if (!vector) return -1;
     if (index >= vector->count) return -1;
 
-    if (vector->count - 1u)
-        new_questions = PICO_ZALLOC(sizeof(struct pico_dns_question *) *
-                                    (vector->count - 1u));
+    /* Delete record */
+    if (delete) {
+        if (pico_dns_question_delete(&(vector->questions[index])) < 0)
+            return -1;
+    }
 
-    /* Move up subsequent records */
-    for (i = index; i < (vector->count - 1); i++) {
+    vector->count--;
+    if (vector->count) {
+        new_questions = PICO_ZALLOC(sizeof(struct pico_dns_question *) *
+                                    vector->count);
+        if (!new_questions) {
+            pico_err = PICO_ERR_ENOMEM;
+            return -1;
+        }
+    }
+
+    /* Move up subsequent questions */
+    for (i = index; i < vector->count; i++) {
         vector->questions[i] = vector->questions[i + 1];
         vector->questions[i + 1] = NULL;
     }
-    vector->count--;
 
     /* Copy records */
     for (i = 0; i < vector->count; i++)
@@ -649,44 +660,23 @@ pico_dns_question_vector_remove( pico_dns_question_vector *vector,
 }
 
 /* ****************************************************************************
+ *  Removes a DNS question from a DNS question vector at a certain index
+ * ****************************************************************************/
+int
+pico_dns_question_vector_remove( pico_dns_question_vector *vector,
+                                 uint16_t index )
+{
+    return pico_dns_question_vector_del_generic(vector, index, 0);
+}
+
+/* ****************************************************************************
  *  Deletes a DNS question from a DNS question vector at a certain index
  * ****************************************************************************/
 int
 pico_dns_question_vector_delete( pico_dns_question_vector *vector,
                                  uint16_t index)
 {
-    struct pico_dns_question **new_questions = NULL;
-    uint16_t i = 0;
-    
-    /* Check params */
-    if (!vector) return -1;
-    if (index >= vector->count) return -1;
-    
-    /* Delete record */
-    if (pico_dns_question_delete(&(vector->questions[index])) < 0)
-        return -1;
-    
-    if (vector->count - 1u)
-        new_questions = PICO_ZALLOC(sizeof(struct pico_dns_question *) *
-                                   (vector->count - 1u));
-    
-    /* Move up subsequent records */
-    for (i = index; i < (vector->count - 1); i++) {
-        vector->questions[i] = vector->questions[i + 1];
-        vector->questions[i + 1] = NULL;
-    }
-    vector->count--;
-    
-    /* Copy records */
-    for (i = 0; i < vector->count; i++)
-        new_questions[i] = vector->questions[i];
-    
-    /* Free the previous array */
-    PICO_FREE(vector->questions);
-    
-    /* Set the records array to the new one */
-    vector->questions = new_questions;
-    return 0;
+    return pico_dns_question_vector_del_generic(vector, index, 1);
 }
 
 /* ****************************************************************************
@@ -986,7 +976,9 @@ pico_dns_record_copy( struct pico_dns_record *record )
 int
 pico_dns_record_delete( struct pico_dns_record **rr )
 {
-    if (!rr || !(*rr))
+    if (!rr)
+        return 0;
+    if (!(*rr))
         return 0;
     
     if ((*rr)->rname)
@@ -1032,11 +1024,15 @@ pico_dns_record_create( const char *url,
 
     /* Allocate space for the record and subfields */
     record = PICO_ZALLOC(sizeof(struct pico_dns_record));
+    if (!record) {
+        pico_err = PICO_ERR_ENOMEM;
+        return NULL;
+    }
     record->rname = PICO_ZALLOC(slen);
     record->rsuffix = PICO_ZALLOC(sizeof(struct pico_dns_record_suffix));
     record->rdata = PICO_ZALLOC(datalen);
-    if (!record || !(record->rname) || !(record->rsuffix) || !(record->rdata)) {
-        pico_err = PICO_ERR_ENOMEM;
+    if (!(record->rname) || !(record->rsuffix) || !(record->rdata)) {
+        pico_dns_record_delete(&record);
         return NULL;
     }
     
@@ -1177,18 +1173,21 @@ pico_dns_record_vector_delete( pico_dns_record_vector *vector, uint16_t index)
     /* Delete record */
     if (pico_dns_record_delete(&(vector->records[index])) < 0)
         return -1;
-    
-    if (vector->count - 1u)
+
+    vector->count--;
+    if (vector->count) {
         new_records = PICO_ZALLOC(sizeof(struct pico_dns_record *) *
-                                    (vector->count - 1u));
+                                  vector->count);
+        if (new_records)
+            return -1;
+    }
     
     /* Move up subsequent records */
-    for (i = index; i < (vector->count - 1); i++) {
+    for (i = index; i < vector->count; i++) {
         vector->records[i] = vector->records[i + 1];
         vector->records[i + 1] = NULL;
     }
-    vector->count--;
-    
+
     /* Copy records */
     for (i = 0; i < vector->count; i++)
         new_records[i] = vector->records[i];
@@ -1323,7 +1322,12 @@ pico_dns_namelen_comp( char *name )
 {
     uint8_t *ptr = (uint8_t *)name; // Pointer to work with
     uint16_t len = 0;               // Length to return
-    
+
+    if (!ptr) {
+        pico_err = PICO_ERR_EINVAL;
+        return 0;
+    }
+
     /* Just count until the zero-byte */
     while (*ptr != '\0' && !(*ptr & 0xC0)) {
         ptr += (uint8_t) *ptr + 1;
@@ -1359,7 +1363,7 @@ pico_dns_namelen_uncomp( char *name, pico_dns_packet *packet )
         if(*ptr & 0xC0) {
             /* Move ptr to the pointer location */
             comp_ptr = (uint16_t)(((((uint16_t)*ptr ) << 8) & 0x3F00) |
-                                  (uint16_t) *(ptr + 1));
+                                  ((uint16_t)*(ptr + 1)));
             ptr = buf + comp_ptr;
         } else {
             /* Add the label length to the total length */
@@ -1464,7 +1468,7 @@ pico_dns_url_to_reverse_qname( const char *url, uint8_t proto )
 
     slen = pico_dns_url_get_reverse_len(url, &arpalen, proto);
     reverse_qname = PICO_ZALLOC((size_t)(slen + arpalen));
-    if (!reverse_qname) {
+    if (!reverse_qname || !url) {
         pico_err = PICO_ERR_ENOMEM;
         return NULL;
     }
@@ -1525,6 +1529,7 @@ pico_dns_qname_to_url( const char *qname )
     temp = PICO_ZALLOC(strlen(qname) + 1u);
     if (!temp) {
         pico_err = PICO_ERR_ENOMEM;
+        PICO_FREE(url);
         return NULL;
     }
     

@@ -163,7 +163,7 @@ pico_mdns_reclaim( pico_mdns_record_vector record_vector,
  * ****************************************************************************/
 static int
 pico_mdns_rdata_cmp( uint8_t *a, uint8_t *b,
-                    uint16_t rdlength_a, uint16_t rdlength_b )
+                     uint16_t rdlength_a, uint16_t rdlength_b )
 {
     uint16_t i = 0;
     uint16_t longest_rdlength = 0;
@@ -198,6 +198,9 @@ pico_mdns_rdata_cmp( uint8_t *a, uint8_t *b,
     return 0;
 }
 
+/* ****************************************************************************
+ *  Compares two mDNS record by name and type
+ * ****************************************************************************/
 static int
 pico_mdns_cmp_name_type( struct pico_mdns_record *a,
                          struct pico_mdns_record *b )
@@ -230,7 +233,6 @@ pico_mdns_cmp_name_type( struct pico_mdns_record *a,
                                (uint16_t)strlen(a->record->rname),
                                (uint16_t)strlen(b->record->rname));
 }
-/* TODO: ADD UNIT TEST ^^^ */
 
 /* ****************************************************************************
  *  Function for comparing 2 resource records in the tree.
@@ -617,6 +619,7 @@ pico_mdns_is_suffix_present( char rname[],
                              char suffix[][5])
 {
     uint8_t suffix_is_present = 0, s_i = 0;
+    char temp[5] = {0};
     char *i = 0;
 
     /* Check params */
@@ -650,9 +653,14 @@ pico_mdns_is_suffix_present( char rname[],
         }
     }
 
+    if (!suffix_is_present) {
+        *opening_bracket_index = NULL;
+        *closing_bracket_index = NULL;
+        memcpy(*suffix, temp, 5);
+    }
+
     return suffix_is_present;
 }
-/* TODO: ADD UNIT TEST ^^^ */
 
 /* ****************************************************************************
  *  Utility function to append a conflict resolution suffix to the first label
@@ -760,7 +768,6 @@ pico_mdns_generate_new_records( pico_mdns_record_vector *conflict_vector,
 
     return 0;
 }
-/* TODO: ADD UNIT TEST ^^^ */
 
 /* ****************************************************************************
  *  Apply conflict resolution for a certain name on a probe cookie.
@@ -1707,7 +1714,6 @@ pico_mdns_my_records_add( pico_mdns_record_vector vector, uint8_t reclaim )
     }
     return vector;
 }
-/* TODO: ADD UNIT TEST ^^^ */
 
 /* ****************************************************************************
  *  Generates a list of all my records for which the probe flag already has
@@ -1801,7 +1807,6 @@ pico_mdns_my_records_claimed_id( uint8_t claim_id,
 
     return 1;
 }
-/* TODO: ADD UNIT TEST ^^^ */
 
 /* ****************************************************************************
  *  Marks mDNS resource records contained in [records]-list as claimed.
@@ -1903,9 +1908,9 @@ pico_mdns_query_create( pico_dns_question_vector *qvector,
  * ****************************************************************************/
 static pico_dns_packet *
 pico_mdns_answer_create( pico_dns_record_vector *anvector,
-                        pico_dns_record_vector *nsvector,
-                        pico_dns_record_vector *arvector,
-                        uint16_t *len )
+                         pico_dns_record_vector *nsvector,
+                         pico_dns_record_vector *arvector,
+                         uint16_t *len )
 {
     pico_dns_packet *packet = NULL;
 
@@ -2166,7 +2171,7 @@ pico_mdns_cookies_check_timeouts( void )
 
             mdns_dbg("Query cookie timed out, deleted!\n");
 
-            /* TODO: If the request was for a reconfirmation of a record,
+            /* If the request was for a reconfirmation of a record,
              flush the corresponding record after the timeout */
         }
     }
@@ -2208,14 +2213,11 @@ pico_mdns_populate_answer_vector( char *url, uint16_t qtype, uint16_t qclass )
     if (!url)
         return anvector;
 
-    if (qtype == PICO_DNS_TYPE_ANY) {
-        /* Look for *ALL* the records with this name */
+    /* Create an answer record vector */
+    if (qtype == PICO_DNS_TYPE_ANY)
         anvector = pico_mdns_record_tree_find_url(url, &MyRecords);
-    } else {
-        /* Look for my record with url and type */
-        anvector = pico_mdns_record_tree_find_url_type(url, qtype,
-                                                       &MyRecords);
-    }
+    else
+        anvector = pico_mdns_record_tree_find_url_type(url, qtype, &MyRecords);
 
     /* Check if question is a QU-question */
     if (PICO_MDNS_IS_MSB_SET(qclass)) {
@@ -2234,7 +2236,6 @@ pico_mdns_populate_answer_vector( char *url, uint16_t qtype, uint16_t qclass )
 
     return anvector;
 }
-/* TODO: ADD UNIT TEST ^^^ */
 
 /* ****************************************************************************
  *  Handle a single received question
@@ -2568,7 +2569,6 @@ pico_mdns_sort_unicast_multicast( pico_mdns_record_vector *answers,
 
     return 0;
 }
-/* TODO: ADD UNIT TEST ^^^ */
 
 /* ****************************************************************************
  *  Send DNS records as answers to a peer via unicast
@@ -2610,7 +2610,6 @@ pico_mdns_unicast_reply( pico_dns_record_vector *unicast_vector,
 
     return 0;
 }
-/* TODO: ADD UNIT TEST ^^^ */
 
 /* ****************************************************************************
  *  Send DNS records as answers to peers via multicast
@@ -2640,15 +2639,20 @@ pico_mdns_multicast_reply( pico_dns_record_vector *multicast_vector )
 
     return 0;
 }
-/* TODO: ADD UNIT TEST ^^^ */
 
+/* ****************************************************************************
+ *  Parses DNS records from a plain chunk of data and looks for them in the
+ *  vector. If they're found, they will be removed from the vector.
+ * ****************************************************************************/
 static int
 pico_mdns_apply_known_answer_suppression( pico_mdns_record_vector *vector,
+                                          pico_dns_packet *packet,
                                           uint16_t ancount,
                                           uint8_t **data )
 {
-    struct pico_dns_record answer = {0};
+    struct pico_dns_record answer = {0}, *copy = NULL;
     struct pico_mdns_record *record = NULL;
+    struct pico_mdns_record ka = {0};
     uint16_t i = 0, j = 0;
 
     /* Check params */
@@ -2669,10 +2673,15 @@ pico_mdns_apply_known_answer_suppression( pico_mdns_record_vector *vector,
         answer.rdata = (uint8_t *) answer.rsuffix +
         sizeof(struct pico_dns_record_suffix);
 
+        copy = pico_dns_record_copy(&answer);
+        PICO_FREE(copy->rname);
+        copy->rname = pico_dns_decompress_name(answer.rname, packet);
+        ka.record = &answer;
+
         /* If the answer is in the record vector */
         for (j = 0; j < vector->count; j++) {
             record = pico_mdns_record_vector_get(vector, j);
-            if (pico_mdns_cmp(record->record, &answer) == 0) {
+            if (pico_mdns_cmp(record, &ka) == 0) {
                 if (pico_mdns_record_vector_delete(vector, i) < 0) {
                     mdns_dbg("Could not delete record from vector!\n");
                     return -1;
@@ -2680,13 +2689,15 @@ pico_mdns_apply_known_answer_suppression( pico_mdns_record_vector *vector,
             }
         }
 
+        pico_dns_record_delete(&copy);
+        ka.record = NULL;
+
         /* Move to next record */
         *data = (uint8_t *) answer.rdata + short_be(answer.rsuffix->rdlength);
     }
 
     return 0;
 }
-/* TODO: ADD UNIT TEST ^^^ */
 
 /* ****************************************************************************
  *  Handle a single incoming query packet without Known Answer Suppression
@@ -2714,6 +2725,7 @@ pico_mdns_handle_query_packet( pico_dns_packet *packet, struct pico_ip4 peer )
     /* Apply Known Answer Suppression */
     ancount = short_be(packet->ancount);
     if (pico_mdns_apply_known_answer_suppression(&anvector,
+                                                 packet,
                                                  ancount,
                                                  &data) < 0){
         mdns_dbg("Could not apply known answer suppression!\n");
@@ -3266,7 +3278,6 @@ pico_mdns_add_probe_question( pico_dns_question_vector *vector,
 
     return 0;
 }
-/* TODO: ADD UNIT TEST ^^^ */
 
 /* ****************************************************************************
  *  Try to find any of my records that need to be probed, and probe them

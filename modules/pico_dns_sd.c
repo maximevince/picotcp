@@ -21,7 +21,7 @@ key_value_pair_t *
 pico_dns_sd_kv_vector_get( kv_vector *vector, uint16_t index );
 int
 pico_dns_sd_kv_vector_erase( kv_vector *vector );
-/* -------------------*/
+/* ------------------- */
 
 typedef PACKED_STRUCT_DEF pico_dns_srv_record_prefix
 {

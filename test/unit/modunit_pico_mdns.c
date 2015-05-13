@@ -162,6 +162,51 @@ START_TEST(tc_mdns_cmp)
     printf("*********************** ending %s * \n", __func__);
 }
 END_TEST
+START_TEST(tc_mdns_cmp_name_type)
+{
+    struct pico_mdns_record a = {0};
+    struct pico_mdns_record b = {0};
+    const char *url1 = "foo.local";
+    const char *url3 = "a.local";
+    struct pico_ip4 rdata = {0};
+    uint16_t len = 0;
+    int ret = 0;
+
+    printf("*********************** starting %s * \n", __func__);
+
+    /* Create different test records */
+    a.record = pico_dns_record_create(url1, &rdata, 4, &len, PICO_DNS_TYPE_PTR,
+                                      PICO_DNS_CLASS_IN, 0);
+    fail_if(!a.record, "Record A could not be created!\n");
+    b.record = pico_dns_record_create(url1, &rdata, 4, &len, PICO_DNS_TYPE_A,
+                                      PICO_DNS_CLASS_IN, 0);
+    fail_if(!b.record, "Record B could not be created!\n");
+
+    /* Try to compare records with equal rname but different type */
+    ret = pico_mdns_cmp_name_type((void *) &a, (void *) &b);
+    fail_unless(1 == ret, "mdns_cmp_name_type failed with different types!\n");
+    pico_dns_record_delete(&(a.record));
+    pico_dns_record_delete(&(b.record));
+
+    /* Create different test records */
+    a.record = pico_dns_record_create(url3, url1, strlen(url1), &len,
+                                      PICO_DNS_TYPE_A,
+                                      PICO_DNS_CLASS_IN, 0);
+    fail_if(!a.record, "Record A could not be created!\n");
+    b.record = pico_dns_record_create(url3, url1, strlen(url1), &len,
+                                      PICO_DNS_TYPE_A,
+                                      PICO_DNS_CLASS_IN, 0);
+    fail_if(!b.record, "Record B could not be created!\n");
+
+    /* Try to compare records with different rname but equal type */
+    ret = pico_mdns_cmp_name_type((void *) &a, (void *) &b);
+    fail_unless(0 == ret, "mdns_cmp_name_type failed!\n");
+    pico_dns_record_delete(&(a.record));
+    pico_dns_record_delete(&(b.record));
+
+    printf("*********************** ending %s * \n", __func__);
+}
+END_TEST
 START_TEST(tc_mdns_cookie_cmp)
 {
     struct pico_mdns_cookie a;
@@ -626,6 +671,54 @@ START_TEST(tc_mdns_cookie_apply_spt)
     printf("*********************** ending %s * \n", __func__);
 }
 END_TEST
+START_TEST(tc_mdns_is_suffix_present)
+{
+    char name1[13] = {5,'v','l','e','e','s',5,'l','o','c','a','l',0};
+    char name2[17] = {9,'v','l','e','e','s',' ','(','2',')',5,'l','o','c','a','l','\0'};
+    char name6[17] = {12,'v','l','e','e','s',' ','(','a',')','(','2',')',5,'l','o','c','a','l','\0'};
+    char name7[18] = {10,'v','l','e','e','s',' ','(','9','a',')',5,'l','o','c','a','l','\0'};
+    char *o_index = NULL;
+    char *c_index = NULL;
+    char suffix[5] = {0};
+    char new_suffix[5] = {0};
+    uint8_t present = 0;
+
+    printf("*********************** starting %s * \n", __func__);
+    present = pico_mdns_is_suffix_present(name1, &o_index, &c_index, &suffix);
+    fail_unless(0 == present,
+                "There is no suffix present!\n");
+    fail_unless(NULL == o_index && NULL == c_index,
+                "There should be no indexes!\n");
+    fail_unless(strcmp(suffix, "") == 0, "The should be no suffix!\n");
+
+    present = pico_mdns_is_suffix_present(name2, &o_index, &c_index, &suffix);
+    fail_unless(1 == present,
+                "is_suffix_present failed with suffix!\n");
+    fail_unless((name2 + 7) == o_index && (name2 + 9) == c_index,
+                "is_suffix_pressent failed!\n");
+    fail_unless(strcmp(suffix, "2") == 0, "Suffix should be 2!\n");
+
+    o_index = NULL;
+    c_index = NULL;
+    suffix[0] = '\0';
+
+    present = pico_mdns_is_suffix_present(name7, &o_index, &c_index, &suffix);
+    fail_unless(0 == present,
+                "There is no suffix present!\n");
+    fail_unless(NULL == o_index && NULL == c_index,
+                "There should be no indexes!\n");
+    fail_unless(strcmp(suffix, "") == 0, "The should be no suffix!\n");
+
+    present = pico_mdns_is_suffix_present(name6, &o_index, &c_index, &suffix);
+    fail_unless(1 == present,
+                "is_suffix_present failed with suffix!\n");
+    fail_unless((name6 + 10) == o_index && (name6 + 12) == c_index,
+                "is_suffix_present failed!\n");
+    fail_unless(strcmp(suffix, "2") == 0, "Suffix should be 2!\n");
+
+    printf("*********************** ending %s * \n", __func__);
+}
+END_TEST
 START_TEST(tc_mdns_resolve_name_conflict)
 {
     char name1[13] = {5,'v','l','e','e','s',5,'l','o','c','a','l',0};
@@ -674,6 +767,32 @@ START_TEST(tc_mdns_resolve_name_conflict)
                 "mdns_conflict_resolve_name failed 'vlees (9a).local' to %s!\n",
                 ret);
     PICO_FREE(ret);
+
+    printf("*********************** ending %s * \n", __func__);
+}
+END_TEST
+START_TEST(tc_mdns_generate_new_records)
+{
+    pico_mdns_record_vector conlfict_vector = {0};
+    pico_mdns_record_vector new_vector = {0};
+    struct pico_mdns_record *record = NULL;
+    const char *url = "foo.local";
+    struct pico_ip4 rdata = {long_be(0x00FFFFFF)};
+    int ret = 0;
+
+    printf("*********************** starting %s * \n", __func__);
+
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
+                                     PICO_MDNS_RECORD_UNIQUE);
+    fail_if(!(record->record), "Record could not be created!\n");
+    pico_mdns_record_vector_add(&conlfict_vector, record);
+
+    ret = pico_mdns_generate_new_records(&conlfict_vector, "\3foo\5local",
+                                         &new_vector, "\7foo (2)\5local");
+    fail_unless(0 == ret, "generate_new_records failed!\n");
+    fail_unless(1 == new_vector.count, "new_vector has count of 0!\n");
+    fail_unless(strcmp(new_vector.records[0]->record->rname, "\7foo (2)\5local") == 0,
+                "New name isn't correctly copied!\n");
 
     printf("*********************** ending %s * \n", __func__);
 }
@@ -1581,6 +1700,51 @@ START_TEST(tc_mdns_my_records_find_url_type)
     printf("*********************** ending %s * \n", __func__);
 }
 END_TEST
+START_TEST(tc_mdns_my_records_add)
+{
+    pico_mdns_record_vector vector = {0};
+    struct pico_mdns_record *record = NULL, *record1 = NULL, *record2 = NULL,
+    *record3 = NULL;
+    struct pico_ip4 rdata = {long_be(0x00FFFFFF)};
+    struct pico_ip4 rdata1 = {long_be(0xFFFFFFFF)};
+    const char *url = "foo.local";
+    const char *url1 = "bar.local";
+
+    printf("*********************** starting %s * \n", __func__);
+    /* Create an A record with URL */
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
+                                     PICO_MDNS_RECORD_UNIQUE);
+    fail_if(!record, "Record could not be created!\n");
+
+    /* Create 2 PTR records to URL */
+    record1 = pico_mdns_record_create(url, url, strlen(url),
+                                      PICO_DNS_TYPE_PTR, 0,
+                                      PICO_MDNS_RECORD_UNIQUE);
+    fail_if(!record1, "Record could not be created!\n");
+
+    /* Simulate that this record is not added again */
+    record2 = pico_mdns_record_create(url, url1, strlen(url1),
+                                      PICO_DNS_TYPE_PTR, 0,
+                                      PICO_MDNS_RECORD_UNIQUE);
+    fail_if(!record2, "Record could not be created!\n");
+
+    /* Create a totally different record */
+    record3 = pico_mdns_record_create(url1, &rdata1, 4, PICO_DNS_TYPE_A, 0,
+                                      PICO_MDNS_RECORD_UNIQUE);
+    fail_if(!record2, "Record could not be created!\n");
+
+    /* Add the records to the tree */
+    pico_mdns_record_vector_add(&vector, record);
+    pico_mdns_record_vector_add(&vector, record1);
+    pico_mdns_record_vector_add(&vector, record2);
+    pico_mdns_record_vector_add(&vector, record3);
+
+    vector = pico_mdns_my_records_add(vector, 0);
+    fail_unless(3 == vector.count, "mdns_my_records_add failed!\n");
+
+    printf("*********************** ending %s * \n", __func__);
+}
+END_TEST
 START_TEST(tc_mdns_my_records_find_probed)
 {
     pico_mdns_record_vector hits = {0};
@@ -1609,6 +1773,60 @@ START_TEST(tc_mdns_my_records_find_to_probe)
     fail_unless(3 == hits.count,
                 "mdns_my_records_find_to_probe failed! %d\n", hits.count);
 
+
+    printf("*********************** ending %s * \n", __func__);
+}
+END_TEST
+START_TEST(tc_mdns_my_records_claimed_id)
+{
+    pico_mdns_record_vector hits = {0};
+    struct pico_mdns_record *record = NULL, *record1 = NULL, *record2 = NULL,
+    *record3 = NULL;
+    struct pico_ip4 rdata = {long_be(0x00FFFFFF)};
+    struct pico_ip4 rdata1 = {long_be(0xFFFFFFFF)};
+    const char *url = "foo.local";
+    const char *url1 = "bar.local";
+
+    printf("*********************** starting %s * \n", __func__);
+    /* Create an A record with URL */
+    record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
+                                     PICO_MDNS_RECORD_UNIQUE);
+    record->claim_id = 1;
+    record->flags |= PICO_MDNS_RECORD_CLAIMED;
+    fail_if(!record, "Record could not be created!\n");
+
+    /* Create 2 PTR records to URL */
+    record1 = pico_mdns_record_create(url, url, strlen(url),
+                                      PICO_DNS_TYPE_PTR, 0,
+                                      PICO_MDNS_RECORD_UNIQUE);
+    record1->claim_id = 1;
+    record1->flags |= PICO_MDNS_RECORD_CLAIMED;
+    fail_if(!record1, "Record could not be created!\n");
+
+    /* Simulate that this record is not added again */
+    record2 = pico_mdns_record_create(url, url1, strlen(url1),
+                                      PICO_DNS_TYPE_PTR, 0,
+                                      PICO_MDNS_RECORD_UNIQUE);
+    fail_if(!record2, "Record could not be created!\n");
+
+    /* Create a totally different record */
+    record3 = pico_mdns_record_create(url1, &rdata1, 4, PICO_DNS_TYPE_A, 0,
+                                      PICO_MDNS_RECORD_UNIQUE);
+    fail_if(!record2, "Record could not be created!\n");
+
+    /* Add the records to the tree */
+    pico_mdns_record_tree_add_record(record, &MyRecords);
+    pico_mdns_record_tree_add_record(record1, &MyRecords);
+    pico_mdns_record_tree_add_record(record2, &MyRecords);
+    pico_mdns_record_tree_add_record(record3, &MyRecords);
+
+    fail_unless(1 == pico_mdns_my_records_claimed_id(1, &hits),
+                "mdns_my_records_claimed_id_failed!\n");
+    fail_unless(2 == hits.count,
+                "Vector count should be 2!\n");
+
+    fail_unless(0 == pico_mdns_my_records_claimed_id(0, &hits),
+                "Claim ID '0' isn't claimed yet..");
 
     printf("*********************** ending %s * \n", __func__);
 }
@@ -1780,12 +1998,12 @@ START_TEST(tc_mdns_cache_add_record)
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
 
-    ret = pico_mdns_cache_add_record(record->record);
+    ret = pico_mdns_cache_add_record(record);
     fail_unless(0 == ret,
                 "mdns_cache_add_record returned error!\n");
     found = pico_mdns_record_tree_find_record(record, &Cache);
     fail_unless((int)found, "mdns_cache_add_record failed!\n");
-    ret = pico_mdns_cache_add_record(record->record);
+    ret = pico_mdns_cache_add_record(record);
     fail_unless(0 == ret,
                 "mdns_cache_add_record returned error!\n");
 
@@ -1806,7 +2024,7 @@ START_TEST(tc_mdns_cache_flush)
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
 
-    ret = pico_mdns_cache_add_record(record->record);
+    ret = pico_mdns_cache_add_record(record);
     fail_unless(0 == ret,
                 "mdns_cache_add_record returned error!\n");
     ret = pico_mdns_flush_cache();
@@ -1814,6 +2032,22 @@ START_TEST(tc_mdns_cache_flush)
                 "mdns_cache_flush returned error!\n");
     found = pico_mdns_record_tree_find_record(record, &Cache);
     fail_unless(!found, "mdns_cache_flush failed!\n");
+
+    printf("*********************** ending %s * \n", __func__);
+}
+END_TEST
+START_TEST(tc_mdns_populate_answer_vector)
+{
+    pico_mdns_record_vector vector = {0};
+
+    printf("*********************** starting %s * \n", __func__);
+    add_records();
+
+    vector = pico_mdns_populate_answer_vector("foo.local",
+                                              PICO_DNS_TYPE_A,
+                                              PICO_DNS_CLASS_IN);
+
+    fail_unless(1 == vector.count, "mdns_populate_answer_vector failed!\n");
 
     printf("*********************** ending %s * \n", __func__);
 }
@@ -1949,10 +2183,86 @@ START_TEST(tc_mdns_handle_data_as_authorities)
 END_TEST
 START_TEST(tc_mdns_handle_data_as_additionals)
 {
-    /* TODO: Write test */
+    printf("*********************** starting %s * \n", __func__);
+    /* Insert code here... */
+    printf("*********************** ending %s * \n", __func__);
+}
+END_TEST
+START_TEST(tc_mdns_sort_unicast_multicast)
+{
+    pico_mdns_record_vector rvector = { 0 };
+    pico_dns_record_vector u_vector = {0}, m_vector = {0};
+    struct pico_mdns_record *a = NULL, *b = NULL;
+    const char *url = "picotcp.com";
+    const char *url2 = "google.com";
+    uint16_t len = 0;
+    uint8_t *ptr = NULL;
+    uint8_t rdata[4] = { 10, 10, 0, 1 };
+    int ret = 0;
 
     printf("*********************** starting %s * \n", __func__);
-    /* Insert code here...*/
+
+    a = pico_mdns_record_create(url, (void *)rdata, 4, PICO_DNS_TYPE_A, 120,
+                                PICO_MDNS_RECORD_UNIQUE);
+    fail_if(!a, "mdns_record_create returned NULL!\n");
+    b = pico_mdns_record_create(url2, (void *)rdata, 4, PICO_DNS_TYPE_A, 120,
+                                (PICO_MDNS_RECORD_SHARED | PICO_MDNS_RECORD_SEND_UNICAST));
+    fail_if(!a, "mdns_record_create returned NULL!\n");
+    ret = pico_dns_record_vector_add(&rvector, a);
+    fail_unless(ret == 0, "mdns_record_vector_add returned error!\n");
+    ret = pico_dns_record_vector_add(&rvector, b);
+    fail_unless(ret == 0, "mdns_record_vector_add returned error!\n");
+
+    ret = pico_mdns_sort_unicast_multicast(&rvector, &u_vector, &m_vector);
+    fail_unless(0 == ret, "mdns_sort_unicast_multicast returned error!\n");
+    fail_unless(1 == u_vector.count, "mdns_sort_unicast_multicast failed!\n");
+    fail_unless(1 == m_vector.count, "mdns_sort_unicast_multicast failed!\n");
+
+    printf("*********************** ending %s * \n", __func__);
+}
+END_TEST
+START_TEST(tc_mdns_apply_known_answer_suppression)
+{
+    pico_dns_packet *packet = NULL;
+    pico_dns_record_vector rvector = { 0 };
+    pico_mdns_record_vector vector = {0};
+    struct pico_mdns_record *a = NULL, *b = NULL;
+    const char *url = "picotcp.com";
+    const char *url2 = "google.com";
+    uint8_t rdata[4] = { 10, 10, 0, 1 };
+    uint8_t *ptr = NULL;;
+    uint16_t len = 0;
+    int ret = 0;
+
+    printf("*********************** starting %s * \n", __func__);
+
+    a = pico_mdns_record_create(url, (void *)rdata, 4, PICO_DNS_TYPE_A, 120,
+                                PICO_MDNS_RECORD_UNIQUE);
+    fail_if(!a, "dns_record_create returned NULL!\n");
+    b = pico_mdns_record_create(url2, (void *)rdata, 4, PICO_DNS_TYPE_A, 120,
+                                PICO_MDNS_RECORD_SHARED);
+    fail_if(!a, "dns_record_create returned NULL!\n");
+    ret = pico_dns_record_vector_add(&rvector, a->record);
+    fail_unless(ret == 0, "dns_record_vector_add returned error!\n");
+    ret = pico_dns_record_vector_add(&rvector, b->record);
+    fail_unless(ret == 0, "dns_record_vector_add returned error!\n");
+    ret = pico_mdns_record_vector_add(&vector, a);
+    fail_unless(ret == 0, "mdns_record_vector_add returned error!\n");
+    ret = pico_mdns_record_vector_add(&vector, b);
+    fail_unless(ret == 0, "mdns_record_vector_add returned error!\n");
+
+    /* Try to create an answer packet */
+    packet = pico_mdns_answer_create(&rvector, NULL, NULL, &len);
+    fail_if (packet == NULL, "mdns_answer_create returned NULL!\n");
+
+    ptr = ((uint8_t *)packet + 12);
+
+    ret = pico_mdns_apply_known_answer_suppression(&vector, packet, 1, &ptr);
+    fail_unless(0 == ret, "mdns_apply_known_answer_suppression returned error!\n");
+
+    fail_unless(1 == vector.count,
+                "mdns_apply_known_answer_suppression failed %d!\n", rvector.count);
+
     printf("*********************** ending %s * \n", __func__);
 }
 END_TEST
@@ -1987,12 +2297,12 @@ START_TEST(tc_mdns_getrecord)
                                      PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record, "Record could not be created!\n");
 
-    ret = pico_mdns_cache_add_record(record->record);
+    ret = pico_mdns_cache_add_record(record);
     fail_unless(0 == ret,
                 "mdns_cache_add_record returned error!\n");
     found = pico_mdns_record_tree_find_record(record, &Cache);
     fail_unless((int)found, "mdns_cache_add_record failed!\n");
-    ret = pico_mdns_cache_add_record(record->record);
+    ret = pico_mdns_cache_add_record(record);
     fail_unless(0 == ret,
                 "mdns_cache_add_record returned error!\n");
 
@@ -2085,6 +2395,29 @@ START_TEST(tc_mdns_send_probe_packet)
     printf("*********************** ending %s * \n", __func__);
 }
 END_TEST
+START_TEST(tc_mdns_add_probe_question)
+{
+    pico_dns_question_vector vector = {0};
+    int ret = 0;
+
+    printf("*********************** starting %s * \n", __func__);
+    ret = pico_mdns_add_probe_question(&vector, "\5vlees\5local");
+    fail_unless(0 == ret, "mdns_add_probe_question returned error!\n");
+    fail_unless(1 == vector.count,
+                "New probe question didn't create!\n");
+    ret = pico_mdns_add_probe_question(&vector, "\5vlees\5local");
+    fail_unless(0 == ret, "mdns_add_probe_question returned error!\n");
+    fail_unless(1 == vector.count,
+                "mdns_add_probe_question failed!\n");
+
+    ret = pico_mdns_add_probe_question(&vector, "\4test\5local");
+    fail_unless(0 == ret, "mdns_add_probe_question returned error!\n");
+    fail_unless(2 == vector.count,
+                "mdns_add_probe_question failed!\n");
+
+    printf("*********************** ending %s * \n", __func__);
+}
+END_TEST
 START_TEST(tc_mdns_probe)
 {
     printf("*********************** starting %s * \n", __func__);
@@ -2170,6 +2503,7 @@ Suite *pico_suite(void)
     /* Comparing functions */
     TCase *TCase_mdns_rdata_cmp = tcase_create("Unit test for mdns_rdata_cmp");
     TCase *TCase_mdns_cmp = tcase_create("Unit test for mdns_cmp");
+    TCase *TCase_mdns_cmp_name_type = tcase_create("Unit test for mdns_cmp_name_type");
     TCase *TCase_mdns_cookie_cmp = tcase_create("Unit test for mdns_cookie_cmp");
 
     /* Cookie functions */
@@ -2180,7 +2514,9 @@ Suite *pico_suite(void)
     TCase *TCase_mdns_cookie_tree_add_cookie = tcase_create("Unit test for mdns_cookie_tree_add_cookie");
     TCase *TCase_mdns_cookie_find_record = tcase_create("Unit test for mdns_cookie_find_record");
     TCase *TCase_mdns_cookie_apply_spt = tcase_create("Unit test for mdns_cookie_apply_spt");
+    TCase *TCase_mdns_is_suffix_present = tcase_create("Unit test for mdns_is_suffix_present");
     TCase *TCase_mdns_resolve_name_conflict = tcase_create("Unit test for mdns_resolve_name_conflict");
+    TCase *TCase_mdns_generate_new_records = tcase_create("Unit test for mdns_generate_new_records");
     TCase *TCase_mdns_cookie_resolve_conflict = tcase_create("Unit test for mdns_cookie_resolve_conflict");
 
     /* Question functions */
@@ -2216,8 +2552,10 @@ Suite *pico_suite(void)
 
     /* My record functions */
     TCase *TCase_mdns_my_records_find_url_type = tcase_create("Unit test for mdns_my_records_find_url_type");
+    TCase *TCase_mdns_my_records_add = tcase_create("Unit test for mdns_my_records_add");
     TCase *TCase_mdns_my_records_find_probed = tcase_create("Unit test for mdns_my_records_find_probed");
     TCase *TCase_mdns_my_records_find_to_probe = tcase_create("Unit test for mdns_my_records_find_to_probe");
+    TCase *TCase_mdns_my_records_claimed_id = tcase_create("Unit test for mdns_my_records_claimed_id");
     TCase *TCase_mdns_my_records_claimed = tcase_create("Unit test for mdns_my_records_claimed");
 
     /* Query functions */
@@ -2229,12 +2567,17 @@ Suite *pico_suite(void)
     /* Cache functions */
     TCase *TCase_mdns_cache_add_record = tcase_create("Unit test for mdns_cache_add_record");
     TCase *TCase_mdns_cache_flush = tcase_create("Unit test for mdns_cache_flush");
+    TCase *TCase_mdns_populate_answer_vector = tcase_create("Unit test for mdns_populate_answer_vector");
 
     /* Handling receptions */
     TCase *TCase_mdns_handle_data_as_questions = tcase_create("Unit test for mdns_handle_data_as_questions");
     TCase *TCase_mdns_handle_data_as_answers = tcase_create("Unit test for mdns_handle_data_as_answers");
     TCase *TCase_mdns_handle_data_as_authorities = tcase_create("Unit test for mdns_handle_data_as_authorities");
     TCase *TCase_mdns_handle_data_as_additionals = tcase_create("Unit test for mdns_handle_data_as_additionals");
+
+    /* Handling query packets */
+    TCase *TCase_mdns_sort_unicast_multicast = tcase_create("Unit test for mdns_sort_unicast_multicast");
+    TCase *TCase_mdns_apply_known_answer_suppression = tcase_create("Unit test for mdns_apply_known_answer_suppression");
 
     /* Address resolving functions */
     TCase *TCase_mdns_send_query_packet = tcase_create("Unit test for mdns_send_query_packet");
@@ -2244,6 +2587,7 @@ Suite *pico_suite(void)
     TCase *TCase_mdns_send_announcement_packet = tcase_create("Unit test for mdns_send_announcement_packet");
     TCase *TCase_mdns_announce = tcase_create("Unit test for mdns_announce");
     TCase *TCase_mdns_send_probe_packet = tcase_create("Unit test for mdns_send_probe_packet");
+    TCase *TCase_mdns_add_probe_question = tcase_create("Unit test for mdns_add_probe_question");
     TCase *TCase_mdns_probe = tcase_create("Unit test for mdns_probe");
 
     /* Claiming functions */
@@ -2261,6 +2605,8 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_mdns_rdata_cmp);
     tcase_add_test(TCase_mdns_cmp, tc_mdns_cmp);
     suite_add_tcase(s, TCase_mdns_cmp);
+    tcase_add_test(TCase_mdns_cmp_name_type, tc_mdns_cmp_name_type);
+    suite_add_tcase(s, TCase_mdns_cmp_name_type);
     tcase_add_test(TCase_mdns_cookie_cmp, tc_mdns_cookie_cmp);
     suite_add_tcase(s, TCase_mdns_cookie_cmp);
 
@@ -2279,8 +2625,12 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_mdns_cookie_find_record);
     tcase_add_test(TCase_mdns_cookie_apply_spt, tc_mdns_cookie_apply_spt);
     suite_add_tcase(s, TCase_mdns_cookie_apply_spt);
+    tcase_add_test(TCase_mdns_is_suffix_present, tc_mdns_is_suffix_present);
+    suite_add_tcase(s, TCase_mdns_is_suffix_present);
     tcase_add_test(TCase_mdns_resolve_name_conflict, tc_mdns_resolve_name_conflict);
     suite_add_tcase(s, TCase_mdns_resolve_name_conflict);
+    tcase_add_test(TCase_mdns_generate_new_records, tc_mdns_generate_new_records);
+    suite_add_tcase(s, TCase_mdns_generate_new_records);
     tcase_add_test(TCase_mdns_cookie_resolve_conflict, tc_mdns_cookie_resolve_conflict);
     suite_add_tcase(s, TCase_mdns_cookie_resolve_conflict);
 
@@ -2340,10 +2690,14 @@ Suite *pico_suite(void)
     /* My records functions */
     tcase_add_test(TCase_mdns_my_records_find_url_type, tc_mdns_my_records_find_url_type);
     suite_add_tcase(s, TCase_mdns_my_records_find_url_type);
+    tcase_add_test(TCase_mdns_my_records_add, tc_mdns_my_records_add);
+    suite_add_tcase(s, TCase_mdns_my_records_add);
     tcase_add_test(TCase_mdns_my_records_find_probed, tc_mdns_my_records_find_probed);
     suite_add_tcase(s, TCase_mdns_my_records_find_probed);
     tcase_add_test(TCase_mdns_my_records_find_to_probe, tc_mdns_my_records_find_to_probe);
     suite_add_tcase(s, TCase_mdns_my_records_find_to_probe);
+    tcase_add_test(TCase_mdns_my_records_claimed_id, tc_mdns_my_records_claimed_id);
+    suite_add_tcase(s, TCase_mdns_my_records_claimed_id);
     tcase_add_test(TCase_mdns_my_records_claimed, tc_mdns_my_records_claimed);
     suite_add_tcase(s, TCase_mdns_my_records_claimed);
 
@@ -2360,6 +2714,8 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_mdns_cache_add_record);
     tcase_add_test(TCase_mdns_cache_flush, tc_mdns_cache_flush);
     suite_add_tcase(s, TCase_mdns_cache_flush);
+    tcase_add_test(TCase_mdns_populate_answer_vector, tc_mdns_populate_answer_vector);
+    suite_add_tcase(s, TCase_mdns_populate_answer_vector);
 
     /* Handling receptions */
     tcase_add_test(TCase_mdns_handle_data_as_questions, tc_mdns_handle_data_as_questions);
@@ -2370,6 +2726,12 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_mdns_handle_data_as_authorities);
     tcase_add_test(TCase_mdns_handle_data_as_additionals, tc_mdns_handle_data_as_additionals);
     suite_add_tcase(s, TCase_mdns_handle_data_as_additionals);
+
+    /* Handling query packets */
+    tcase_add_test(TCase_mdns_sort_unicast_multicast, tc_mdns_sort_unicast_multicast);
+    suite_add_tcase(s, TCase_mdns_sort_unicast_multicast);
+    tcase_add_test(TCase_mdns_apply_known_answer_suppression, tc_mdns_apply_known_answer_suppression);
+    suite_add_tcase(s, TCase_mdns_apply_known_answer_suppression);
 
     /* Address resolving functions */
     tcase_add_test(TCase_mdns_send_query_packet, tc_mdns_send_query_packet);
@@ -2384,6 +2746,8 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_mdns_announce);
     tcase_add_test(TCase_mdns_send_probe_packet, tc_mdns_send_probe_packet);
     suite_add_tcase(s, TCase_mdns_send_probe_packet);
+    tcase_add_test(TCase_mdns_add_probe_question, tc_mdns_add_probe_question);
+    suite_add_tcase(s, TCase_mdns_add_probe_question);
     tcase_add_test(TCase_mdns_probe, tc_mdns_probe);
     suite_add_tcase(s, TCase_mdns_probe);
 

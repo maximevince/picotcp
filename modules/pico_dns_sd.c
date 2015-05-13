@@ -78,6 +78,7 @@ pico_dns_sd_srv_record_create( const char *url,
                                uint32_t ttl,
                                uint8_t flags )
 {
+    struct pico_mdns_record *record = NULL;
     pico_dns_srv_record *srv_data = NULL;
     char *target_rname = NULL;
     uint16_t srv_length = 0;
@@ -105,12 +106,20 @@ pico_dns_sd_srv_record_create( const char *url,
 
     /* Copy in the URL and convert to DNS notation */
     target_rname = pico_dns_url_to_qname(target_url);
+    if (!target_rname) {
+        dns_sd_dbg("Could not convert URL to qname!\n");
+        return NULL;
+    }
     strcpy((char *)srv_data + 6u, target_rname);
     PICO_FREE(target_rname);
 
     /* Create and return new mDNS record */
-    return pico_mdns_record_create(url, srv_data, srv_length, PICO_DNS_TYPE_SRV,
-                                   ttl, flags);
+    record = pico_mdns_record_create(url, srv_data, srv_length,
+                                     PICO_DNS_TYPE_SRV,
+                                     ttl, flags);
+    PICO_FREE(srv_data);
+
+    return record;
 }
 
 /* ****************************************************************************
@@ -122,6 +131,7 @@ pico_dns_sd_txt_record_create( const char *url,
                                uint32_t ttl,
                                uint8_t flags )
 {
+    struct pico_mdns_record *record = NULL;
     key_value_pair_t *iterator = NULL;
     char *txt = NULL;
     uint16_t i = 0, txt_i = 0, pair_len = 0, key_len = 0, value_len = 0;
@@ -166,8 +176,11 @@ pico_dns_sd_txt_record_create( const char *url,
         }
     }
 
-    return pico_mdns_record_create(url, txt, len, PICO_DNS_TYPE_TXT, ttl,
-                                   flags);
+    record = pico_mdns_record_create(url, txt, len, PICO_DNS_TYPE_TXT,
+                                     ttl, flags);
+    PICO_FREE(txt);
+
+    return record;
 }
 
 /* ****************************************************************************
@@ -204,7 +217,7 @@ pico_dns_sd_kv_create( const char *key, const char *value )
         kv_pair->value = NULL;
     else {
         kv_pair->value = (char *)PICO_ZALLOC((size_t)(strlen(value) + 1));
-        if (!(kv_pair->key)) {
+        if (!(kv_pair->value)) {
             pico_err = PICO_ERR_ENOMEM;
             PICO_FREE(kv_pair->key);
             PICO_FREE(kv_pair);
@@ -366,6 +379,7 @@ pico_dns_sd_claimed_callback( pico_mdns_record_vector *records,
                               void *arg )
 {
     pico_mdns_record_vector rvector = {0};
+    struct pico_mdns_record *record = NULL;
     struct register_argument *arguments = NULL;
     struct pico_mdns_record *ptr_record = NULL;
     char *rname = NULL;
@@ -381,7 +395,11 @@ pico_dns_sd_claimed_callback( pico_mdns_record_vector *records,
     ptr_record = arguments->ptr_record;
 
     /* Get the rname of the claimed records */
-    rname = pico_mdns_record_vector_get(records, 0)->record->rname;
+    if (!(record = pico_mdns_record_vector_get(records, 0))) {
+        dns_sd_dbg("Error occured with claiming!\n");
+        return;
+    }
+    rname = record->record->rname;
     if (strcmp(rname, (char*)(ptr_record->record->rdata)) != 0) {
         /* Update rdata */
         PICO_FREE(ptr_record->record->rdata);
@@ -482,6 +500,8 @@ pico_dns_sd_register_service( const char *name,
                                          (void *)url, (uint16_t)strlen(url),
                                          PICO_DNS_TYPE_PTR,
                                          ttl, PICO_MDNS_RECORD_SHARED);
+    PICO_FREE(url);
+
 
     pico_mdns_record_vector_add(&rvector, srv_record);
     pico_mdns_record_vector_add(&rvector, txt_record);

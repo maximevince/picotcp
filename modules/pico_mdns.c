@@ -1262,12 +1262,10 @@ pico_mdns_record_vector_get( pico_mdns_record_vector *vector,
     return NULL;
 }
 
-/* ****************************************************************************
- *  Removes an mDNS record from an mDNS record vector at a certain index
- * ****************************************************************************/
 static int
-pico_mdns_record_vector_remove( pico_mdns_record_vector *vector,
-                                uint16_t index )
+pico_mdns_record_vector_del_generic( pico_mdns_record_vector *vector,
+                                     uint16_t index,
+                                     uint8_t delete )
 {
     struct pico_mdns_record **new_records = NULL;
     uint16_t i = 0;
@@ -1276,59 +1274,20 @@ pico_mdns_record_vector_remove( pico_mdns_record_vector *vector,
     if (!vector) return -1;
     if (index >= vector->count) return 0;
 
-    if (vector->count - 1u)
-        new_records = PICO_ZALLOC(sizeof(struct pico_mdns_record *) *
-                                  (vector->count - 1u));
-    if (vector->count != 0 && !new_records) {
-        pico_err = PICO_ERR_ENOMEM;
-        return -1;
+    if (delete) {
+        /* Delete record */
+        if (pico_mdns_record_delete(&(vector->records[index])) < 0)
+            return -1;
     }
 
-    /* Move up subsequent records */
-    for (i = index; i < (uint16_t)(vector->count - 1); i++) {
-        vector->records[i] = vector->records[i + 1];
-        vector->records[i + 1] = NULL;
-    }
     vector->count--;
-
-    /* Copy records */
-    for (i = 0; i < vector->count; i++)
-        new_records[i] = vector->records[i];
-
-    /* Free the previous array */
-    PICO_FREE(vector->records);
-
-    /* Set the records array to the new one */
-    vector->records = new_records;
-    return 0;
-
-}
-
-/* ****************************************************************************
- *  Deletes an mDNS record an mDNS record vector at a certain index
- * ****************************************************************************/
-static int
-pico_mdns_record_vector_delete( pico_mdns_record_vector *vector,
-                                uint16_t index )
-{
-    struct pico_mdns_record **new_records = NULL;
-    uint16_t i = 0;
-
-    /* Check params */
-    if (!vector) return -1;
-    if (index >= vector->count) return 0;
-
-    /* Delete record */
-    if (pico_mdns_record_delete(&(vector->records[index])) < 0)
-        return -1;
-
-    vector->count--;
-    if (vector->count)
+    if (vector->count) {
         new_records = PICO_ZALLOC(sizeof(struct pico_mdns_record *) *
                                   vector->count);
-    if (vector->count != 0 && !new_records) {
-        pico_err = PICO_ERR_ENOMEM;
-        return -1;
+        if (!new_records) {
+            pico_err = PICO_ERR_ENOMEM;
+            return -1;
+        }
     }
 
     /* Move up subsequent records */
@@ -1347,6 +1306,26 @@ pico_mdns_record_vector_delete( pico_mdns_record_vector *vector,
     /* Set the records array to the new one */
     vector->records = new_records;
     return 0;
+}
+
+/* ****************************************************************************
+ *  Removes an mDNS record from an mDNS record vector at a certain index
+ * ****************************************************************************/
+static int
+pico_mdns_record_vector_remove( pico_mdns_record_vector *vector,
+                                uint16_t index )
+{
+    return pico_mdns_record_vector_del_generic(vector, index, 0);
+}
+
+/* ****************************************************************************
+ *  Deletes an mDNS record an mDNS record vector at a certain index
+ * ****************************************************************************/
+static int
+pico_mdns_record_vector_delete( pico_mdns_record_vector *vector,
+                                uint16_t index )
+{
+    return pico_mdns_record_vector_del_generic(vector, index, 1);
 }
 
 /* ****************************************************************************

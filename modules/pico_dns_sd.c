@@ -1,9 +1,9 @@
-/* ****************************************************************************
- *  PicoTCP. Copyright (c) 2014 TASS Belgium NV. Some rights reserved.
- *  See LICENSE and COPYING for usage.
- *  .
- *  Author: Jelle De Vleeschouwer
- * ****************************************************************************/
+/*********************************************************************
+ PicoTCP. Copyright (c) 2014-2015 Altran Intelligent Systems. Some rights reserved.
+ See LICENSE and COPYING for usage.
+ .
+ Author: Jelle De Vleeschouwer
+ *********************************************************************/
 
 #include "pico_dns_sd.h"
 

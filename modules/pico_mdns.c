@@ -1,11 +1,9 @@
-/* ****************************************************************************
- *  PicoTCP. Copyright (c) 2014 TASS Belgium NV. Some rights reserved.
- *  See LICENSE and COPYING for usage.
- *  .
- *  Author: Toon Stegen, Jelle De Vleeschouwer
- * ****************************************************************************/
-
-/* picoTCP */
+/*********************************************************************
+   PicoTCP. Copyright (c) 2014-2015 Altran Intelligent Systems. Some rights reserved.
+   See LICENSE and COPYING for usage.
+   .
+   Author: Toon Stegen, Jelle De Vleeschouwer
+ *********************************************************************/
 #include "pico_config.h"
 #include "pico_stack.h"
 #include "pico_addressing.h"

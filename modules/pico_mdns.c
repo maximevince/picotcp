@@ -121,14 +121,8 @@ static struct pico_mdns_record *
 pico_mdns_record_copy( struct pico_mdns_record *record );
 
 static int
-pico_mdns_record_delete( struct pico_mdns_record **record );
-
-static int
 pico_mdns_record_vector_delete( pico_mdns_record_vector *vector,
                                 uint16_t index );
-
-static int
-pico_mdns_record_vector_destroy( pico_mdns_record_vector *vector );
 
 static int
 pico_mdns_record_tree_del_url( const char *url, struct pico_tree *tree );
@@ -181,18 +175,16 @@ pico_mdns_rdata_cmp( uint8_t *a, uint8_t *b,
 
     for (i = 0; i < longest_rdlength; i++) {
         if (i < rdlength_a && i < rdlength_b) {
-            if ((uint8_t)a[i] > (uint8_t)b[i]) {
-                return 1;
-            } else if ((uint8_t)a[i] < (uint8_t)b[i])
-                return -1;
-        } else {
-            if (rdlength_a == rdlength_b)
-                return 0;
-            else if (rdlength_a == longest_rdlength)
-                return 1;
+            if ((uint8_t)a[i] == (uint8_t)b[i])
+                continue;
             else
-                return -1;
-        }
+                return (((uint8_t)a[i] < (uint8_t)b[i]) ? -1 : 1);
+        } else if (rdlength_a == rdlength_b)
+            return 0;
+        else if (rdlength_a == longest_rdlength)
+            return 1;
+        else
+            return -1;
     }
 
     return 0;
@@ -211,11 +203,15 @@ pico_mdns_cmp_name_type( struct pico_mdns_record *a,
     if (!a || !b)
         return -2;
 
+    if (!(a->record) || !(b->record))
+        return -2;
     if (a->record && !(b->record))
         return 1;
     if (!(a->record) && b->record)
         return -1;
 
+    if (!(a->record->rsuffix) || !(b->record->rsuffix))
+        return -2;
     if (a->record->rsuffix && !(b->record->rsuffix))
         return 1;
     if (!(a->record->rsuffix) && b->record->rsuffix)
@@ -663,7 +659,7 @@ pico_mdns_is_suffix_present( char rname[],
     if (!suffix_is_present) {
         *opening_bracket_index = NULL;
         *closing_bracket_index = NULL;
-        memcpy(*suffix, temp, 5);
+        memcpy(suffix[0], temp, 5);
     }
 
     return suffix_is_present;
@@ -760,11 +756,13 @@ pico_mdns_generate_new_records( pico_mdns_record_vector *conflict_vector,
             /* Add the record to a vector */
             if (pico_mdns_record_vector_add(new_vector, new_record) < 0) {
                 mdns_dbg("Could not add record to vector!\n");
+                pico_mdns_record_delete(&new_record);
                 return -1;
             }
             /* Remove current conflicting record */
             if (pico_mdns_record_vector_delete(conflict_vector, i) < 0) {
                 mdns_dbg("Could not delete conflicting record from vector!\n");
+                pico_mdns_record_delete(&new_record);
                 return -1;
             }
             /* Because the record is deleted from the vector, when the next
@@ -952,6 +950,7 @@ pico_mdns_record_resolve_conflict( struct pico_mdns_record *record,
     new_record = pico_mdns_record_copy_with_new_name(record, new_name);
     if (!new_record) {
         mdns_dbg("Could not create new non-conflicting record!\n");
+        PICO_FREE(new_name);
         return -1;
     }
     new_record->flags = new_record->flags & 0x1F;
@@ -1060,11 +1059,15 @@ pico_mdns_record_copy_with_new_name( struct pico_mdns_record *record,
     }
 
     /* Free the copied rname */
-    if (copy->record)
-        PICO_FREE(copy->record->rname);
+    PICO_FREE(copy->record->rname);
 
     /* Provide a new string */
     copy->record->rname = PICO_ZALLOC(strlen(new_rname) + 1);
+    if (!(copy->record->rname)) {
+        pico_err = PICO_ERR_ENOMEM;
+        pico_mdns_record_delete(&copy);
+        return NULL;
+    }
     strcpy(copy->record->rname, new_rname);
     copy->record->rname_length = (uint16_t)(strlen(new_rname) + 1);
 
@@ -1157,9 +1160,7 @@ pico_mdns_record_create( const char *url,
 }
 
 /* ****************************************************************************
- *  Deletes a mDNS resource records. Does not take linked lists into account,
- *  So a gap will most likely arise, if you use this function for a res
- *  record which is in the middle of a list.
+ *  Deletes a mDNS resource record.
  * ****************************************************************************/
 int
 pico_mdns_record_delete( struct pico_mdns_record **record )
@@ -1331,7 +1332,7 @@ pico_mdns_record_vector_delete( pico_mdns_record_vector *vector,
 /* ****************************************************************************
  *  Deletes every mDNS record from an mDNS record vector
  * ****************************************************************************/
-static int
+int
 pico_mdns_record_vector_destroy( pico_mdns_record_vector *vector )
 {
     uint16_t i = 0;
@@ -1759,6 +1760,7 @@ pico_mdns_my_records_find_probed( void )
             if (copy) {
                 if (pico_mdns_record_vector_add(&vector, copy) < 0) {
                     mdns_dbg("Could not add copy of mDNS record to vector!\n");
+                    pico_mdns_record_delete(&copy);
                     return vector;
                 }
             }
@@ -1792,6 +1794,7 @@ pico_mdns_my_records_find_to_probe( void )
             if (copy) {
                 if (pico_mdns_record_vector_add(&vector, copy) < 0) {
                     mdns_dbg("Could not add copy of mDNS record to vector!\n");
+                    pico_mdns_record_delete(&copy);
                     break;
                 }
             }
@@ -2527,6 +2530,10 @@ pico_mdns_handle_data_as_answers_generic( uint8_t **ptr,
         PICO_FREE(copy->rname);
         copy->rname = pico_dns_decompress_name(answer.rname, packet);
         mdns_answer = pico_mdns_record_create_from_dns(copy);
+        if (!mdns_answer) {
+            pico_dns_record_delete(&copy);
+            return -1;
+        }
 
         /* Handle a single aswer */
         switch (type) {
@@ -2714,6 +2721,8 @@ pico_mdns_apply_known_answer_suppression( pico_mdns_record_vector *vector,
         sizeof(struct pico_dns_record_suffix);
 
         copy = pico_dns_record_copy(&answer);
+        if (!copy)
+            return -1;
         PICO_FREE(copy->rname);
         copy->rname = pico_dns_decompress_name(answer.rname, packet);
         ka.record = &answer;
@@ -3496,11 +3505,14 @@ pico_mdns_set_hostname( const char *url, void *arg )
     /* Add the record a vector */
     if (pico_mdns_record_vector_add(&vector, record) < 0) {
         mdns_dbg("Could not add hostname record to vector!\n");
+        pico_mdns_record_delete(&record);
+        return -1;
     }
 
     /* Try to claim the record */
     if (pico_mdns_claim(vector, init_callback, arg) < 0) {
         mdns_dbg("Could not claim record for hostname %s!\n", url);
+        pico_mdns_record_vector_destroy(&vector);
         return -1;
     }
 

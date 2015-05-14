@@ -53,6 +53,12 @@ pico_mdns_record_create( const char *url,
                          uint8_t flags );
 
 /* ****************************************************************************
+ *  Deletes a mDNS resource record.
+ * ****************************************************************************/
+int
+pico_mdns_record_delete( struct pico_mdns_record **record );
+
+/* ****************************************************************************
  *  Initialise an mDNS record vector
  * ****************************************************************************/
 int
@@ -77,6 +83,12 @@ pico_mdns_record_vector_add( pico_mdns_record_vector *vector,
 struct pico_mdns_record *
 pico_mdns_record_vector_get( pico_mdns_record_vector *vector,
                              uint16_t index );
+
+/* ****************************************************************************
+ *  Deletes every mDNS record from an mDNS record vector
+ * ****************************************************************************/
+int
+pico_mdns_record_vector_destroy( pico_mdns_record_vector *vector );
 
 /* ****************************************************************************
  *  API functions

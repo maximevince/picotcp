@@ -272,6 +272,46 @@ pico_dns_packet_compress_name( uint8_t *name,
 }
 
 /* ****************************************************************************
+ *  Utility function compress a record section
+ * ****************************************************************************/
+static int
+pico_dns_compress_record_section( int expression, uint16_t count,
+                                  uint8_t *buf, uint8_t **iterator,
+                                  uint16_t *len )
+{
+    struct pico_dns_record_suffix *rsuffix = NULL;
+    uint8_t *_iterator = *iterator;
+    uint16_t i = 0;
+
+    /* Check params */
+    if (!buf || !iterator || !len) {
+        pico_err = PICO_ERR_EINVAL;
+        return -1;
+    }
+    if (!(*iterator)) {
+        pico_err = PICO_ERR_EINVAL;
+        return -1;
+    }
+
+    for (i = 0; i < count; i++) {
+        if (expression || i)
+            pico_dns_packet_compress_name(_iterator, buf, len);
+
+        /* To get rdlength */
+        rsuffix = (struct pico_dns_record_suffix *)
+        (_iterator + pico_dns_namelen_comp((char *)_iterator) + 1u);
+
+        /* Move to next res record */
+        _iterator = ((uint8_t *)rsuffix +
+                     sizeof(struct pico_dns_record_suffix) +
+                     short_be(rsuffix->rdlength));
+    }
+
+    *iterator = _iterator;
+    return 0;
+}
+
+/* ****************************************************************************
  *  Applies DNS name compression to an entire DNS packet
  * ****************************************************************************/
 static int
@@ -279,7 +319,6 @@ pico_dns_packet_compress( pico_dns_packet *packet, uint16_t *len )
 {
     uint8_t *packet_buf = NULL;
     uint8_t *iterator = NULL;
-    struct pico_dns_record_suffix *rsuffix = NULL;
     uint16_t qdcount = 0, ancount = 0, nscount = 0, arcount = 0, i = 0;
     
     /* Check params */
@@ -297,12 +336,11 @@ pico_dns_packet_compress( pico_dns_packet *packet, uint16_t *len )
     arcount = short_be(packet->arcount);
     
     /* Move past the DNS packet header */
-    iterator = (uint8_t *)((uint8_t *)packet + 12u);
+    iterator = (uint8_t *)((uint8_t *) packet + 12u);
 
     /* Start with the questions */
     for (i = 0; i < qdcount; i++) {
-        /* First question can't be compressed */
-        if (i > 0)
+        if (i) /* First question can't be compressed */
             pico_dns_packet_compress_name(iterator, packet_buf, len);
 
         /* Move to next question */
@@ -312,64 +350,19 @@ pico_dns_packet_compress( pico_dns_packet *packet, uint16_t *len )
     }
 
     /* Then onto the answers */
-    for (i = 0; i < ancount; i++) {
-        if (qdcount > 0)
-            /* When question are present, compress like normal */
-            pico_dns_packet_compress_name(iterator, packet_buf, len);
-        else {
-            if (i > 0)
-                /* Otherwise don't compress first iterator */
-                pico_dns_packet_compress_name(iterator, packet_buf, len);
-        }
-
-        /* To get rdlength */
-        rsuffix = (struct pico_dns_record_suffix *)
-                  (iterator + pico_dns_namelen_comp((char *)iterator) + 1u);
-        
-        /* Move to next res record */
-        iterator = (uint8_t *)rsuffix + sizeof(struct pico_dns_record_suffix) +
-                    short_be(rsuffix->rdlength);
-    }
+    pico_dns_compress_record_section(qdcount, ancount,
+                                     packet_buf, &iterator,
+                                     len);
 
     /* Then onto the authorities */
-    for (i = 0; i < nscount; i++) {
-        if (qdcount > 0 || ancount > 0)
-            pico_dns_packet_compress_name(iterator, packet_buf, len);
-        else {
-            if (i > 0)
-                pico_dns_packet_compress_name(iterator, packet_buf, len);
-        }
-
-        /* To get rdlength */
-        rsuffix = (struct pico_dns_record_suffix *)
-                  (iterator + pico_dns_namelen_comp((char *)iterator) + 1u);
-
-        /* Move to next res record */
-        iterator = (uint8_t *)rsuffix + sizeof(struct pico_dns_record_suffix) +
-                    short_be(rsuffix->rdlength);
-    }
+    pico_dns_compress_record_section((qdcount || ancount), nscount,
+                                     packet_buf, &iterator,
+                                     len);
 
     /* Then onto the additionals */
-    for (i = 0; i < arcount; i++) {
-        if (qdcount > 0 || ancount > 0 || nscount > 0)
-            pico_dns_packet_compress_name(iterator, packet_buf, len);
-        else {
-            if (i > 0)
-                pico_dns_packet_compress_name(iterator, packet_buf, len);
-        }
-        
-        /* Try to compress name */
-        pico_dns_packet_compress_name(iterator, packet_buf, len);
-        
-        /* To get rdlength */
-        rsuffix = (struct pico_dns_record_suffix *)
-                  (iterator + pico_dns_namelen_comp((char *)iterator) + 1u);
-
-        /* Move to next res record */
-        iterator = (uint8_t *)rsuffix + sizeof(struct pico_dns_record_suffix) +
-                    short_be(rsuffix->rdlength);
-    }
-    
+    pico_dns_compress_record_section((qdcount || ancount || nscount), arcount,
+                                     packet_buf, &iterator,
+                                     len);
     return 0;
 }
 
@@ -468,7 +461,6 @@ pico_dns_question_create( const char *url,
                           uint8_t reverse )
 {
     struct pico_dns_question *question = NULL;
-    char *qname = NULL;
     uint16_t slen = 0;
     
     /* Check if valid arguments are provided */
@@ -477,29 +469,30 @@ pico_dns_question_create( const char *url,
         return NULL;
     }
 
-    if (reverse && qtype == PICO_DNS_TYPE_PTR) {
-        qname = pico_dns_url_to_reverse_qname(url, proto);
-    } else {
-        qname = pico_dns_url_to_qname(url);
-    }
-    if (!qname)
-        return NULL;
-    slen = (uint16_t)(strlen(qname) + 1u);
-    
     /* Allocate space for the question and the subfields */
     question = PICO_ZALLOC(sizeof(struct pico_dns_question));
     if (!question) {
         pico_err = PICO_ERR_ENOMEM;
         return NULL;
     }
-    question->qname = qname;
+
+    /* Create a qname from the URL */
+    if (reverse && qtype == PICO_DNS_TYPE_PTR) {
+        question->qname = pico_dns_url_to_reverse_qname(url, proto);
+    } else {
+        question->qname = pico_dns_url_to_qname(url);
+    }
+
+    /* Provide space for the question suffix */
     question->qsuffix = PICO_ZALLOC(sizeof(struct pico_dns_question_suffix));
-    if (!(question->qname) || !(question->qsuffix)) {
+    if (!(question->qsuffix) || !(question->qname)) {
         pico_err = PICO_ERR_ENOMEM;
+        pico_dns_question_delete(&question);
         return NULL;
     }
-    
+
     /* Determine the entire length of the question */
+    slen = (uint16_t)(strlen(question->qname) + 1u);
     *len = (uint16_t)(slen + (uint16_t)sizeof(struct pico_dns_question_suffix));
     
     /* Set the length of the question */
@@ -510,7 +503,6 @@ pico_dns_question_create( const char *url,
     
     /* Fill in the proto */
     question->proto = proto;
-    
     return question;
 }
 
@@ -788,44 +780,59 @@ pico_dns_question_vector_size( pico_dns_question_vector *vector )
 
 // MARK: QUERY FUNCTIONS
 
+static uint16_t
+pico_dns_packet_len( pico_dns_question_vector *qvector,
+                     pico_dns_record_vector *anvector,
+                     pico_dns_record_vector *nsvector,
+                     pico_dns_record_vector *arvector,
+                     uint8_t *qdcount, uint8_t *ancount,
+                     uint8_t *nscount, uint8_t *arcount )
+{
+    uint16_t len = (uint16_t) sizeof(pico_dns_packet);
+
+    /* Check params */
+    if (!qvector || !anvector || !nsvector || !arvector) {
+        pico_err = PICO_ERR_EINVAL;
+        return 0;
+    }
+
+    len = (uint16_t)(len + pico_dns_question_vector_size(qvector));
+    *qdcount = (uint8_t)(qvector->count);
+    len = (uint16_t)(len + pico_dns_record_vector_size(anvector));
+    *ancount = (uint8_t)(anvector->count);
+    len = (uint16_t)(len + pico_dns_record_vector_size(nsvector));
+    *nscount = (uint8_t)(nsvector->count);
+    len = (uint16_t)(len + pico_dns_record_vector_size(arvector));
+    *arcount = (uint8_t)(arvector->count);
+
+    return len;
+}
+
 /* ****************************************************************************
- *  Creates a DNS packet meant for querying. Currently only questions can be
- *  inserted in the packet.
+ *  Generic packet creation utility
  * ****************************************************************************/
 pico_dns_packet *
-pico_dns_query_create( pico_dns_question_vector *qvector,
-                       pico_dns_record_vector *anvector,
-                       pico_dns_record_vector *nsvector,
-                       pico_dns_record_vector *arvector,
-                       uint16_t *len )
+pico_dns_packet_create( pico_dns_question_vector *qvector,
+                        pico_dns_record_vector *anvector,
+                        pico_dns_record_vector *nsvector,
+                        pico_dns_record_vector *arvector,
+                        uint16_t *len )
 {
     pico_dns_packet *packet = NULL;
     pico_dns_question_vector _qvector = {0};
     pico_dns_record_vector _anvector = {0}, _nsvector = {0}, _arvector = {0};
     uint8_t qdcount = 0, ancount = 0, nscount = 0, arcount = 0;
-    
-    /* The length starts with the size of the header */
-    *len = (uint16_t) sizeof(pico_dns_packet);
-    
-    if (qvector)
-        _qvector = *qvector;
-    if (anvector)
-        _anvector = *anvector;
-    if (nsvector)
-        _nsvector = *nsvector;
-    if (arvector)
-        _arvector = *arvector;
-    
+
+    /* Set default vector, if arguments are NULL-pointers */
+    _qvector = qvector ? *qvector : _qvector;
+    _anvector = anvector ? *anvector : _anvector;
+    _nsvector = nsvector ? *nsvector : _nsvector;
+    _arvector = arvector ? *arvector : _arvector;
+
     /* Get the size of the entire packet and determine the header counters */
-    *len = (uint16_t)(*len + pico_dns_question_vector_size(&_qvector));
-    qdcount = (uint8_t)pico_dns_question_vector_count(&_qvector);
-    *len = (uint16_t)(*len + pico_dns_record_vector_size(&_anvector));
-    ancount = (uint8_t)pico_dns_record_vector_count(&_anvector);
-    *len = (uint16_t)(*len + pico_dns_record_vector_size(&_nsvector));
-    nscount = (uint8_t)pico_dns_record_vector_count(&_nsvector);
-    *len = (uint16_t)(*len + pico_dns_record_vector_size(&_arvector));
-    arcount = (uint8_t)pico_dns_record_vector_count(&_arvector);
-    
+    *len = pico_dns_packet_len(&_qvector, &_anvector, &_nsvector, &_arvector,
+                               &qdcount, &ancount, &nscount, &arcount);
+
     /* Provide space for the entire packet */
     packet = PICO_ZALLOC(*len);
     if (!packet) {
@@ -834,9 +841,11 @@ pico_dns_query_create( pico_dns_question_vector *qvector,
     }
 
     /* Fill the Question Section with questions */
-    if (pico_dns_fill_packet_question_section(packet, &_qvector)) {
-        dns_dbg("Could not fill Question Section correctly!\n");
-        return NULL;
+    if (qvector && _qvector.count != 0) {
+        if (pico_dns_fill_packet_question_section(packet, &_qvector)) {
+            dns_dbg("Could not fill Question Section correctly!\n");
+            return NULL;
+        }
     }
 
     /* Fill the Resource Record Sections with resource records */
@@ -851,8 +860,22 @@ pico_dns_query_create( pico_dns_question_vector *qvector,
 
     /* Apply DNS name compression */
     pico_dns_packet_compress(packet, len);
-
+    
     return packet;
+}
+
+/* ****************************************************************************
+ *  Creates a DNS packet meant for querying. Currently only questions can be
+ *  inserted in the packet.
+ * ****************************************************************************/
+pico_dns_packet *
+pico_dns_query_create( pico_dns_question_vector *qvector,
+                       pico_dns_record_vector *anvector,
+                       pico_dns_record_vector *nsvector,
+                       pico_dns_record_vector *arvector,
+                       uint16_t *len )
+{
+    return pico_dns_packet_create(qvector, anvector, nsvector, arvector, len);
 }
 
 // MARK: RESOURCE RECORD FUNCTIONS
@@ -921,56 +944,6 @@ pico_dns_record_copy_flat( struct pico_dns_record *record,
 }
 
 /* ****************************************************************************
- *  Just copies a resource record provided in [record]
- * ****************************************************************************/
-struct pico_dns_record *
-pico_dns_record_copy( struct pico_dns_record *record )
-{
-    struct pico_dns_record *copy = NULL;
-
-    if (!record) {
-        pico_err = PICO_ERR_EINVAL;
-        return NULL;
-    }
-
-    copy = PICO_ZALLOC(sizeof(struct pico_dns_record));
-    if (!copy) {
-        pico_err = PICO_ERR_ENOMEM;
-        return NULL;
-    }
-    copy->rname = PICO_ZALLOC((size_t)record->rname_length);
-    if (!(copy->rname)) {
-        pico_err = PICO_ERR_ENOMEM;
-        PICO_FREE(copy);
-        return NULL;
-    }
-    strcpy(copy->rname, record->rname);
-    copy->rname_length = record->rname_length;
-    copy->rsuffix = PICO_ZALLOC(sizeof(struct pico_dns_record_suffix));
-    if (!(copy->rsuffix)) {
-        pico_err = PICO_ERR_ENOMEM;
-        PICO_FREE(copy->rname);
-        PICO_FREE(copy);
-        return NULL;
-    }
-    copy->rsuffix->rtype = record->rsuffix->rtype;
-    copy->rsuffix->rclass = record->rsuffix->rclass;
-    copy->rsuffix->rttl = record->rsuffix->rttl;
-    copy->rsuffix->rdlength = record->rsuffix->rdlength;
-    copy->rdata = PICO_ZALLOC((size_t)short_be(record->rsuffix->rdlength));
-    if (!(copy->rdata)) {
-        pico_err = PICO_ERR_ENOMEM;
-        PICO_FREE(copy->rsuffix);
-        PICO_FREE(copy->rname);
-        PICO_FREE(copy);
-        return NULL;
-    }
-    memcpy(copy->rdata, record->rdata, short_be(record->rsuffix->rdlength));
-    
-    return copy;
-}
-
-/* ****************************************************************************
  *  Deletes & free's the memory for a certain dns resource record
  * ****************************************************************************/
 int
@@ -980,21 +953,74 @@ pico_dns_record_delete( struct pico_dns_record **rr )
         return 0;
     if (!(*rr))
         return 0;
-    
+
     if ((*rr)->rname)
         PICO_FREE((*rr)->rname);
-    
+
     if ((*rr)->rsuffix)
         PICO_FREE((*rr)->rsuffix);
-    
+
     if ((*rr)->rdata)
         PICO_FREE((*rr)->rdata);
 
     PICO_FREE((*rr));
     *rr = NULL;
-    
+
     return 0;
 }
+
+/* ****************************************************************************
+ *  Just copies a resource record provided in [record]
+ * ****************************************************************************/
+struct pico_dns_record *
+pico_dns_record_copy( struct pico_dns_record *record )
+{
+    struct pico_dns_record *copy = NULL;
+
+    /* Check params */
+    if (!record) {
+        pico_err = PICO_ERR_EINVAL;
+        return NULL;
+    }
+    if (!(record->rname) || !(record->rsuffix) || !(record->rdata)) {
+        pico_err = PICO_ERR_EINVAL;
+        return NULL;
+    }
+
+    /* Provide place the copy */
+    copy = PICO_ZALLOC(sizeof(struct pico_dns_record));
+    if (!copy) {
+        pico_err = PICO_ERR_ENOMEM;
+        return NULL;
+    }
+
+    /* Provide space for the subfields */
+    copy->rname = PICO_ZALLOC((size_t)record->rname_length);
+    copy->rsuffix = PICO_ZALLOC(sizeof(struct pico_dns_record_suffix));
+    copy->rdata = PICO_ZALLOC((size_t)short_be(record->rsuffix->rdlength));
+    if (!(copy->rname) || !(copy->rsuffix) || !(copy->rdata)) {
+        pico_dns_record_delete(&copy);
+        pico_err = PICO_ERR_ENOMEM;
+        return NULL;
+    }
+
+    /* Fill in the rname field */
+    strcpy(copy->rname, record->rname);
+    copy->rname_length = record->rname_length;
+
+    /* Fill in the rsuffix fields */
+    copy->rsuffix->rtype = record->rsuffix->rtype;
+    copy->rsuffix->rclass = record->rsuffix->rclass;
+    copy->rsuffix->rttl = record->rsuffix->rttl;
+    copy->rsuffix->rdlength = record->rsuffix->rdlength;
+
+    /* Fill in the rdata field */
+    memcpy(copy->rdata, record->rdata, short_be(record->rsuffix->rdlength));
+    
+    return copy;
+}
+
+
 
 /* ****************************************************************************
  * Creates a standalone DNS resource record for given 'url'. Fills the
@@ -1178,8 +1204,10 @@ pico_dns_record_vector_delete( pico_dns_record_vector *vector, uint16_t index)
     if (vector->count) {
         new_records = PICO_ZALLOC(sizeof(struct pico_dns_record *) *
                                   vector->count);
-        if (new_records)
+        if (!new_records) {
+            pico_err = PICO_ERR_ENOMEM;
             return -1;
+        }
     }
     
     /* Move up subsequent records */
@@ -1265,50 +1293,7 @@ pico_dns_answer_create( pico_dns_record_vector *anvector,
                         pico_dns_record_vector *arvector,
                         uint16_t *len )
 {
-    pico_dns_packet *packet = NULL;
-    pico_dns_question_vector _qvector = {0};
-    pico_dns_record_vector _anvector = {0}, _nsvector = {0}, _arvector = {0};
-    uint8_t ancount = 0, nscount = 0, arcount = 0;
-
-    if (anvector)
-        _anvector = *anvector;
-    if (nsvector)
-        _anvector = *nsvector;
-    if (arvector)
-        _arvector = *arvector;
-    
-    /* The length start with the size of the header */
-    *len = (uint16_t)sizeof(struct pico_dns_header);
-    
-    *len = (uint16_t)(*len + pico_dns_record_vector_size(&_anvector));
-    ancount = (uint8_t)pico_dns_record_vector_count(&_anvector);
-    *len = (uint16_t)(*len + pico_dns_record_vector_size(&_nsvector));
-    nscount = (uint8_t)pico_dns_record_vector_count(&_nsvector);
-    *len = (uint16_t)(*len + pico_dns_record_vector_size(&_arvector));
-    arcount = (uint8_t)pico_dns_record_vector_count(&_arvector);
-    
-    /* Provide space for the entire packet */
-    packet = PICO_ZALLOC(*len);
-    if (!packet) {
-        pico_err = PICO_ERR_ENOMEM;
-        dns_dbg("Could not allocate memory for this packet!\n");
-        return NULL;
-    }
-    
-    /* Fill the resource record sections */
-    if (pico_dns_fill_packet_rr_sections(packet, &_qvector, &_anvector,
-                                         &_nsvector, &_arvector)) {
-        dns_dbg("Could not fill Resource Record Sections correctly!\n");
-        return NULL;
-    }
-
-    /* Fill the DNS packet header */
-    pico_dns_fill_packet_header(packet, 0, ancount, nscount, arcount);
-    
-    /* Apply DNS name compression */
-    pico_dns_packet_compress(packet, len);
-
-    return packet;
+    return pico_dns_packet_create(NULL, anvector, nsvector, arvector, len);
 }
 
 // MARK: NAME & IP FUNCTIONS
@@ -1362,7 +1347,7 @@ pico_dns_namelen_uncomp( char *name, pico_dns_packet *packet )
         /* Check if the first bit of the data is set - '|1|1|P|P|...|P|P|' */
         if(*ptr & 0xC0) {
             /* Move ptr to the pointer location */
-            comp_ptr = (uint16_t)(((((uint16_t)*ptr ) << 8) & 0x3F00) |
+            comp_ptr = (uint16_t)((uint16_t)((((uint16_t)*ptr) << 8) & 0x3F00) |
                                   ((uint16_t)*(ptr + 1)));
             ptr = buf + comp_ptr;
         } else {
@@ -1577,11 +1562,13 @@ pico_dns_url_to_qname( const char *url )
     qname = PICO_ZALLOC(strlen(url) + 2u);
     if (!qname) {
         pico_err = PICO_ERR_ENOMEM;
+        PICO_FREE(temp);
         return NULL;
     }
     
     /* Copy in the URL (+1 to leave space for leading '.') */
     strcpy(qname + 1, temp);
+    PICO_FREE(temp);
     
     /* Change to DNS notation */
     pico_dns_name_to_dns_notation(qname);

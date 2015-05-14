@@ -68,7 +68,7 @@ PACKED_STRUCT_DEF pico_dns_header
     uint8_t tc : 1;     // TrunCation
     uint8_t aa : 1;     // Authoritative Answer
     uint8_t opcode : 4; // Opcode
-    uint8_t qr : 1;     // Query
+    uint8_t qr : 1;     // Query/Response
     uint8_t rcode : 4;  // Response code
     uint8_t z : 3;      // Zero
     uint8_t ra : 1;     // Recursion Available

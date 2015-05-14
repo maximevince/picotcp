@@ -108,6 +108,7 @@ pico_dns_sd_srv_record_create( const char *url,
     target_rname = pico_dns_url_to_qname(target_url);
     if (!target_rname) {
         dns_sd_dbg("Could not convert URL to qname!\n");
+        PICO_FREE(srv_data);
         return NULL;
     }
     strcpy((char *)srv_data + 6u, target_rname);
@@ -409,6 +410,7 @@ pico_dns_sd_claimed_callback( pico_mdns_record_vector *records,
         ptr_record->record->rdata = (uint8_t *)PICO_ZALLOC(strlen(rname) + 1);
         if (!(ptr_record->record->rdata)) {
             pico_err = PICO_ERR_ENOMEM;
+            pico_mdns_record_delete(&ptr_record);
             return;
         }
         /* Copy in the the updated name */
@@ -420,9 +422,9 @@ pico_dns_sd_claimed_callback( pico_mdns_record_vector *records,
 
     /* Claim the PTR record */
     pico_mdns_record_vector_add(&rvector, ptr_record);
-    if (pico_mdns_claim(rvector, arguments->callback, arguments->arg)
-        < 0) {
+    if (pico_mdns_claim(rvector, arguments->callback, arguments->arg) < 0) {
         dns_sd_dbg("Trying to claim PTR record failed!\n");
+        pico_mdns_record_vector_destroy(&rvector);
     }
 
     PICO_FREE(arguments);
@@ -442,8 +444,6 @@ pico_dns_sd_init( const char *_hostname,
 {
     return pico_mdns_init(_hostname, link, flags, callback, arg);
 }
-
-
 
 /* ****************************************************************************
  *  Register a service on in the '.local'-domain of a certain type. Port number
@@ -477,6 +477,7 @@ pico_dns_sd_register_service( const char *name,
     /* Check other params */
     if (!txt_data) {
         dns_sd_dbg("No key-value pair vector passed!\n");
+        PICO_FREE(url);
         return -1;
     }
 
@@ -492,6 +493,7 @@ pico_dns_sd_register_service( const char *name,
     /* Erase the key-value pair vector, it's no longer needed */
     if (pico_dns_sd_kv_vector_erase(txt_data) < 0) {
         dns_sd_dbg("Could not erase key-value pair vector!\n");
+        PICO_FREE(url);
         return -1;
     }
 
@@ -501,7 +503,6 @@ pico_dns_sd_register_service( const char *name,
                                          PICO_DNS_TYPE_PTR,
                                          ttl, PICO_MDNS_RECORD_SHARED);
     PICO_FREE(url);
-
 
     pico_mdns_record_vector_add(&rvector, srv_record);
     pico_mdns_record_vector_add(&rvector, txt_record);

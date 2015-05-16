@@ -1495,6 +1495,8 @@ int pico_ipv4_link_add(struct pico_device *dev, struct pico_ip4 address, struct 
     pico_ipv4_route_add(network, netmask, gateway, 1, new);
     pico_ipv4_to_string(ipstr, new->address.addr);
     dbg("Assigned ipv4 %s to device %s\n", ipstr, new->dev->name);
+    if (default_bcast_route.link == NULL)
+        default_bcast_route.link = new;
     return 0;
 }
 
@@ -1560,6 +1562,8 @@ int pico_ipv4_link_del(struct pico_device *dev, struct pico_ip4 address)
 
     pico_ipv4_cleanup_routes(found);
     pico_tree_delete(&Tree_dev_link, found);
+    if (default_bcast_route.link == found)
+        default_bcast_route.link = NULL;
     PICO_FREE(found);
 
     return 0;

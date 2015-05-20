@@ -494,7 +494,7 @@ pico_dns_question_create( const char *url,
     /* Determine the entire length of the question */
     slen = (uint16_t)(strlen(question->qname) + 1u);
     *len = (uint16_t)(slen + (uint16_t)sizeof(struct pico_dns_question_suffix));
-    
+
     /* Set the length of the question */
     question->qname_length = (uint8_t)(slen);
     
@@ -1494,38 +1494,27 @@ pico_dns_url_to_reverse_qname( const char *url, uint8_t proto )
 char *
 pico_dns_qname_to_url( const char *qname )
 {
-    char *url = NULL;   // URL-string to return
-    char *temp = NULL;  // Temporary string
-    
+    char *url = NULL;
+    char temp[256] = {0};
+
     /* Check if qname or url_addr is not a NULL-pointer */
     if (!qname) {
         pico_err = PICO_ERR_EINVAL;
         return NULL;
     }
-    
+
     /* Provide space for the url */
-    url = PICO_ZALLOC(strlen(qname) - 2u);
+    url = PICO_ZALLOC(strlen(qname));
     if (!url) {
         pico_err = PICO_ERR_ENOMEM;
         return NULL;
     }
-    
-    /* Provide space for a temporary string to work with */
-    temp = PICO_ZALLOC(strlen(qname) + 1u);
-    if (!temp) {
-        pico_err = PICO_ERR_ENOMEM;
-        PICO_FREE(url);
-        return NULL;
-    }
-    
+
     /* Convert qname to an URL*/
     strcpy(temp, qname);
     pico_dns_notation_to_name(temp);
-    strcpy(url, temp + 1);
-    
-    /* We don't need temp anymore, free memory */
-    PICO_FREE(temp);
-    
+    strcpy((char *)url, (char *)(temp + 1));
+
     return url;
 }
 
@@ -1541,38 +1530,27 @@ pico_dns_qname_to_url( const char *qname )
 char *
 pico_dns_url_to_qname( const char *url )
 {
-    char *qname = NULL; // qname-string to return
-    char *temp = NULL;  // temp string to work with
-    
+    char *qname = NULL;
+
     /* Check if url or qname_addr is not a NULL-pointer */
     if (!url) {
         pico_err = PICO_ERR_EINVAL;
         return NULL;
     }
-    
-    /* Provide space for the temporary string */
-    temp = PICO_ZALLOC(strlen(url) + 1u);
-    if (!temp) {
-        pico_err = PICO_ERR_ENOMEM;
-        return NULL;
-    }
-    strcpy(temp, url);
-    
+
     /* Provide space for the qname */
     qname = PICO_ZALLOC(strlen(url) + 2u);
     if (!qname) {
         pico_err = PICO_ERR_ENOMEM;
-        PICO_FREE(temp);
         return NULL;
     }
-    
+
     /* Copy in the URL (+1 to leave space for leading '.') */
-    strcpy(qname + 1, temp);
-    PICO_FREE(temp);
+    strcpy(qname + 1, url);
     
     /* Change to DNS notation */
     pico_dns_name_to_dns_notation(qname);
-    
+
     return qname;
 }
 

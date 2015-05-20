@@ -806,7 +806,7 @@ pico_mdns_cookie_resolve_conflict( struct pico_mdns_cookie *cookie,
         mdns_dbg("Could not delete question with nameconflict from cookie!\n");
         return -1;
     }
-
+    
     /* Step 1b: Stop timer events if cookie contains no other questions */
     if (pico_dns_question_vector_count(&(cookie->qvector)) == 0) {
         pico_timer_cancel(cookie->send_timer);
@@ -2721,7 +2721,6 @@ pico_mdns_apply_known_answer_suppression( pico_mdns_record_vector *vector,
         copy = pico_dns_record_copy(&answer);
         if (!copy)
             return -1;
-        PICO_FREE(copy->rname);
         copy->rname = pico_dns_decompress_name(answer.rname, packet);
         ka.record = &answer;
 
@@ -2735,14 +2734,12 @@ pico_mdns_apply_known_answer_suppression( pico_mdns_record_vector *vector,
                 }
             }
         }
-
         pico_dns_record_delete(&copy);
         ka.record = NULL;
 
         /* Move to next record */
         *data = (uint8_t *) answer.rdata + short_be(answer.rsuffix->rdlength);
     }
-
     return 0;
 }
 
@@ -3348,13 +3345,11 @@ static int pico_mdns_probe( void (*callback)(pico_mdns_record_vector *,
 
     /* Find my records that need to pass the probing step first */
     rvector = pico_mdns_my_records_find_to_probe();
-
     if (pico_mdns_record_vector_count(&rvector)) {
         /* Iterate over the found records */
         for (i = 0; i < pico_mdns_record_vector_count(&rvector); i++) {
             record = pico_mdns_record_vector_get(&rvector, i);
             /* Find a probe question for the record name */
-
             if (pico_mdns_add_probe_question(&qvector, record->record->rname)
                 < 0) {
                 mdns_dbg("Could not add probe question to vector!\n");
@@ -3370,7 +3365,6 @@ static int pico_mdns_probe( void (*callback)(pico_mdns_record_vector *,
             mdns_dbg("Cookie_create returned NULL @ probe()!\n");
             return -1;
         }
-
         if (pico_mdns_cookie_tree_add_cookie(probe_cookie) < 0) {
             mdns_dbg("Could not append cookie to Cookies!\n");
             return -1;
@@ -3417,7 +3411,7 @@ pico_mdns_claim_generic( pico_mdns_record_vector vector,
 
     /* 1.) Appending records to 'my records' */
     vector = pico_mdns_my_records_add(vector, reclaim);
-
+    
     /* 2a.) Try to probe any records */
     pico_mdns_probe(callback, arg);
 

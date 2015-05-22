@@ -1202,7 +1202,7 @@ START_TEST(tc_pico_dns_name_to_dns_notation)
     char url1[13] = { 0x00,'p','i','c','o','t','c','p','.','c','o','m',0x00 };
     int ret = 0;
 
-    ret = pico_dns_name_to_dns_notation(url1);
+    ret = pico_dns_name_to_dns_notation(url1, strlen(url1) + 2);
     fail_unless(ret == 0, "dns_name_to_dns_notation returned error!\n");
     fail_unless(strcmp(url1, qname1) == 0,
                 "dns_name_to_dns_notation failed! %s\n", url1);
@@ -1216,7 +1216,7 @@ START_TEST(tc_pico_dns_notation_to_name)
     char url1[13] = { '.','p','i','c','o','t','c','p','.','c','o','m',0x00 };
     int ret = 0;
 
-    ret = pico_dns_notation_to_name(qname1);
+    ret = pico_dns_notation_to_name(qname1, strlen(qname1));
     fail_unless(ret == 0, "dns_notation_to_name returned error!\n");
     fail_unless(strcmp(url1, qname1) == 0,
                 "dns_notation_to_name failed! %s\n", qname1);

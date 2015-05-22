@@ -1036,26 +1036,6 @@ START_TEST(tc_pico_dns_namelen_comp)
     fail_unless(ret == 13, "Namelength is wrong!\n");
 }
 END_TEST
-START_TEST(tc_pico_dns_namelen_uncomp)
-{
-    char name[] = "\3www\4tass\2be\0";
-    char name_comp[] = "\3www\4tass\2be\xc0\x02";  /* two bytes ofset from start of buf */
-    char name_comp2[] = "\xc0\x00";
-    char buf[] = "00\5index\0";
-    unsigned int ret = 0;
-
-    /* name without compression */
-    ret = pico_dns_namelen_uncomp(name, (pico_dns_packet *)buf);
-    fail_unless(ret == 12, "Namelength '%d' is wrong with no pointer!\n", ret);
-    /* name with compression */
-    ret = pico_dns_namelen_uncomp(name_comp, (pico_dns_packet *)buf);
-    fail_unless(ret == 18, "Namelength '%d' is wrong with pointer!\n", ret);
-
-    /* name with compression, but with name as 'buf' */
-    ret = pico_dns_namelen_uncomp(name_comp2, (pico_dns_packet *)name);
-    fail_unless(ret == 12, "Namelength '%d' is wrong with only pointer!\n", ret);
-}
-END_TEST
 START_TEST(tc_pico_dns_decompress_name)
 {
     char name[] = "\4mail\xc0\x02";
@@ -1348,7 +1328,6 @@ Suite *pico_suite(void)
 
     /* Name conversion and compression function */
     TCase *TCase_pico_dns_namelen_comp = tcase_create("Unit test for 'pico_dns_namelen_comp'");
-    TCase *TCase_pico_dns_namelen_uncomp = tcase_create("Unit test for 'pico_dns_namelen_uncomp'");
     TCase *TCase_pico_dns_decompress_name = tcase_create("Unit test for 'pico_dns_decompress_name'");
     TCase *TCase_pico_dns_url_get_reverse_len = tcase_create("Unit test for 'pico_dns_url_get_reverse_len'");
     TCase *TCase_pico_dns_url_to_reverse_qname = tcase_create("Unit test for 'pico_dns_url_to_reverse_qname'");
@@ -1396,7 +1375,6 @@ Suite *pico_suite(void)
     tcase_add_test(TCase_pico_dns_record_vector_size, tc_pico_dns_record_vector_size);
     tcase_add_test(TCase_pico_dns_answer_create, tc_pico_dns_answer_create);
     tcase_add_test(TCase_pico_dns_namelen_comp, tc_pico_dns_namelen_comp);
-    tcase_add_test(TCase_pico_dns_namelen_uncomp, tc_pico_dns_namelen_uncomp);
     tcase_add_test(TCase_pico_dns_decompress_name, tc_pico_dns_decompress_name);
     tcase_add_test(TCase_pico_dns_url_get_reverse_len, tc_pico_dns_url_get_reverse_len);
     tcase_add_test(TCase_pico_dns_url_to_reverse_qname, tc_pico_dns_url_to_reverse_qname);
@@ -1443,7 +1421,6 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_pico_dns_record_vector_size);
     suite_add_tcase(s, TCase_pico_dns_answer_create);
     suite_add_tcase(s, TCase_pico_dns_namelen_comp);
-    suite_add_tcase(s, TCase_pico_dns_namelen_uncomp);
     suite_add_tcase(s, TCase_pico_dns_decompress_name);
     suite_add_tcase(s, TCase_pico_dns_url_get_reverse_len);
     suite_add_tcase(s, TCase_pico_dns_url_to_reverse_qname);

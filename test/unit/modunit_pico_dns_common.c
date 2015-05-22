@@ -1115,7 +1115,7 @@ START_TEST(tc_pico_dns_url_to_reverse_qname)
     qname = pico_dns_url_to_reverse_qname(url_ipv4, PICO_PROTO_IPV4);
     fail_unless(qname != NULL, "dns_url_to_reverse_qname returned NULL!\n");
     fail_unless(strcmp(qname, cmp_buf1) == 0,
-                "dns_url_to_reverse_qname failed with IPv4!\n");
+                "dns_url_to_reverse_qname failed with IPv4 %s!\n", qname);
     PICO_FREE(qname);
 
     /* Try to reverse IPv6 URL */
@@ -1199,7 +1199,7 @@ START_TEST(tc_pico_dns_name_to_dns_notation)
     char qname1[13] = { 0x07, 'p','i','c','o','t','c','p',
                         0x03, 'c','o','m',
                         0x00 };
-    char url1[13] = { 0x00,'p','i','c','o','t','c','p','.','c','o','m',0x00 };
+    char url1[13] = { '.','p','i','c','o','t','c','p','.','c','o','m',0x00 };
     int ret = 0;
 
     ret = pico_dns_name_to_dns_notation(url1, strlen(url1) + 2);

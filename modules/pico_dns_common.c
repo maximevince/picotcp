@@ -1397,7 +1397,6 @@ pico_dns_url_get_reverse_len( const char *url,
 
 /* ****************************************************************************
  *  Returns the qname with [url] in DNS-format, with reverse resolving
- *  f.e.: www.google.com => 3www6google3com0
  * ****************************************************************************/
 static char *
 pico_dns_url_to_reverse_qname( const char *url, uint8_t proto )
@@ -1419,8 +1418,8 @@ pico_dns_url_to_reverse_qname( const char *url, uint8_t proto )
         memcpy(reverse_qname + (uint16_t)(strlen(url) + 2u) - 1,
                PICO_ARPA_IPV4_SUFFIX,
                strlen(PICO_ARPA_IPV4_SUFFIX));
-        /* If reverse IPv6 address resolving, convert to IPv6 arpa-format */
     }
+    /* If reverse IPv6 address resolving, convert to IPv6 arpa-format */
 #ifdef PICO_SUPPORT_IPV6
     else if (proto == PICO_PROTO_IPV6) {
         pico_dns_ipv6_set_ptr(url, reverse_qname + 1u);
@@ -1432,7 +1431,8 @@ pico_dns_url_to_reverse_qname( const char *url, uint8_t proto )
     else {
         /* If you call this function you want a reverse qname */
     }
-    pico_dns_name_to_dns_notation(reverse_qname, strlen(url) + 2u);
+    reverse_qname[0] = '.';
+    pico_dns_name_to_dns_notation(reverse_qname, strlen(reverse_qname) + 1);
     return reverse_qname;
 }
 
@@ -1503,7 +1503,8 @@ pico_dns_url_to_qname( const char *url )
     strcpy(qname + 1, url);
     
     /* Change to DNS notation */
-    pico_dns_name_to_dns_notation(qname, strlen(url));
+    qname[0] = '.';
+    pico_dns_name_to_dns_notation(qname, strlen(qname) + 1);
 
     return qname;
 }

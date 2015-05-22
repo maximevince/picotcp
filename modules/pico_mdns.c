@@ -374,10 +374,7 @@ pico_mdns_send_packet(pico_dns_packet *packet, uint16_t len)
     pico_string_to_ipv4(PICO_MDNS_DEST_ADDR4, &dst4.addr);
 
     /* Send packet to IPv4 socket */
-    return pico_socket_sendto(mdns_sock_ipv4,
-                              packet,
-                              (int)len,
-                              &dst4,
+    return pico_socket_sendto(mdns_sock_ipv4, packet, (int)len, &dst4,
                               short_be(mdns_port));
 }
 
@@ -390,10 +387,7 @@ pico_mdns_send_packet_unicast(pico_dns_packet *packet,
                               struct pico_ip4 peer)
 {
     /* Send packet to IPv4 socket */
-    return pico_socket_sendto(mdns_sock_ipv4,
-                              packet,
-                              (int)len,
-                              &peer,
+    return pico_socket_sendto(mdns_sock_ipv4, packet, (int)len, &peer,
                               short_be(mdns_port));
 }
 
@@ -2244,19 +2238,20 @@ pico_mdns_populate_answer_vector( char *url, uint16_t qtype, uint16_t qclass )
     else
         anvector = pico_mdns_record_tree_find_url_type(url, qtype, &MyRecords);
 
+    /* Remove answer which aren't succesfully registered yet */
+    for (i = 0; i < anvector.count; i++) {
+        record = pico_mdns_record_vector_get(&anvector, i);
+        if (!IS_RES_RECORD_FLAG_PROBED_SET(record->flags)) {
+            pico_mdns_record_vector_delete(&anvector, i);
+            continue;
+        }
+    }
+
     /* Check if question is a QU-question */
     if (PICO_MDNS_IS_MSB_SET(qclass)) {
-        mdns_dbg("Question requests for Unicast response...\n");
-
         /* Set the SEND_UNICAST flag of all the answer records */
-        for (i = 0; i < anvector.count; i++) {
-            record = pico_mdns_record_vector_get(&anvector, i);
-            if (!IS_RES_RECORD_FLAG_PROBED_SET(record->flags)) {
-                pico_mdns_record_vector_delete(&anvector, i);
-                continue;
-            }
+        for (i = 0; i < anvector.count; i++)
             PICO_MDNS_SET_FLAG(record->flags, PICO_MDNS_RECORD_SEND_UNICAST);
-        }
     }
 
     return anvector;
@@ -2768,17 +2763,14 @@ pico_mdns_handle_query_packet( pico_dns_packet *packet, struct pico_ip4 peer )
 
     /* Apply Known Answer Suppression */
     ancount = short_be(packet->ancount);
-    if (pico_mdns_apply_known_answer_suppression(&anvector,
-                                                 packet,
-                                                 ancount,
+    if (pico_mdns_apply_known_answer_suppression(&anvector, packet, ancount,
                                                  &data) < 0){
         mdns_dbg("Could not apply known answer suppression!\n");
         return -1;
     }
 
     /* Sort the records in 2 two vectors by unicast or multicast */
-    if (pico_mdns_sort_unicast_multicast(&anvector,
-                                         &anvector_u,
+    if (pico_mdns_sort_unicast_multicast(&anvector, &anvector_u,
                                          &anvector_m) < 0) {
         mdns_dbg("Could not sort answers into unicast/multicast vector!\n");
         return -1;
@@ -2823,13 +2815,11 @@ pico_mdns_handle_probe_packet( pico_dns_packet *packet, struct pico_ip4 peer )
     }
 
     /* Sort the records in 2 two vectors by unicast or multicast */
-    if (pico_mdns_sort_unicast_multicast(&anvector,
-                                         &anvector_u,
-                                         &anvector_m) < 0) {
+    if (pico_mdns_sort_unicast_multicast(&anvector, &anvector_u, &anvector_m)
+        < 0) {
         mdns_dbg("Could not sort answers into unicast/multicast vector!\n");
         return -1;
     }
-
 
     if (pico_mdns_unicast_reply(&anvector_u, peer) < 0)
         mdns_dbg("Could not sent reply via unicast!\n");

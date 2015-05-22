@@ -435,14 +435,14 @@ pico_dns_sd_claimed_callback( pico_mdns_record_vector *records,
  * ****************************************************************************/
 int
 pico_dns_sd_init( const char *_hostname,
-                  struct pico_ipv4_link *link,
+                  struct pico_ip4 address,
                   uint8_t flags,
                   void (*callback)(pico_mdns_record_vector *,
                                    char *,
                                    void *),
                   void *arg )
 {
-    return pico_mdns_init(_hostname, link, flags, callback, arg);
+    return pico_mdns_init(_hostname, address, flags, callback, arg);
 }
 
 /* ****************************************************************************

@@ -26,7 +26,7 @@ typedef struct
  * ****************************************************************************/
 int
 pico_dns_sd_init( const char *_hostname,
-                  struct pico_ipv4_link *link,
+                  struct pico_ip4 address,
                   uint8_t flags,
                   void (*callback)(pico_mdns_record_vector *,
                                    char *,

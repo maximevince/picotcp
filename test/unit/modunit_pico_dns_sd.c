@@ -35,7 +35,7 @@ int dns_sd_init()
     pico_ipv4_link_add(mock->dev, local, netmask);
 
     /* Try to initialise the mDNS module right */
-    return pico_dns_sd_init("host.local", pico_ipv4_link_by_dev(mock->dev), 0,
+    return pico_dns_sd_init("host.local", local, 0,
                             callback, NULL);
 }
 

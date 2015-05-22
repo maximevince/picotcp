@@ -407,19 +407,16 @@ uint16_t
 pico_dns_client_strlen( const char *url );
 
 /* ****************************************************************************
- *  Converts a URL at location url + 1 to a FQDN in the form 3www6google3com0
+ *  replace '.' in the domain name by the label length
  *  f.e. www.google.be => 3www6google2be0
- *  Size of ptr[] has to +2u more than the URL itself.
  * ****************************************************************************/
-int
-pico_dns_name_to_dns_notation( char *url );
+int pico_dns_name_to_dns_notation(char *ptr, unsigned int maxlen);
 
 /* ****************************************************************************
- *  Converts a FQDN at location fqdn to an URL in the form .www.google.com
+ *  replace the label length in the domain name by '.'
  *  f.e. 3www6google2be0 => .www.google.be
  * ****************************************************************************/
-int
-pico_dns_notation_to_name( char *fqdn );
+int pico_dns_notation_to_name(char *ptr, unsigned int maxlen);
 
 /* ****************************************************************************
  *  Mirrors and IP-address in ptr to an ARPA-format

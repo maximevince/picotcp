@@ -35,28 +35,28 @@ int mdns_init()
     pico_ipv4_link_add(mock->dev, local, netmask);
 
     /* Try to initialise the mDNS module right */
-    return pico_mdns_init("host.local", pico_ipv4_link_by_dev(mock->dev), 0,
-                          callback, NULL);
+    return pico_mdns_init("host.local", local, 0, callback, NULL);
 }
 
 START_TEST(tc_mdns_init)
 {
     int ret = 0;
+    struct pico_ip4 local = {0};
 
     printf("*********************** starting %s * \n", __func__);
 
     pico_stack_init();
 
     /* Try to initialise the mDNS module wrong */
-    ret = pico_mdns_init(NULL, NULL, 0, callback, NULL);
+    ret = pico_mdns_init(NULL, local, 0, callback, NULL);
     fail_unless(-1 == ret, "mdns_init failed checking params!\n");
 
     /* Try to initialise the mDNS module wrong */
-    ret = pico_mdns_init(hostname, NULL, 0, callback, NULL);
+    ret = pico_mdns_init(hostname, local, 0, callback, NULL);
     fail_unless(-1 == ret, "mdns_init failed checking params!\n");
 
     /* Try to initialise the mDNS module wrong */
-    ret = pico_mdns_init(hostname, NULL, 0, NULL, NULL);
+    ret = pico_mdns_init(hostname, local, 0, NULL, NULL);
     fail_unless(-1 == ret, "mdns_init failed checking params!\n");
 
     ret = mdns_init();
@@ -1349,7 +1349,7 @@ void add_records( void )
 
     /* Create an A record with URL */
     record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
-                                     PICO_MDNS_RECORD_UNIQUE);
+                                     (PICO_MDNS_RECORD_UNIQUE |PICO_MDNS_RECORD_PROBED));
     fail_if(!record, "Record could not be created!\n");
 
     /* Create 2 PTR records to URL */
@@ -1752,7 +1752,7 @@ START_TEST(tc_mdns_my_records_find_probed)
     add_records();
 
     hits = pico_mdns_my_records_find_probed();
-    fail_unless(1 == hits.count,
+    fail_unless(2 == hits.count,
                 "mdns_my_records_find_probed failed!\n");
 
 
@@ -1768,7 +1768,7 @@ START_TEST(tc_mdns_my_records_find_to_probe)
     add_records();
 
     hits = pico_mdns_my_records_find_to_probe();
-    fail_unless(3 == hits.count,
+    fail_unless(2 == hits.count,
                 "mdns_my_records_find_to_probe failed! %d\n", hits.count);
 
 

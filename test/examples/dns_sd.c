@@ -65,7 +65,7 @@ void dns_sd_init_callback( pico_mdns_record_vector *vector,
     }
 }
 
-void app_dns_sd(char *arg, struct pico_ipv4_link *link)
+void app_dns_sd(char *arg, struct pico_ip4 address)
 {
     char *hostname, *service_type, *service_port;
     char *nxt = arg;
@@ -89,13 +89,8 @@ void app_dns_sd(char *arg, struct pico_ipv4_link *link)
         exit(255);
     }
 
-    if (!link) {
-        printf("Link not found!\n");
-        exit(255);
-    }
-
     printf("\nStarting DNS Service Discovery module...\n");
-    if (pico_dns_sd_init(hostname, link, 0, &dns_sd_init_callback, NULL) != 0) {
+    if (pico_dns_sd_init(hostname, address, 0, &dns_sd_init_callback, NULL) != 0) {
         printf("Initialisation returned with Error!\n");
         exit(255);
     }

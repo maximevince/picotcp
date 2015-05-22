@@ -16,7 +16,7 @@
 #ifdef PICO_SUPPORT_MDNS
 
 /* --- Debugging --- */
-#define DEBUG 0
+#define DEBUG 1
 
 #if DEBUG == 0
 #define mdns_dbg(...) do {} while(0)
@@ -237,18 +237,15 @@ pico_mdns_cmp_name_type( struct pico_mdns_record *a,
 static int
 pico_mdns_cmp( void *ka, void *kb )
 {
-    struct pico_mdns_record *a = NULL;
-    struct pico_mdns_record *b = NULL;
     int ret = 0;
 
     /* Parse in the records */
-    a = (struct pico_mdns_record *)ka;
-    b = (struct pico_mdns_record *)kb;
+    struct pico_mdns_record *a = (struct pico_mdns_record *)ka;
+    struct pico_mdns_record *b = (struct pico_mdns_record *)kb;
 
     /* First compare name and type */
     ret = pico_mdns_cmp_name_type(a, b);
-    if(ret)
-        return ret;
+    if (ret) return ret;
 
     /* Finally compare rdata for unique comparising */
     return pico_mdns_rdata_cmp((uint8_t *)a->record->rdata,
@@ -1846,7 +1843,6 @@ pico_mdns_my_records_claimed( pico_mdns_record_vector rvector,
     struct pico_mdns_record *found = NULL;
     char *url = NULL;
     uint16_t i = 0;
-    uint8_t all_claimed = 1;
     uint8_t claim_id = 0;
 
     /* Get the claim ID of the first claimed record */
@@ -1875,11 +1871,8 @@ pico_mdns_my_records_claimed( pico_mdns_record_vector rvector,
         }
     }
 
-    /* Check if all records with saim */
-    all_claimed = pico_mdns_my_records_claimed_id(claim_id, &vector);
-
     /* If all_claimed is still true */
-    if (all_claimed) {
+    if (pico_mdns_my_records_claimed_id(claim_id, &vector)) {
         mdns_dbg("%d records with claim ID '%d' are claimed!\n",
                  vector.count, claim_id);
         callback(&vector, NULL, arg);
@@ -2937,6 +2930,8 @@ pico_mdns_event4( uint16_t ev, struct pico_socket *s )
             /* Handle the MDNS data received */
             pico_mdns_recv(recvbuf, pico_read, peer);
         }
+
+        mdns_dbg(">>>>>>>>>>>>>><<<<<<<<<<<<<\n\n");
     } else if (ev == PICO_SOCK_EV_CLOSE) {
         mdns_dbg("Socket is closed. Bailing out.\n");
         return;
@@ -3525,12 +3520,12 @@ pico_mdns_get_hostname( void )
  * ****************************************************************************/
 int
 pico_mdns_init( const char *_hostname,
-               struct pico_ipv4_link *link,
-               uint8_t flags,
-               void (*callback)(pico_mdns_record_vector *,
-                                char *,
-                                void *),
-               void *arg )
+                struct pico_ip4 address,
+                uint8_t flags,
+                void (*callback)(pico_mdns_record_vector *,
+                                 char *,
+                                 void *),
+                void *arg )
 {
     struct pico_ip_mreq mreq4;
     uint16_t proto4 = PICO_PROTO_IPV4;
@@ -3545,18 +3540,17 @@ pico_mdns_init( const char *_hostname,
     port = short_be(mdns_port);
 
     /* Check callbcak parameter */
-    if(!callback || !_hostname || !link) {
+    if(!callback || !_hostname) {
         mdns_dbg("No callback function suplied!\n");
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }
 
     /* Open global IPv4 mDNS socket */
-    mdns_sock_ipv4 = pico_socket_open(proto4,
-                                      PICO_PROTO_UDP,
+    mdns_sock_ipv4 = pico_socket_open(proto4, PICO_PROTO_UDP,
                                       &pico_mdns_event4);
     if(!mdns_sock_ipv4) {
-        mdns_dbg("Open returned empty IPv4 socket\n");
+        mdns_dbg("pico_socket_open returned NULL-ptr...\n");
         return -1;
     }
 
@@ -3571,17 +3565,15 @@ pico_mdns_init( const char *_hostname,
     mreq4.mcast_link_addr = inaddr_any;
 
     /* Don't want the multicast data to be looped back to the host */
-    if(pico_socket_setoption(mdns_sock_ipv4,
-                             PICO_IP_MULTICAST_LOOP,
-                             &loop) < 0) {
+    if(pico_socket_setoption(mdns_sock_ipv4, PICO_IP_MULTICAST_LOOP, &loop)
+       < 0) {
         mdns_dbg("socket_setoption PICO_IP_MULTICAST_LOOP failed\n");
         return -1;
     }
 
     /* Tell the stack we're interested in this particular multicast group */
-    if(pico_socket_setoption(mdns_sock_ipv4,
-                             PICO_IP_ADD_MEMBERSHIP,
-                             &mreq4) < 0) {
+    if(pico_socket_setoption(mdns_sock_ipv4, PICO_IP_ADD_MEMBERSHIP, &mreq4)
+       < 0) {
         mdns_dbg("socket_setoption PICO_IP_ADD_MEMBERSHIP failed\n");
         return -1;
     }
@@ -3590,15 +3582,13 @@ pico_mdns_init( const char *_hostname,
      *  All multicast responses (including answers sent via unicast) SHOULD
      *  be send with IP TTL set to 255 for backward-compatibility reasons
      */
-    if(pico_socket_setoption(mdns_sock_ipv4,
-                             PICO_IP_MULTICAST_TTL,
-                             &ttl) < 0) {
+    if(pico_socket_setoption(mdns_sock_ipv4, PICO_IP_MULTICAST_TTL, &ttl) < 0) {
         mdns_dbg("socket_setoption PICO_IP_MULTICAST_TTL failed\n");
         return -1;
     }
     
     /* Bind to mDNS port */
-    if (pico_socket_bind(mdns_sock_ipv4, &(link->address), &port) != 0) {
+    if (pico_socket_bind(mdns_sock_ipv4, (void *)&address, &port) != 0) {
         mdns_dbg("Bind error!\n");
         return -1;
     }

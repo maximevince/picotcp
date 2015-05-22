@@ -11,7 +11,7 @@
 #include "pico_ipv4.h"
 
 /* ********************************* CONFIG ***********************************/
-#define PICO_MDNS_PROBE_UNICAST 0            /* Probe queries as QU-questions */
+#define PICO_MDNS_PROBE_UNICAST 1            /* Probe queries as QU-questions */
 #define PICO_MDNS_DEFAULT_TTL 60             /* Default TTL of mDNS records   */
 #define PICO_MDNS_CONTINUOUS_REFRESH 0       /* Continuously update cache     */
 /* ****************************************************************************/
@@ -130,7 +130,7 @@ pico_mdns_get_hostname( void );
  * ****************************************************************************/
 int
 pico_mdns_init( const char *_hostname,
-                struct pico_ipv4_link *link,
+                struct pico_ip4 address,
                 uint8_t flags,
                 void (*callback)(pico_mdns_record_vector *,
                                  char *,

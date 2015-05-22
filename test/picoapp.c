@@ -55,8 +55,8 @@ void app_mcastreceive(char *args);
 void app_ping(char *args);
 void app_dhcp_server(char *args);
 void app_dhcp_client(char *args);
-void app_dns_sd(char *arg, struct pico_ipv4_link *link);
-void app_mdns(char *arg, struct pico_ipv4_link *link);
+void app_dns_sd(char *arg, struct pico_ip4 addr);
+void app_mdns(char *arg, struct pico_ip4 addr);
 void app_sntp(char *args);
 void app_tftp(char *args);
 void app_slaacv4(char *args);
@@ -158,6 +158,7 @@ int main(int argc, char **argv)
     };
     uint16_t *macaddr_low = (uint16_t *) (macaddr + 2);
     struct pico_device *dev = NULL;
+    struct pico_ip4 addr4 = {0};
     struct pico_ip4 bcastAddr = ZERO_IP4;
 
     struct option long_options[] = {
@@ -380,6 +381,7 @@ int main(int argc, char **argv)
                 pico_string_to_ipv4(addr, &ipaddr.addr);
                 pico_string_to_ipv4(nm, &netmask.addr);
                 pico_ipv4_link_add(dev, ipaddr, netmask);
+                addr4 = ipaddr;
                 bcastAddr.addr = (ipaddr.addr) | (~netmask.addr);
                 if (gw && *gw) {
                     pico_string_to_ipv4(gw, &gateway.addr);
@@ -568,13 +570,13 @@ int main(int argc, char **argv)
 #ifndef PICO_SUPPORT_DNS_SD
                 return 0;
 #else
-                app_dns_sd(args, pico_ipv4_link_by_dev(dev));
+                app_dns_sd(args, addr4);
 #endif
             } else IF_APPNAME("mdns") {
 #ifndef PICO_SUPPORT_MDNS
                 return 0;
 #else
-                app_mdns(args, pico_ipv4_link_by_dev(dev));
+                app_mdns(args, addr4);
 #endif
 #ifdef PICO_SUPPORT_SNTP_CLIENT
             } else IF_APPNAME("sntp") {

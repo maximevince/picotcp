@@ -34,36 +34,19 @@ void mdns_init_callback( pico_mdns_record_vector *vector,
                          char *str,
                          void *arg )
 {
-    pico_mdns_record_vector rvector = { 0 };
     struct pico_mdns_record *hostname_record = NULL;
-    struct pico_mdns_record *test = NULL;
     char *hostname = NULL;
-    char *name = "_http._tcp.local";
-    char *pointer = "jelle._http._tcp.local";
-    struct pico_ip4 ip = {0xFFFF00FF};
 
     /* Get the first record in the vector */
     hostname_record = pico_mdns_record_vector_get(vector, 0);
 
     /* Convert the rname to an URL */
     hostname = pico_dns_qname_to_url(hostname_record->record->rname);
-
     printf("Initialised with hostname: %s\n", hostname);
-
-    test = pico_mdns_record_create(name, pointer, strlen(pointer),
-                                   PICO_DNS_TYPE_PTR, 120,
-                                   PICO_MDNS_RECORD_SHARED);
-
-    pico_mdns_record_vector_add(&rvector, test);
-    pico_mdns_claim(rvector, mdns_claimed_callback, NULL);
-
-    pico_mdns_getrecord("_http._tcp.local", PICO_DNS_TYPE_PTR,
-                        mdns_getrecord_callback, NULL);
-
     PICO_FREE(hostname);
 }
 
-void app_mdns(char *arg, struct pico_ipv4_link *link)
+void app_mdns(char *arg, struct pico_ip4 address)
 {
     char *hostname, *peername;
     char *nxt = arg;
@@ -87,13 +70,8 @@ void app_mdns(char *arg, struct pico_ipv4_link *link)
         exit(255);
     }
     
-    if (!link) {
-        printf("Link not found!\n");
-        exit(255);
-    }
-    
     printf("\nStarting mDNS module...\n");
-    if (pico_mdns_init(hostname, link, 0, &mdns_init_callback, peername) != 0) {
+    if (pico_mdns_init(hostname, address, 0, &mdns_init_callback, peername) != 0) {
         printf("Initialisation returned with Error!\n");
         exit(255);
     }

@@ -254,7 +254,7 @@ pico_dns_packet_compress_name( uint8_t *name,
             difference = (uint16_t)(ptr_after_str - offset);
             last_byte = packet + *len;
             for (i = ptr_after_str; i <= last_byte; i++)
-                *(i - difference) = *i;
+                *((uint8_t *)(i - difference)) = *i;
 
             /* Update length */
             *len = (uint16_t)(*len - difference);
@@ -1039,9 +1039,20 @@ pico_dns_record_create( const char *url,
         pico_err = PICO_ERR_ENOMEM;
         return NULL;
     }
-    record->rname = PICO_ZALLOC(slen);
+
+    /* Convert the url to an FQDN */
+    record->rname = pico_dns_url_to_qname(url);
+
+    /* If the type is PTR convert rdata to FQDN */
+    if (rtype == PICO_DNS_TYPE_PTR) {
+        record->rdata = (uint8_t *)pico_dns_url_to_qname(rdata);
+        datalen = (uint16_t)(datalen + 2u);
+    } else
+        /* Else, provide space for the record data */
+        record->rdata = PICO_ZALLOC(datalen);
+
+    /* Provide space for the record suffix */
     record->rsuffix = PICO_ZALLOC(sizeof(struct pico_dns_record_suffix));
-    record->rdata = PICO_ZALLOC(datalen);
     if (!(record->rname) || !(record->rsuffix) || !(record->rdata)) {
         pico_dns_record_delete(&record);
         return NULL;
@@ -1053,18 +1064,11 @@ pico_dns_record_create( const char *url,
     /* Fill in the rname_length field */
     record->rname_length = (uint8_t)slen;
     
-    /* Copy url into rname in DNS notation */
-    strcpy(record->rname + 1u, url);
-    pico_dns_name_to_dns_notation(record->rname);
-    
     /* Fill in the resource record suffix */
     pico_dns_record_fill_suffix(record->rsuffix, rtype, rclass, rttl, datalen);
 
     /* Fill in rdata */
-    if (rtype == PICO_DNS_TYPE_PTR) {
-        memcpy(record->rdata + 1, rdata, datalen - 2u);
-        pico_dns_name_to_dns_notation((char *)(record->rdata));
-    } else
+    if (rtype != PICO_DNS_TYPE_PTR)
         memcpy(record->rdata, rdata, datalen);
 
     return record;
@@ -1428,7 +1432,7 @@ pico_dns_url_to_reverse_qname( const char *url, uint8_t proto )
     else {
         /* If you call this function you want a reverse qname */
     }
-    pico_dns_name_to_dns_notation(reverse_qname);
+    pico_dns_name_to_dns_notation(reverse_qname, strlen(url) + 2u);
     return reverse_qname;
 }
 
@@ -1462,8 +1466,8 @@ pico_dns_qname_to_url( const char *qname )
 
     /* Convert qname to an URL*/
     strcpy(temp, qname);
-    pico_dns_notation_to_name(temp);
-    strcpy((char *)url, (char *)(temp + 1));
+    pico_dns_notation_to_name(temp, strlen(qname) + 2u);
+    strcpy(url, (char *)(temp + 1));
 
     return url;
 }
@@ -1499,7 +1503,7 @@ pico_dns_url_to_qname( const char *url )
     strcpy(qname + 1, url);
     
     /* Change to DNS notation */
-    pico_dns_name_to_dns_notation(qname);
+    pico_dns_name_to_dns_notation(qname, strlen(url));
 
     return qname;
 }
@@ -1516,50 +1520,52 @@ pico_dns_client_strlen(const char *url)
 }
 
 /* ****************************************************************************
- *  Converts a URL at location url + 1 to a FQDN in the form 3www6google3com0
+ *  replace '.' in the domain name by the label length
  *  f.e. www.google.be => 3www6google2be0
- *  Size of ptr[] has to +2u more than the URL itself.
  * ****************************************************************************/
-int
-pico_dns_name_to_dns_notation(char *url)
+int pico_dns_name_to_dns_notation(char *ptr, unsigned int maxlen)
 {
     char p = 0, *label = NULL;
     uint8_t len = 0;
+    char *start = ptr;
 
-    if (!url)
+    if (!ptr)
         return -1;
 
-    label = url++;
-    while ((p = *url++) != 0) {
+    label = ptr++;
+    while ((p = *ptr++) != 0) {
         if (p == '.') {
             *label = (char)len;
-            label = url - 1;
+            label = ptr - 1;
             len = 0;
         } else {
             len++;
         }
+        if ((unsigned int)(ptr - start) > maxlen)
+            break;
     }
     *label = (char)len;
     return 0;
 }
 
 /* ****************************************************************************
- *  Converts a FQDN at location fqdn to an URL in the form .www.google.com
+ *  replace the label length in the domain name by '.'
  *  f.e. 3www6google2be0 => .www.google.be
  * ****************************************************************************/
-int
-pico_dns_notation_to_name(char *fqdn)
+int pico_dns_notation_to_name(char *ptr, unsigned int maxlen)
 {
     char p = 0, *label = NULL;
-
-    if (!fqdn)
+    char *start = ptr;
+    if (!ptr)
         return -1;
 
-    label = fqdn;
-    while ((p = *fqdn++) != 0) {
-        fqdn += p;
+    label = ptr;
+    while ((p = *ptr++) != 0) {
+        ptr += p;
         *label = '.';
-        label = fqdn;
+        label = ptr;
+        if ((unsigned int)(ptr - start) > maxlen)
+            break;
     }
     return 0;
 }

@@ -1504,7 +1504,7 @@ pico_dns_url_to_qname( const char *url )
     
     /* Change to DNS notation */
     qname[0] = '.'; /* Don't want strlen to give a wrong length */
-    pico_dns_name_to_dns_notation(qname, strlen(qname) + 1);
+    pico_dns_name_to_dns_notation(qname, strlen(qname));
 
     return qname;
 }

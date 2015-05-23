@@ -123,7 +123,7 @@ pico_mdns_record_vector_delete( pico_mdns_record_vector *vector,
                                 uint16_t index );
 
 static int
-pico_mdns_record_tree_del_url( const char *url, struct pico_tree *tree );
+pico_mdns_record_tree_del_name( const char *name, struct pico_tree *tree );
 
 static int
 pico_mdns_record_tree_del_record( struct pico_mdns_record *record,
@@ -607,7 +607,7 @@ static uint8_t
 pico_mdns_is_suffix_present( char rname[],
                              char **opening_bracket_index,
                              char **closing_bracket_index,
-                             char suffix[][5])
+                             char suffix[][5] )
 {
     uint8_t suffix_is_present = 0, s_i = 0;
     char temp[5] = {0};
@@ -771,7 +771,7 @@ pico_mdns_cookie_resolve_conflict( struct pico_mdns_cookie *cookie,
                                    char *rname )
 {
     pico_mdns_record_vector rvector = { 0 };
-    char *new_name = NULL, *url = NULL;
+    char *new_name = NULL;
 
     /* Check params */
     if (!cookie || !rname) {
@@ -784,13 +784,11 @@ pico_mdns_cookie_resolve_conflict( struct pico_mdns_cookie *cookie,
     }
 
     /* Convert rname to url */
-    url = pico_dns_qname_to_url(rname);
-    mdns_dbg("CONFLICT for probe query with name '%s' occured!\n", url);
+    mdns_dbg("CONFLICT for probe query with name '%s' occured!\n", rname);
 
     /* Prerequisite step: delete all conflicting records from my records */
-    if (pico_mdns_record_tree_del_url(url, &MyRecords) < 0)
+    if (pico_mdns_record_tree_del_name(rname, &MyRecords) < 0)
         mdns_dbg("Could not delete my conflicting records!\n");
-    PICO_FREE(url);
 
     /* Step 1: Remove question with that name from cookie */
     if (pico_dns_question_vector_del_name(&(cookie->qvector), rname) < 0) {
@@ -843,11 +841,11 @@ pico_mdns_cookie_resolve_conflict( struct pico_mdns_cookie *cookie,
 
 static struct pico_dns_question *
 pico_mdns_question_create( const char *url,
-                          uint16_t *len,
-                          uint8_t proto,
-                          uint16_t qtype,
-                          uint8_t flags,
-                          uint8_t reverse )
+                           uint16_t *len,
+                           uint8_t proto,
+                           uint16_t qtype,
+                           uint8_t flags,
+                           uint8_t reverse )
 {
     uint16_t _qtype = 0;                            // qtype
     uint16_t qclass = short_be(PICO_DNS_CLASS_IN);  // qclass
@@ -1204,7 +1202,7 @@ pico_mdns_record_vector_count( pico_mdns_record_vector *vector )
  * ****************************************************************************/
 int
 pico_mdns_record_vector_add( pico_mdns_record_vector *vector,
-                            struct pico_mdns_record *record )
+                             struct pico_mdns_record *record )
 {
     struct pico_mdns_record **new_records = NULL;
     uint16_t i = 0;
@@ -1390,29 +1388,23 @@ pico_mdns_record_vector_append( pico_mdns_record_vector *vector,
  *  Find multiple mDNS res records in a record tree by URL
  * ****************************************************************************/
 static pico_mdns_record_vector
-pico_mdns_record_tree_find_url( const char *url,
-                                struct pico_tree *tree )
+pico_mdns_record_tree_find_name( const char *name,
+                                 struct pico_tree *tree )
 {
     pico_mdns_record_vector cache_hits = { 0 };
     struct pico_mdns_record *node_record = NULL;
     struct pico_tree_node *node = NULL;
-    char *rname = NULL;
 
     /* Check params */
-    if (!url) {
+    if (!name || !tree) {
         pico_err = PICO_ERR_EINVAL;
         return cache_hits;
     }
 
-    /* We need the FQDN to compare */
-    rname = pico_dns_url_to_qname(url);
-    if (!rname)
-        return cache_hits;
-
     /* Iterate over the Cache-tree */
     pico_tree_foreach(node, tree) {
         node_record = node->keyValue;
-        if (strcmp(node_record->record->rname, rname) == 0) {
+        if (strcmp(node_record->record->rname, name) == 0) {
             /* Add the record to the an mDNS res record vector */
             if (pico_mdns_record_vector_add(&cache_hits, node_record) < 0) {
                 mdns_dbg("Could not add copy of cache record to vector!\n");
@@ -1420,7 +1412,6 @@ pico_mdns_record_tree_find_url( const char *url,
             }
         }
     }
-    PICO_FREE(rname);
     return cache_hits;
 }
 
@@ -1428,46 +1419,36 @@ pico_mdns_record_tree_find_url( const char *url,
  *  Find multiple mDNS res records in a record tree by URL and rtype
  * ****************************************************************************/
 static pico_mdns_record_vector
-pico_mdns_record_tree_find_url_type( const char *url,
-                                     uint16_t rtype,
-                                     struct pico_tree *tree )
+pico_mdns_record_tree_find_name_type( const char *name,
+                                      uint16_t rtype,
+                                      struct pico_tree *tree )
 {
     pico_mdns_record_vector cache_hits = { 0 };
-    struct pico_mdns_record test_record;
     struct pico_mdns_record *node_record = NULL;
     struct pico_mdns_record *copy = NULL;
     struct pico_tree_node *node = NULL;
-    uint16_t len = 0;
-    uint8_t rdata = 0;
 
     /* Check params */
-    if (!url) {
+    if (!name || !tree) {
         pico_err = PICO_ERR_EINVAL;
         return cache_hits;
     }
-    /* Create a test record */
-    test_record.record = pico_dns_record_create(url, &rdata, 1, &len, rtype,
-                                                PICO_DNS_CLASS_IN, 0);
     /* Iterate over the Cache-tree */
     pico_tree_foreach(node, tree) {
         node_record = node->keyValue;
-        if (pico_mdns_cmp_name_type(node_record, &test_record) == 0) {
-            /* Make a copy of found record */
-            copy = pico_mdns_record_copy(node_record);
-            if (copy) {
-                /* Add the copy to an mDNS record vector */
-                if (pico_mdns_record_vector_add(&cache_hits, copy) < 0) {
-                    mdns_dbg("Could not add copy of cache record to vector!\n");
-                    return cache_hits;
+        if (rtype == short_be(node_record->record->rsuffix->rtype)) {
+            if (strcmp(node_record->record->rname, name) == 0) {
+                copy = pico_mdns_record_copy(node_record);
+                if (copy) {
+                    /* Add the copy to an mDNS record vector */
+                    if (pico_mdns_record_vector_add(&cache_hits,
+                                                    copy) < 0) {
+                        mdns_dbg("Could not add cache copy to vector!\n");
+                        return cache_hits;
+                    }
                 }
             }
         }
-    }
-
-    /* Delete the test DNS record */
-    if (pico_dns_record_delete(&(test_record.record)) < 0) {
-        mdns_dbg("Could not delete DNS test record!\n");
-        return cache_hits;
     }
 
     return cache_hits;
@@ -1484,7 +1465,7 @@ pico_mdns_record_tree_find_record( struct pico_mdns_record *record,
     struct pico_tree_node *node = NULL;
 
     /* Check params */
-    if (!record) {
+    if (!record || !tree) {
         pico_err = PICO_ERR_EINVAL;
         return NULL;
     }
@@ -1503,21 +1484,21 @@ pico_mdns_record_tree_find_record( struct pico_mdns_record *record,
  *  Delete multiple mDNS res records in a record tree by URL and rtype
  * ****************************************************************************/
 static int
-pico_mdns_record_tree_del_url( const char *url,
-                               struct pico_tree *tree )
+pico_mdns_record_tree_del_name( const char *name,
+                                struct pico_tree *tree )
 {
     pico_mdns_record_vector cache_hits = { 0 };
     struct pico_mdns_record *record = NULL;
     uint16_t i = 0;
 
     /* Check params */
-    if (!url) {
+    if (!name || !tree) {
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }
 
     /* Find all the records by name in the tree */
-    cache_hits = pico_mdns_record_tree_find_url(url, tree);
+    cache_hits = pico_mdns_record_tree_find_name(name, tree);
 
     /* Iterate over the results and remove them from the cache tree */
     for (i = 0; i < pico_mdns_record_vector_count(&cache_hits); i++) {
@@ -1538,50 +1519,37 @@ pico_mdns_record_tree_del_url( const char *url,
  *  Delete multiple mDNS res records in a record tree by URL and rtype
  * ****************************************************************************/
 static int
-pico_mdns_record_tree_del_url_type( const char *url,
-                                    uint16_t type,
-                                    struct pico_tree *tree )
+pico_mdns_record_tree_del_name_type( const char *name,
+                                     uint16_t type,
+                                     struct pico_tree *tree )
 {
-    struct pico_mdns_record test_record;
     struct pico_mdns_record *node_record = NULL;
     struct pico_tree_node *node = NULL;
-    struct pico_tree_node *next = NULL;
-
-    uint8_t rdata = 0;
-    uint16_t len = 0;
 
     /* Check params */
-    if (!url) {
+    if (!name || !tree) {
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }
 
-    /* Create a test record */
-    test_record.record = pico_dns_record_create(url, &rdata, 1, &len, type,
-                                                PICO_DNS_CLASS_IN, 0);
-
     /* Iterate over the tree */
-    pico_tree_foreach_safe(node, tree, next) {
+    pico_tree_foreach(node, tree) {
         node_record = node->keyValue;
-        if (pico_mdns_cmp_name_type(node_record, &test_record) == 0) {
-            /* Move the node to the next */
-            node = pico_tree_next(node);
-            /* Delete from the tree */
-            pico_tree_delete(tree, node_record);
-            if (pico_mdns_record_delete(&node_record) < 0) {
-                mdns_dbg("Could not delete mDNS res record from tree!\n");
-                return -1;
+        if (type == short_be(node_record->record->rsuffix->rtype)) {
+            if (strcmp(node_record->record->rname, name) == 0) {
+                /* Move the node to the next */
+                node = pico_tree_next(node);
+                /* Delete from the tree */
+                pico_tree_delete(tree, node_record);
+                if (pico_mdns_record_delete(&node_record) < 0) {
+                    mdns_dbg("Could not delete mDNS res record from tree!\n");
+                    return -1;
+                }
+                /* Move the node to the previous, otherwise, a node will be
+                 skipped in the next iteration */
+                node = pico_tree_prev(node);
             }
-            /* Move the node to the previous, otherwise, a node will be 
-               skipped in the next iteration */
-            node = pico_tree_prev(node);
         }
-    }
-
-    /* Delete the test DNS record */
-    if (pico_dns_record_delete(&(test_record.record)) < 0) {
-        mdns_dbg("Could not delete DNS test record!\n");
-        return -1;
     }
 
     return 0;
@@ -1643,35 +1611,26 @@ pico_mdns_record_tree_add_record( struct pico_mdns_record *record,
  *  Finds a mDNS record in my records by url and type
  * ****************************************************************************/
 static struct pico_mdns_record *
-pico_mdns_my_records_find_url_type( const char *url,
-                                    uint16_t type )
+pico_mdns_my_records_find_name_type( const char *name,
+                                     uint16_t type )
 {
     struct pico_mdns_record *node_record = NULL;
     struct pico_tree_node *node = NULL;
-    struct pico_mdns_record test_record;
-    uint16_t len = 0;
-    uint8_t rdata = 0;
 
     /* Check params */
-    if (!url) {
+    if (!name) {
         pico_err = PICO_ERR_EINVAL;
         return NULL;
     }
 
-    /* Create a test record */
-    test_record.record = pico_dns_record_create(url, &rdata, 1, &len, type,
-                                                PICO_DNS_CLASS_IN, 0);
     /* Iterate over the Cache-tree */
     pico_tree_foreach(node, &MyRecords) {
         node_record = node->keyValue;
-        if (pico_mdns_cmp_name_type(node_record, &test_record) == 0)
-            return node_record;
-    }
-
-    /* Delete the test DNS record */
-    if (pico_dns_record_delete(&(test_record.record)) < 0) {
-        mdns_dbg("Could not delete DNS test record!\n");
-        return NULL;
+        if (type == short_be(node_record->record->rsuffix->rtype)) {
+            if (strcmp(node_record->record->rname, name) == 0) {
+                return node_record;
+            }
+        }
     }
 
     return NULL;
@@ -1688,7 +1647,6 @@ pico_mdns_my_records_add( pico_mdns_record_vector vector, uint8_t reclaim )
 {
     struct pico_mdns_record *record = NULL, *found = NULL;
     static uint8_t claim_id_count = 0;
-    char *url = NULL;
     uint16_t i = 0, j = 0;
 
     if (!reclaim)
@@ -1700,10 +1658,8 @@ pico_mdns_my_records_add( pico_mdns_record_vector vector, uint8_t reclaim )
 
         /* Check if record with this combination of name and type is already
            contained in my records and if so, skip adding */
-        url = pico_dns_qname_to_url(record->record->rname);
-        found = pico_mdns_my_records_find_url_type(url,
+        found = pico_mdns_my_records_find_name_type(record->record->rname,
                                     short_be(record->record->rsuffix->rtype));
-        PICO_FREE(url);
         if (found) {
             /* Remove duplicate record from the vector */
             pico_mdns_record_vector_remove(&vector, i);
@@ -1971,12 +1927,12 @@ pico_mdns_cache_update_ttl( struct pico_mdns_record *record,
  *  Utility function to add a cache entry
  * ****************************************************************************/
 static int
-pico_mdns_cache_add( struct pico_mdns_record *record, char *url )
+pico_mdns_cache_add( struct pico_mdns_record *record )
 {
     struct pico_dns_record_suffix *suffix = NULL;
 
     /* Check param */
-    if (!record || !url) {
+    if (!record) {
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }
@@ -1985,7 +1941,8 @@ pico_mdns_cache_add( struct pico_mdns_record *record, char *url )
     suffix = record->record->rsuffix;
     if (PICO_MDNS_IS_MSB_SET(short_be(suffix->rclass))) {
         mdns_dbg("FLUSH - Cache flush bit was set, triggered flush.\n");
-        if (pico_mdns_record_tree_del_url_type(url, short_be(suffix->rtype),
+        if (pico_mdns_record_tree_del_name_type(record->record->rname,
+                                               short_be(suffix->rtype),
                                                &Cache) < 0) {
             mdns_dbg("Could not flush records from cache!\n");
             return -1;
@@ -2011,14 +1968,12 @@ static int
 pico_mdns_cache_add_record( struct pico_mdns_record *record )
 {
     struct pico_mdns_record *found = NULL;
-    char *url = NULL;
 
     /* Check params */
     if (!record) {
         pico_err = PICO_ERR_EINVAL;
         return -1;
     }
-
 
     /* See if the record is already contained in the cache */
     found = pico_mdns_record_tree_find_record(record, &Cache);
@@ -2027,18 +1982,10 @@ pico_mdns_cache_add_record( struct pico_mdns_record *record )
                                    long_be(record->record->rsuffix->rttl));
         return 1;
     } else {
-        /* Convert the rname to an URL */
-        url = pico_dns_qname_to_url(record->record->rname);
-        if (!url) {
-            mdns_dbg("Could not convert rname to url!\n");
-            return -1;
-        }
-        if (pico_mdns_cache_add(record, url) < 0) {
+        if (pico_mdns_cache_add(record) < 0) {
             mdns_dbg("Could not add cache entry!\n");
             return -1;
         }
-        /* Free the url created */
-        PICO_FREE(url);
     }
 
     return 0;
@@ -2215,21 +2162,21 @@ pico_mdns_tick( pico_time now, void *_arg )
  *  qclass.
  * ****************************************************************************/
 static pico_mdns_record_vector
-pico_mdns_populate_answer_vector( char *url, uint16_t qtype, uint16_t qclass )
+pico_mdns_populate_answer_vector( char *name, uint16_t qtype, uint16_t qclass )
 {
     pico_mdns_record_vector anvector = {0};
     struct pico_mdns_record *record = NULL;
     uint16_t i = 0;
 
     /* Check params */
-    if (!url)
+    if (!name)
         return anvector;
 
     /* Create an answer record vector */
     if (qtype == PICO_DNS_TYPE_ANY)
-        anvector = pico_mdns_record_tree_find_url(url, &MyRecords);
+        anvector = pico_mdns_record_tree_find_name(name, &MyRecords);
     else
-        anvector = pico_mdns_record_tree_find_url_type(url, qtype, &MyRecords);
+        anvector = pico_mdns_record_tree_find_name_type(name, qtype, &MyRecords);
 
     /* Remove answer which aren't succesfully registered yet */
     for (i = 0; i < anvector.count; i++) {
@@ -2259,7 +2206,7 @@ pico_mdns_handle_single_question( struct pico_dns_question *question,
 {
     pico_mdns_record_vector anvector = { 0 };
     struct pico_mdns_cookie *found_cookie = NULL;
-    char *qname_original = NULL, *url = NULL;
+    char *qname_original = NULL;
     uint16_t qtype = 0, qclass = 0;
 
     /* Check params */
@@ -2275,8 +2222,7 @@ pico_mdns_handle_single_question( struct pico_dns_question *question,
         mdns_dbg("Could not decompress name correctly!\n");
         return anvector;
     }
-    url = pico_dns_qname_to_url(question->qname);
-    mdns_dbg("Question RCVD for '%s'\n", url);
+    mdns_dbg("Question RCVD for '%s'\n", question->qname);
 
     /* Find currently active query cookie */
     found_cookie = pico_mdns_cookie_tree_find_query_cookie(question->qname);
@@ -2288,11 +2234,11 @@ pico_mdns_handle_single_question( struct pico_dns_question *question,
         /* Popoluate answer vector depending on url, qtype and qclass */
         qtype = short_be(question->qsuffix->qtype);
         qclass = short_be(question->qsuffix->qclass);
-        anvector = pico_mdns_populate_answer_vector(url, qtype, qclass);
+        anvector = pico_mdns_populate_answer_vector(question->qname,
+                                                    qtype, qclass);
     }
 
     /* Free the qname, with the decompression, memory was allocated */
-    PICO_FREE(url);
     PICO_FREE(question->qname);
     question->qname = qname_original;
     return anvector;
@@ -2348,7 +2294,6 @@ pico_mdns_handle_single_answer( struct pico_mdns_record *answer )
 {
     struct pico_mdns_record *found_record = NULL;
     struct pico_mdns_cookie *found = NULL;
-    char *url = NULL;
     uint16_t type = 0;
 
     /* Check params */
@@ -2371,11 +2316,9 @@ pico_mdns_handle_single_answer( struct pico_mdns_record *answer )
         mdns_dbg("RCVD an unsolicited record!\n");
 
         /* Check for conflicting 'my record' */
-        url = pico_dns_qname_to_url(answer->record->rname);
-        if (!url) return -1;
         type = short_be(answer->record->rsuffix->rtype);
-        found_record = pico_mdns_my_records_find_url_type(url, type);
-        PICO_FREE(url);
+        found_record = pico_mdns_my_records_find_name_type(
+                                                answer->record->rname, type);
 
         /* Resolve conflict if found */
         if (found_record)
@@ -3048,6 +2991,7 @@ pico_mdns_getrecord( const char *url, uint16_t type,
                      void *arg )
 {
     pico_mdns_record_vector cache_hits = { 0 };
+    char *name = NULL;
 
     /* Check params */
     if (!url) {
@@ -3056,7 +3000,9 @@ pico_mdns_getrecord( const char *url, uint16_t type,
     }
 
     /* First, try to find records in the cache */
-    cache_hits = pico_mdns_record_tree_find_url_type(url, type, &Cache);
+    name = pico_dns_url_to_qname(url);
+    cache_hits = pico_mdns_record_tree_find_name_type(name, type, &Cache);
+    PICO_FREE(name);
     if (pico_mdns_record_vector_count(&cache_hits) > 0) {
         mdns_dbg("CACHE HIT! Passed copies of cache records to callback.\n");
         callback(&cache_hits, NULL, arg);

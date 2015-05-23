@@ -1377,7 +1377,7 @@ void add_records( void )
     pico_mdns_record_tree_add_record(record2, &MyRecords);
     pico_mdns_record_tree_add_record(record3, &MyRecords);
 }
-START_TEST(tc_mdns_record_tree_find_url)
+START_TEST(tc_mdns_record_tree_find_name)
 {
     pico_mdns_record_vector hits = {0};
     int found = 1, i = 0;
@@ -1386,9 +1386,9 @@ START_TEST(tc_mdns_record_tree_find_url)
 
     add_records();
 
-    hits = pico_mdns_record_tree_find_url("foo.local", &MyRecords);
+    hits = pico_mdns_record_tree_find_name("\3foo\5local", &MyRecords);
     fail_unless(3 == hits.count,
-                "mdns_record_tree_find_url should find 3 records here!\n");
+                "mdns_record_tree_find_name should find 3 records here!\n");
     for (i = 0; i < hits.count; i++) {
         if (strcmp(pico_mdns_record_vector_get(&hits,
                                                (uint16_t)i)->record->rname,
@@ -1396,20 +1396,20 @@ START_TEST(tc_mdns_record_tree_find_url)
             found = 0;
     }
     fail_unless(1 == found,
-                "mdns_record_tree_find_url returned records with other name!\n");
+                "mdns_record_tree_find_name returned records with other name!\n");
 
-    hits = pico_mdns_record_tree_find_url("bar.local", &MyRecords);
+    hits = pico_mdns_record_tree_find_name("\3bar\5local", &MyRecords);
     fail_unless(1 == hits.count,
-                "mdns_record_tree_find_url should find 1 record here!\n");
+                "mdns_record_tree_find_name should find 1 record here!\n");
     fail_unless(0 == strcmp(pico_mdns_record_vector_get(&hits,
                                                         0)->record->rname,
                             "\3bar\5local"),
-                "mdns_record_tree_find_url returned record with other name!\n");
+                "mdns_record_tree_find_name returned record with other name!\n");
 
     printf("*********************** ending %s * \n", __func__);
 }
 END_TEST
-START_TEST(tc_mdns_record_tree_find_url_type)
+START_TEST(tc_mdns_record_tree_find_name_type)
 {
     pico_mdns_record_vector hits = {0};
     int found = 1, i = 0;
@@ -1419,17 +1419,17 @@ START_TEST(tc_mdns_record_tree_find_url_type)
     add_records();
 
     /* Try to find the first A record */
-    hits = pico_mdns_record_tree_find_url_type("foo.local", PICO_DNS_TYPE_A,
+    hits = pico_mdns_record_tree_find_name_type("\3foo\5local", PICO_DNS_TYPE_A,
                                                &MyRecords);
     fail_unless(1 == hits.count,
-                "mdns_record_tree_find_url should find 1 record here!\n");
+                "mdns_record_tree_find_name should find 1 record here!\n");
     fail_unless(0 == strcmp(pico_mdns_record_vector_get(&hits,
                                                         0)->record->rname,
                             "\3foo\5local"),
-                "mdns_record_tree_find_url returned record with other name!\n");
+                "mdns_record_tree_find_name returned record with other name!\n");
 
     /* Try to find the 2 PTR records */
-    hits = pico_mdns_record_tree_find_url_type("foo.local", PICO_DNS_TYPE_PTR,
+    hits = pico_mdns_record_tree_find_name_type("\3foo\5local", PICO_DNS_TYPE_PTR,
                                                &MyRecords);
     for (i = 0; i < hits.count; i++) {
         if (strcmp(pico_mdns_record_vector_get(&hits,
@@ -1438,17 +1438,17 @@ START_TEST(tc_mdns_record_tree_find_url_type)
             found = 0;
     }
     fail_unless(1 == found,
-            "mdns_record_tree_find_url returned records with other name!\n");
+            "mdns_record_tree_find_name returned records with other name!\n");
 
     /* Try to find the last A record */
-    hits = pico_mdns_record_tree_find_url_type("bar.local", PICO_DNS_TYPE_A,
+    hits = pico_mdns_record_tree_find_name_type("\3bar\5local", PICO_DNS_TYPE_A,
                                                &MyRecords);
     fail_unless(1 == hits.count,
-                "mdns_record_tree_find_url should find 1 record here!\n");
+                "mdns_record_tree_find_name should find 1 record here!\n");
     fail_unless(0 == strcmp(pico_mdns_record_vector_get(&hits,
                                                         0)->record->rname,
                             "\3bar\5local"),
-                "mdns_record_tree_find_url returned record with other name!\n");
+                "mdns_record_tree_find_name returned record with other name!\n");
 
     printf("*********************** ending %s * \n", __func__);
 }
@@ -1499,7 +1499,7 @@ START_TEST(tc_mdns_record_tree_find_record)
     printf("*********************** ending %s * \n", __func__);
 }
 END_TEST
-START_TEST(tc_mdns_record_tree_del_url)
+START_TEST(tc_mdns_record_tree_del_name)
 {
     pico_mdns_record_vector hits = {0};
     struct pico_mdns_record *record = NULL, *record1 = NULL, *record2 = NULL,
@@ -1539,25 +1539,25 @@ START_TEST(tc_mdns_record_tree_del_url)
     pico_mdns_record_tree_add_record(record3, &MyRecords);
 
     /* Try to del the first tree records */
-    ret = pico_mdns_record_tree_del_url(url, &MyRecords);
+    ret = pico_mdns_record_tree_del_name("\3foo\5local", &MyRecords);
     fail_unless(0 == ret,
-                "mdns_record_tree_del_url failed!\n");
-    hits = pico_mdns_record_tree_find_url(url, &MyRecords);
+                "mdns_record_tree_del_name failed!\n");
+    hits = pico_mdns_record_tree_find_name("\3foo\5local", &MyRecords);
     fail_unless(0 == hits.count,
-                "mdns_record_tree_find_url should find 3 records here!\n");
+                "mdns_record_tree_find_name should find 3 records here!\n");
 
-    hits = pico_mdns_record_tree_find_url(url1, &MyRecords);
+    hits = pico_mdns_record_tree_find_name("\3bar\5local", &MyRecords);
     fail_unless(1 == hits.count,
-                "mdns_record_tree_find_url should find 1 record here!\n");
+                "mdns_record_tree_find_name should find 1 record here!\n");
     fail_unless(0 == strcmp(pico_mdns_record_vector_get(&hits,
                                                         0)->record->rname,
                             "\3bar\5local"),
-                "mdns_record_tree_del_url failed!\n");
+                "mdns_record_tree_del_name failed!\n");
 
     printf("*********************** ending %s * \n", __func__);
 }
 END_TEST
-START_TEST(tc_mdns_record_tree_del_url_type)
+START_TEST(tc_mdns_record_tree_del_name_type)
 {
     pico_mdns_record_vector hits = {0};
     const char *url = "foo.local";
@@ -1568,22 +1568,22 @@ START_TEST(tc_mdns_record_tree_del_url_type)
     add_records();
 
     /* Try to del the two PTR records */
-    ret = pico_mdns_record_tree_del_url_type(url, PICO_DNS_TYPE_PTR,
+    ret = pico_mdns_record_tree_del_name_type("\3foo\5local", PICO_DNS_TYPE_PTR,
                                              &MyRecords);
-    fail_unless(0 == ret, "mdns_record_tree_del_url_type returned error!\n");
+    fail_unless(0 == ret, "mdns_record_tree_del_name_type returned error!\n");
 
     /* Try to find the 2 PTR records */
-    hits = pico_mdns_record_tree_find_url_type(url, PICO_DNS_TYPE_PTR,
+    hits = pico_mdns_record_tree_find_name_type("\3foo\5local", PICO_DNS_TYPE_PTR,
                                                &MyRecords);
     fail_unless(0 == hits.count,
-                "mdns_record_tree_find_url_type returned PTR records!\n");
+                "mdns_record_tree_find_name_type returned PTR records!\n");
 
 
     /* Try to find the first A record */
-    hits = pico_mdns_record_tree_find_url_type(url, PICO_DNS_TYPE_A,
+    hits = pico_mdns_record_tree_find_name_type("\3foo\5local", PICO_DNS_TYPE_A,
                                                &MyRecords);
     fail_unless(1 == hits.count,
-                "mdns_record_tree_del_url_type failed!\n");
+                "mdns_record_tree_del_name_type failed!\n");
 
     printf("*********************** ending %s * \n", __func__);
 }
@@ -1648,9 +1648,9 @@ START_TEST(tc_mdns_record_tree_add_record)
 
     add_records();
 
-    hits = pico_mdns_record_tree_find_url("foo.local", &MyRecords);
+    hits = pico_mdns_record_tree_find_name("\3foo\5local", &MyRecords);
     fail_unless(3 == hits.count,
-                "mdns_record_tree_find_url should find 3 records here!\n");
+                "mdns_record_tree_find_name should find 3 records here!\n");
     for (i = 0; i < hits.count; i++) {
         if (strcmp(pico_mdns_record_vector_get(&hits,
                                                (uint16_t)i)->record->rname,
@@ -1658,21 +1658,21 @@ START_TEST(tc_mdns_record_tree_add_record)
             found = 0;
     }
     fail_unless(1 == found,
-                "mdns_record_tree_find_url returned records with other name!\n");
+                "mdns_record_tree_find_name returned records with other name!\n");
 
-    hits = pico_mdns_record_tree_find_url("bar.local", &MyRecords);
+    hits = pico_mdns_record_tree_find_name("\3bar\5local", &MyRecords);
     fail_unless(1 == hits.count,
-                "mdns_record_tree_find_url should find 1 record here!\n");
+                "mdns_record_tree_find_name should find 1 record here!\n");
     fail_unless(0 == strcmp(pico_mdns_record_vector_get(&hits,
                                                         0)->record->rname,
                             "\3bar\5local"),
-                "mdns_record_tree_find_url returned record with other name!\n");
+                "mdns_record_tree_find_name returned record with other name!\n");
 
     printf("*********************** ending %s * \n", __func__);
 }
 END_TEST
 /* MARK: My records functions */
-START_TEST(tc_mdns_my_records_find_url_type)
+START_TEST(tc_mdns_my_records_find_name_type)
 {
     struct pico_mdns_record *hit = NULL;
 
@@ -1681,19 +1681,19 @@ START_TEST(tc_mdns_my_records_find_url_type)
     add_records();
 
     /* Try to find the first A record */
-    hit = pico_mdns_my_records_find_url_type("foo.local", PICO_DNS_TYPE_A);
+    hit = pico_mdns_my_records_find_name_type("\3foo\5local", PICO_DNS_TYPE_A);
     fail_unless(0 == strcmp(hit->record->rname, "\3foo\5local"),
-                "mdns_record_tree_find_url returned record with other name!\n");
+                "mdns_record_tree_find_name returned record with other name!\n");
 
     /* Try to find the first PTR records */
-    hit = pico_mdns_my_records_find_url_type("foo.local", PICO_DNS_TYPE_PTR);
+    hit = pico_mdns_my_records_find_name_type("\3foo\5local", PICO_DNS_TYPE_PTR);
     fail_unless(0 == strcmp(hit->record->rname, "\3foo\5local"),
-                "mdns_record_tree_find_url returned record with other name!\n");
+                "mdns_record_tree_find_name returned record with other name!\n");
 
     /* Try to find the last A record */
-    hit = pico_mdns_my_records_find_url_type("bar.local", PICO_DNS_TYPE_A);
+    hit = pico_mdns_my_records_find_name_type("\3bar\5local", PICO_DNS_TYPE_A);
     fail_unless(0 == strcmp(hit->record->rname, "\3bar\5local"),
-                "mdns_record_tree_find_url returned record with other name!\n");
+                "mdns_record_tree_find_name returned record with other name!\n");
 
     printf("*********************** ending %s * \n", __func__);
 }
@@ -2041,7 +2041,7 @@ START_TEST(tc_mdns_populate_answer_vector)
     printf("*********************** starting %s * \n", __func__);
     add_records();
 
-    vector = pico_mdns_populate_answer_vector("foo.local",
+    vector = pico_mdns_populate_answer_vector("\3foo\5local",
                                               PICO_DNS_TYPE_A,
                                               PICO_DNS_CLASS_IN);
 
@@ -2540,16 +2540,16 @@ Suite *pico_suite(void)
     TCase *TCase_mdns_record_vector_append = tcase_create("Unit test for mdns_record_vector_append");
 
     /* Record tree functions */
-    TCase *TCase_mdns_record_tree_find_url = tcase_create("Unit test for mdns_record_tree_find_url");
-    TCase *TCase_mdns_record_tree_find_url_type = tcase_create("Unit test for mdns_record_tree_find_url_type");
+    TCase *TCase_mdns_record_tree_find_name = tcase_create("Unit test for mdns_record_tree_find_name");
+    TCase *TCase_mdns_record_tree_find_name_type = tcase_create("Unit test for mdns_record_tree_find_name_type");
     TCase *TCase_mdns_record_tree_find_record = tcase_create("Unit test for mdns_record_tree_find_record");
-    TCase *TCase_mdns_record_tree_del_url = tcase_create("Unit test for mdns_record_tree_del_url");
-    TCase *TCase_mdns_record_tree_del_url_type = tcase_create("Unit test for mdns_record_tree_del_url_type");
+    TCase *TCase_mdns_record_tree_del_name = tcase_create("Unit test for mdns_record_tree_del_name");
+    TCase *TCase_mdns_record_tree_del_name_type = tcase_create("Unit test for mdns_record_tree_del_name_type");
     TCase *TCase_mdns_record_tree_del_record = tcase_create("Unit test for mdns_record_tree_del_record");
     TCase *TCase_mdns_record_tree_add_record = tcase_create("Unit test for mdns_record_tree_add_record");
 
     /* My record functions */
-    TCase *TCase_mdns_my_records_find_url_type = tcase_create("Unit test for mdns_my_records_find_url_type");
+    TCase *TCase_mdns_my_records_find_name_type = tcase_create("Unit test for mdns_my_records_find_name_type");
     TCase *TCase_mdns_my_records_add = tcase_create("Unit test for mdns_my_records_add");
     TCase *TCase_mdns_my_records_find_probed = tcase_create("Unit test for mdns_my_records_find_probed");
     TCase *TCase_mdns_my_records_find_to_probe = tcase_create("Unit test for mdns_my_records_find_to_probe");
@@ -2670,24 +2670,24 @@ Suite *pico_suite(void)
     tcase_add_test(TCase_mdns_record_vector_append, tc_mdns_record_vector_append);
 
     /* Record tree functions */
-    tcase_add_test(TCase_mdns_record_tree_find_url, tc_mdns_record_tree_find_url);
-    suite_add_tcase(s, TCase_mdns_record_tree_find_url);
-    tcase_add_test(TCase_mdns_record_tree_find_url_type, tc_mdns_record_tree_find_url_type);
-    suite_add_tcase(s, TCase_mdns_record_tree_find_url_type);
+    tcase_add_test(TCase_mdns_record_tree_find_name, tc_mdns_record_tree_find_name);
+    suite_add_tcase(s, TCase_mdns_record_tree_find_name);
+    tcase_add_test(TCase_mdns_record_tree_find_name_type, tc_mdns_record_tree_find_name_type);
+    suite_add_tcase(s, TCase_mdns_record_tree_find_name_type);
     tcase_add_test(TCase_mdns_record_tree_find_record, tc_mdns_record_tree_find_record);
     suite_add_tcase(s, TCase_mdns_record_tree_find_record);
-    tcase_add_test(TCase_mdns_record_tree_del_url, tc_mdns_record_tree_del_url);
-    suite_add_tcase(s, TCase_mdns_record_tree_del_url);
-    tcase_add_test(TCase_mdns_record_tree_del_url_type, tc_mdns_record_tree_del_url_type);
-    suite_add_tcase(s, TCase_mdns_record_tree_del_url_type);
+    tcase_add_test(TCase_mdns_record_tree_del_name, tc_mdns_record_tree_del_name);
+    suite_add_tcase(s, TCase_mdns_record_tree_del_name);
+    tcase_add_test(TCase_mdns_record_tree_del_name_type, tc_mdns_record_tree_del_name_type);
+    suite_add_tcase(s, TCase_mdns_record_tree_del_name_type);
     tcase_add_test(TCase_mdns_record_tree_del_record, tc_mdns_record_tree_del_record);
     suite_add_tcase(s, TCase_mdns_record_tree_del_record);
     tcase_add_test(TCase_mdns_record_tree_add_record, tc_mdns_record_tree_add_record);
     suite_add_tcase(s, TCase_mdns_record_tree_add_record);
 
     /* My records functions */
-    tcase_add_test(TCase_mdns_my_records_find_url_type, tc_mdns_my_records_find_url_type);
-    suite_add_tcase(s, TCase_mdns_my_records_find_url_type);
+    tcase_add_test(TCase_mdns_my_records_find_name_type, tc_mdns_my_records_find_name_type);
+    suite_add_tcase(s, TCase_mdns_my_records_find_name_type);
     tcase_add_test(TCase_mdns_my_records_add, tc_mdns_my_records_add);
     suite_add_tcase(s, TCase_mdns_my_records_add);
     tcase_add_test(TCase_mdns_my_records_find_probed, tc_mdns_my_records_find_probed);

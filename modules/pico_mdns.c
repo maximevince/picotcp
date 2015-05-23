@@ -356,6 +356,7 @@ static void (*init_callback)(pico_mdns_record_vector *, char *, void *) = 0;
  *  Hostname for this machine, only 1 hostname can be set.
  * ****************************************************************************/
 static char *hostname = NULL;
+static pico_mdns_record_vector hostnamevector = { 0 };
 
 // MARK: MDNS PACKET UTILITIES
 
@@ -1346,7 +1347,7 @@ pico_mdns_record_vector_destroy( pico_mdns_record_vector *vector )
  * ****************************************************************************/
 static int
 pico_mdns_record_vector_append( pico_mdns_record_vector *vector,
-                               pico_mdns_record_vector *vector_b )
+                                pico_mdns_record_vector *vector_b )
 {
     struct pico_mdns_record **new_records = NULL;
     uint16_t i = 0, offset = 0;
@@ -1795,6 +1796,7 @@ pico_mdns_my_records_claimed( pico_mdns_record_vector rvector,
                               void *arg )
 {
     pico_mdns_record_vector vector = { 0 };
+    pico_mdns_record_vector _vector = { 0 };
     struct pico_mdns_record *record = NULL;
     struct pico_mdns_record *found = NULL;
     char *url = NULL;
@@ -1823,15 +1825,22 @@ pico_mdns_my_records_claimed( pico_mdns_record_vector rvector,
                 url = pico_dns_qname_to_url(found->record->rname);
                 PICO_FREE(hostname);
                 hostname = url;
+                pico_mdns_record_vector_delete(&hostnamevector, 0);
+                pico_mdns_record_vector_add(&hostnamevector, found);
             }
         }
     }
 
     /* If all_claimed is still true */
     if (pico_mdns_my_records_claimed_id(claim_id, &vector)) {
-        mdns_dbg("%d records with claim ID '%d' are claimed!\n",
-                 vector.count, claim_id);
-        callback(&vector, NULL, arg);
+        mdns_dbg("%d records with claim ID '%d' are claimed!\n", vector.count,
+                 claim_id);
+        if (callback == init_callback) {
+            _vector = hostnamevector;
+            pico_mdns_record_vector_append(&_vector, &vector);
+            callback(&_vector, NULL, arg);
+        } else
+            callback(&vector, NULL, arg);
     }
 
     return 0;

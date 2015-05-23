@@ -1198,14 +1198,18 @@ START_TEST(tc_pico_dns_name_to_dns_notation)
 {
     char qname1[13] = { 0x07, 'p','i','c','o','t','c','p',
                         0x03, 'c','o','m',
-                        0x00 };
-    char url1[13] = { '.','p','i','c','o','t','c','p','.','c','o','m',0x00 };
+        0x00 };
+    char url1[13] = { 0,'p','i','c','o','t','c','p','.','c','o','m',0x00 };
+    char url2[13] = { 'a','p','i','c','o','t','c','p','.','c','o','m',0x00 };
     int ret = 0;
 
     ret = pico_dns_name_to_dns_notation(url1, strlen(url1) + 2);
+    fail_unless(ret == -1, "dns_name_to_dns_notation didn't check correct!\n");
+
+    ret = pico_dns_name_to_dns_notation(url2, strlen(url2) + 2);
     fail_unless(ret == 0, "dns_name_to_dns_notation returned error!\n");
-    fail_unless(strcmp(url1, qname1) == 0,
-                "dns_name_to_dns_notation failed! %s\n", url1);
+    fail_unless(strcmp(url2, qname1) == 0,
+                "dns_name_to_dns_notation failed! %s\n", url2);
 }
 END_TEST
 START_TEST(tc_pico_dns_notation_to_name)

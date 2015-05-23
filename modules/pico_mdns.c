@@ -28,7 +28,7 @@
 #define PICO_MDNS_RR_TTL_TICK (1000)    /* One second */
 
 /* mDNS MTU size */
-#define PICO_MDNS_MTU 1400u
+#define PICO_MDNS_MAXBUF 1400u
 
 /* Cookie flags */
 #define PICO_MDNS_COOKIE_TYPE_ANNOUNCEMENT 0x01u
@@ -2913,7 +2913,7 @@ pico_mdns_recv(void *buf, int buflen, struct pico_ip4 peer)
 static void
 pico_mdns_event4( uint16_t ev, struct pico_socket *s )
 {
-    char recvbuf[PICO_MDNS_MTU] = { 0 };
+    char *recvbuf = NULL;
     struct pico_ip4 peer = { 0 };
     int pico_read = 0;
     uint16_t port = 0;
@@ -2922,15 +2922,20 @@ pico_mdns_event4( uint16_t ev, struct pico_socket *s )
     /* process read event, data available */
     if (ev == PICO_SOCK_EV_RD) {
         mdns_dbg("\n>>>>>>> READ EVENT! <<<<<<<\n");
+        recvbuf = PICO_ZALLOC(PICO_MDNS_MAXBUF);
+        if (!recvbuf) {
+            pico_err = PICO_ERR_ENOMEM;
+            return;
+        }
         /* Receive while data is available in socket buffer */
-        while((pico_read = pico_socket_recvfrom(s, recvbuf, PICO_MDNS_MTU,
+        while((pico_read = pico_socket_recvfrom(s, recvbuf, PICO_MDNS_MAXBUF,
                                                 &peer, &port)) > 0) {
             pico_ipv4_to_string(host, peer.addr);
             mdns_dbg("Received data from %s:%u\n", host, short_be(port));
             /* Handle the MDNS data received */
             pico_mdns_recv(recvbuf, pico_read, peer);
         }
-
+        PICO_FREE(recvbuf);
         mdns_dbg(">>>>>>>>>>>>>><<<<<<<<<<<<<\n\n");
     } else if (ev == PICO_SOCK_EV_CLOSE) {
         mdns_dbg("Socket is closed. Bailing out.\n");

@@ -1431,7 +1431,7 @@ pico_dns_url_to_reverse_qname( const char *url, uint8_t proto )
     else {
         /* If you call this function you want a reverse qname */
     }
-    reverse_qname[0] = '.';
+    reverse_qname[0] = '.'; /* Don't want strlen to give wrong length */
     pico_dns_name_to_dns_notation(reverse_qname, strlen(reverse_qname) + 1);
     return reverse_qname;
 }
@@ -1503,7 +1503,7 @@ pico_dns_url_to_qname( const char *url )
     strcpy(qname + 1, url);
     
     /* Change to DNS notation */
-    qname[0] = '.';
+    qname[0] = '.'; /* Don't want strlen to give a wrong length */
     pico_dns_name_to_dns_notation(qname, strlen(qname) + 1);
 
     return qname;
@@ -1531,6 +1531,8 @@ int pico_dns_name_to_dns_notation(char *ptr, unsigned int maxlen)
     char *start = ptr;
 
     if (!ptr)
+        return -1;
+    if (!maxlen)
         return -1;
 
     label = ptr++;

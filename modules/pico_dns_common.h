@@ -53,6 +53,8 @@
 #define PICO_ARPA_IPV6_SUFFIX ".IP6.ARPA"
 #endif
 
+#define PICO_DNS_NAMEBUF_SIZE (256)
+
 enum pico_dns_arpa
 {
     PICO_DNS_ARPA4,

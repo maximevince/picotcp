@@ -421,6 +421,12 @@ int pico_dns_name_to_dns_notation(char *ptr, unsigned int maxlen);
 int pico_dns_notation_to_name(char *ptr, unsigned int maxlen);
 
 /* ****************************************************************************
+ *  Returns the length of the first label in an URL
+ * ****************************************************************************/
+uint16_t
+pico_dns_first_label_length( const char *url );
+
+/* ****************************************************************************
  *  Mirrors and IP-address in ptr to an ARPA-format
  *  f.e. 192.168.0.1 => 1.0.168.192
  * ****************************************************************************/

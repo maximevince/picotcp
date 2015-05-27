@@ -109,7 +109,7 @@ pico_dns_fill_packet_rr_sections( pico_dns_packet *packet,
 
     /* iterate over ADDITIONAL vector */
     for (i = 0; i < pico_dns_record_vector_count(arvector); i++) {
-        record = pico_dns_record_vector_get(nsvector, i);
+        record = pico_dns_record_vector_get(arvector, i);
         if (pico_dns_record_copy_flat(record, &destination)) {
             dns_dbg("Could not copy record into Authority Section!\n");
             return -1;
@@ -1027,7 +1027,7 @@ pico_dns_record_create( const char *url,
     char *rdata = (char *)_rdata;
     
     /* Get length + 2 for .-prefix en trailing zero-byte */
-    slen = (uint16_t)(pico_dns_client_strlen(url) + 2u);
+    slen = (uint16_t)(strlen(url) + 2u);
 
     /* We want DNS notation with PTR records */
     if (rtype == PICO_DNS_TYPE_PTR)
@@ -1262,9 +1262,10 @@ pico_dns_record_vector_size( pico_dns_record_vector *vector )
     /* Add up the sizes */
     for (i = 0; i < pico_dns_record_vector_count(vector); i++) {
         record = pico_dns_record_vector_get(vector, i);
-        size = size + (size_t)record->rname_length +
-               sizeof(struct pico_dns_record_suffix) +
-               short_be(record->rsuffix->rdlength);
+        if (record)
+        	size = size + (size_t)record->rname_length +
+               	   sizeof(struct pico_dns_record_suffix) +
+				   short_be(record->rsuffix->rdlength);
     }
     return (uint16_t)size;
 }
@@ -1432,7 +1433,8 @@ pico_dns_url_to_reverse_qname( const char *url, uint8_t proto )
         /* If you call this function you want a reverse qname */
     }
     reverse_qname[0] = '.'; /* Don't want strlen to give wrong length */
-    pico_dns_name_to_dns_notation(reverse_qname, strlen(reverse_qname) + 1);
+    pico_dns_name_to_dns_notation(reverse_qname,
+								  (uint16_t)(strlen(reverse_qname) + 1));
     return reverse_qname;
 }
 
@@ -1466,7 +1468,7 @@ pico_dns_qname_to_url( const char *qname )
 
     /* Convert qname to an URL*/
     strcpy(temp, qname);
-    pico_dns_notation_to_name(temp, strlen(qname) + 2u);
+    pico_dns_notation_to_name(temp, (uint16_t)(strlen(qname) + 2u));
     strcpy(url, (char *)(temp + 1));
 
     return url;
@@ -1504,7 +1506,7 @@ pico_dns_url_to_qname( const char *url )
     
     /* Change to DNS notation */
     qname[0] = '.'; /* Don't want strlen to give a wrong length */
-    pico_dns_name_to_dns_notation(qname, strlen(qname));
+    pico_dns_name_to_dns_notation(qname, (uint16_t)(strlen(qname)));
 
     return qname;
 }
@@ -1571,6 +1573,27 @@ int pico_dns_notation_to_name(char *ptr, unsigned int maxlen)
             break;
     }
     return 0;
+}
+
+/* ****************************************************************************
+ *  Returns the length of the first label in an URL
+ * ****************************************************************************/
+uint16_t
+pico_dns_first_label_length( const char *url )
+{
+	const char *i = NULL;
+	uint16_t len = 0;
+
+	if (!url)
+		return 0;
+
+	i = url;
+	while (*i != '.' && *i != '\0') {
+		++i;
+		++len;
+	}
+
+	return len;
 }
 
 /* ****************************************************************************

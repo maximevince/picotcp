@@ -175,12 +175,6 @@ START_TEST(tc_dns_sd_kv_delete)
                 "dns_sd_kv_delete failed!\n");
 }
 END_TEST
-START_TEST(tc_dns_sd_first_label_length)
-{
-    fail_unless(pico_dns_sd_first_label_length("vlees..local") == 5,
-                "dns_sd_first_label_length failed!\n");
-}
-END_TEST
 START_TEST(tc_dns_sd_check_type_format)
 {
     fail_unless(pico_dns_sd_check_type_format("_http._tcp") == 0,
@@ -229,18 +223,12 @@ START_TEST(tc_dns_sd_claimed_callback)
 {
     pico_mdns_record_vector vector = {0};
     struct register_argument *test = NULL;
-    struct pico_mdns_record *ptr_record = NULL, *srv_record = NULL;
+    struct pico_mdns_record *srv_record = NULL;
     char *name = "Hello World!";
     char *url = "Hello World!._http._tcp.local";
 
     pico_stack_init();
     dns_sd_init();
-
-    /* Create the shared PTR record */
-    ptr_record = pico_mdns_record_create((char *)(url + strlen(name) + 1u),
-                                         (void *)url, (uint16_t)strlen(url),
-                                         PICO_DNS_TYPE_PTR,
-                                         120, PICO_MDNS_RECORD_SHARED);
 
     /* Create a SRV record to pass in */
     srv_record = pico_dns_sd_srv_record_create(url, 0, 0, 80, "host.local",
@@ -248,7 +236,6 @@ START_TEST(tc_dns_sd_claimed_callback)
     pico_mdns_record_vector_add(&vector, srv_record);
 
     test = PICO_ZALLOC(sizeof(struct register_argument));
-    test->ptr_record = ptr_record;
     test->callback = callback;
     test->arg = NULL;
 
@@ -360,7 +347,6 @@ Suite *pico_suite(void)
     TCase *TCase_dns_sd_kv_delete = tcase_create("Unit test for dns_sd_kv_delete");
 
     /* Utility functions */
-    TCase *TCase_dns_sd_first_label_length = tcase_create("Unit test for dns_sd_first_label_length");
     TCase *TCase_dns_sd_check_type_format = tcase_create("Unit test for dns_sd_check_type_format");
     TCase *TCase_dns_sd_check_instance_name_format = tcase_create("Unit test for dns_sd_check_instance_name_format");
     TCase *TCase_dns_sd_create_service_url = tcase_create("Unit test for dns_sd_create_service_url");
@@ -394,8 +380,6 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_dns_sd_kv_delete);
 
     /* Utility functions */
-    tcase_add_test(TCase_dns_sd_first_label_length, tc_dns_sd_first_label_length);
-    suite_add_tcase(s, TCase_dns_sd_first_label_length);
     tcase_add_test(TCase_dns_sd_check_type_format, tc_dns_sd_check_type_format);
     suite_add_tcase(s, TCase_dns_sd_check_type_format);
     tcase_add_test(TCase_dns_sd_check_instance_name_format, tc_dns_sd_check_instance_name_format);

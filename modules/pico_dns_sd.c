@@ -31,7 +31,6 @@ typedef PACKED_STRUCT_DEF pico_dns_srv_record_prefix
 } pico_dns_srv_record;
 
 struct register_argument {
-    struct pico_mdns_record *ptr_record;
     void (*callback)(pico_mdns_record_vector *,
                      char *,
                      void *);
@@ -256,27 +255,6 @@ pico_dns_sd_kv_delete( key_value_pair_t **kv_pair )
 }
 
 /* ****************************************************************************
- *  Returns the length of the first label in an URL
- * ****************************************************************************/
-static uint16_t
-pico_dns_sd_first_label_length( const char *url )
-{
-    const char *i = NULL;
-    uint16_t len = 0;
-
-    if (!url)
-        return 0;
-
-    i = url;
-    while (*i != '.' && *i != '\0') {
-        ++i;
-        ++len;
-    }
-
-    return len;
-}
-
-/* ****************************************************************************
  *  Returns 0 when the type is correctly formatted and it's label lengths are
  *  in the allowed boundaries
  * ****************************************************************************/
@@ -290,7 +268,7 @@ pico_dns_sd_check_type_format( const char *type )
         return -1;
 
     /* Then check if the first label is larger than 17 bytes */
-    first_lbl_length = pico_dns_sd_first_label_length(type);
+    first_lbl_length = pico_dns_first_label_length(type);
 
     /* Check if there is a subtype present */
     if (memcmp(type + first_lbl_length + 1, "_sub", 4) == 0) {
@@ -299,7 +277,7 @@ pico_dns_sd_check_type_format( const char *type )
             return -1;
 
         /* Get the length of the service name */
-        first_lbl_length = pico_dns_sd_first_label_length(type +
+        first_lbl_length = pico_dns_first_label_length(type +
                                                           first_lbl_length + 6);
     } else {
         /* Check if type is not greater then 21 bytes (22 - 1, since the length
@@ -379,53 +357,19 @@ pico_dns_sd_claimed_callback( pico_mdns_record_vector *records,
                               char *str,
                               void *arg )
 {
-    pico_mdns_record_vector rvector = {0};
-    struct pico_mdns_record *record = NULL;
     struct register_argument *arguments = NULL;
-    struct pico_mdns_record *ptr_record = NULL;
-    char *rname = NULL;
 
     IGNORE_PARAMETER(str);
 
-    /* Parse in the PTR record */
+    /* Parse in the arguments */
     if (!arg || !records) {
         pico_err = PICO_ERR_EINVAL;
         return;
     }
-    arguments = (struct register_argument *)arg;
-    ptr_record = arguments->ptr_record;
+	arguments = (struct register_argument *) arg;
 
-    /* Get the rname of the claimed records */
-    if (!(record = pico_mdns_record_vector_get(records, 0))) {
-        dns_sd_dbg("Error occured with claiming!\n");
-        return;
-    }
-    rname = record->record->rname;
-    if (strcmp(rname, (char*)(ptr_record->record->rdata)) != 0) {
-        /* Update rdata */
-        PICO_FREE(ptr_record->record->rdata);
-        ptr_record->record->rdata = NULL;
-
-        /* Provide space for the updated name */
-        ptr_record->record->rdata = (uint8_t *)PICO_ZALLOC(strlen(rname) + 1);
-        if (!(ptr_record->record->rdata)) {
-            pico_err = PICO_ERR_ENOMEM;
-            pico_mdns_record_delete(&ptr_record);
-            return;
-        }
-        /* Copy in the the updated name */
-        strcpy((char *)(ptr_record->record->rdata), rname);
-        /* Update rdlength */
-        ptr_record->record->rsuffix->rdlength = short_be((uint16_t)
-                                                         (strlen(rname) + 1u));
-    }
-
-    /* Claim the PTR record */
-    pico_mdns_record_vector_add(&rvector, ptr_record);
-    if (pico_mdns_claim(rvector, arguments->callback, arguments->arg) < 0) {
-        dns_sd_dbg("Trying to claim PTR record failed!\n");
-        pico_mdns_record_vector_destroy(&rvector);
-    }
+	/* Call callback */
+	arguments->callback(records, NULL, arguments->arg);
 
     PICO_FREE(arguments);
 }
@@ -463,7 +407,6 @@ pico_dns_sd_register_service( const char *name,
     pico_mdns_record_vector rvector = {0};
     struct pico_mdns_record *srv_record = NULL;
     struct pico_mdns_record *txt_record = NULL;
-    struct pico_mdns_record *ptr_record = NULL;
     struct register_argument *arguments = NULL;
     const char *hostname = pico_mdns_get_hostname();
 
@@ -481,28 +424,28 @@ pico_dns_sd_register_service( const char *name,
         return -1;
     }
 
-    dns_sd_dbg("Target: %s\n", hostname);
+    printf("Target: %s\n", hostname);
 
     /* Create the SRV record */
     srv_record = pico_dns_sd_srv_record_create(url, 0, 0, port, hostname,
                                                ttl, PICO_MDNS_RECORD_UNIQUE);
+	if (!srv_record) {
+		PICO_FREE(url);
+		return -1;
+	}
     /* Create the TXT record */
     txt_record = pico_dns_sd_txt_record_create(url, *txt_data, ttl,
                                                PICO_MDNS_RECORD_UNIQUE);
-
+	PICO_FREE(url);
+    if (!txt_record) {
+    	pico_mdns_record_delete(&srv_record);
+    	return -1;
+    }
     /* Erase the key-value pair vector, it's no longer needed */
     if (pico_dns_sd_kv_vector_erase(txt_data) < 0) {
         dns_sd_dbg("Could not erase key-value pair vector!\n");
-        PICO_FREE(url);
         return -1;
     }
-
-    /* Create the shared PTR record */
-    ptr_record = pico_mdns_record_create((char *)(url + strlen(name) + 1u),
-                                         (void *)url, (uint16_t)strlen(url),
-                                         PICO_DNS_TYPE_PTR,
-                                         ttl, PICO_MDNS_RECORD_SHARED);
-    PICO_FREE(url);
 
     pico_mdns_record_vector_add(&rvector, srv_record);
     pico_mdns_record_vector_add(&rvector, txt_record);
@@ -513,8 +456,6 @@ pico_dns_sd_register_service( const char *name,
         pico_err = PICO_ERR_ENOMEM;
         return -1;
     }
-
-    arguments->ptr_record = ptr_record;
     arguments->callback = callback;
     arguments->arg = arg;
 

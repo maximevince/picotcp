@@ -329,12 +329,13 @@ START_TEST(tc_mdns_cookie_delete)
     struct pico_mdns_cookie *a = NULL;
     pico_dns_question_vector qvector = {0};
     pico_mdns_record_vector rvector = {0};
+	pico_mdns_record_vector arvector = {0};
 
     printf("*********************** starting %s * \n", __func__);
 
     fail_unless(pico_mdns_cookie_delete(&a) == -1,
                 "mdns_cookie_delete failed checking params!\n");
-    a = pico_mdns_cookie_create(qvector, rvector, 0, 0, NULL, NULL);
+    a = pico_mdns_cookie_create(qvector, rvector, arvector, 0, 0, NULL, NULL);
     fail_unless(pico_mdns_cookie_delete(&a) == 0,
                 "mdns_cookie_delete failed!\n");
 
@@ -345,11 +346,12 @@ START_TEST(tc_mdns_cookie_create)
 {
     struct pico_mdns_cookie *a = NULL;
     pico_dns_question_vector qvector = {0};
-    pico_mdns_record_vector rvector = {0};
+	pico_mdns_record_vector rvector = {0};
+	pico_mdns_record_vector arvector = {0};
 
     printf("*********************** starting %s * \n", __func__);
 
-    a = pico_mdns_cookie_create(qvector, rvector, 0, 0, NULL, NULL);
+    a = pico_mdns_cookie_create(qvector, rvector, arvector, 0, 0, NULL, NULL);
     fail_if(!a, "mdns_cookie_create failed!\n");
 
     pico_mdns_cookie_delete(&a);
@@ -361,7 +363,8 @@ START_TEST(tc_mdns_cookie_tree_find_query_cookie)
 {
     struct pico_mdns_cookie *a = NULL, *b = NULL;
     pico_dns_question_vector qvector_a = {0}, qvector_b = {0};
-    pico_mdns_record_vector rvector = {0};
+	pico_mdns_record_vector rvector = {0};
+	pico_mdns_record_vector arvector = {0};
     struct pico_dns_question *question1 = NULL;
     struct pico_dns_question *question2 = NULL;
     struct pico_dns_question *question3 = NULL;
@@ -405,10 +408,10 @@ START_TEST(tc_mdns_cookie_tree_find_query_cookie)
     pico_dns_question_vector_add(&qvector_b, question2);
     pico_dns_question_vector_add(&qvector_b, question5);
 
-    a = pico_mdns_cookie_create(qvector_a, rvector, 1,
+    a = pico_mdns_cookie_create(qvector_a, rvector, arvector, 1,
                                 PICO_MDNS_COOKIE_TYPE_QUERY, NULL, NULL);
     fail_if(!a, "mdns_cookie_create failed!\n");
-    b = pico_mdns_cookie_create(qvector_b, rvector, 1,
+    b = pico_mdns_cookie_create(qvector_b, rvector, arvector, 1,
                                 PICO_MDNS_COOKIE_TYPE_QUERY, NULL, NULL);
     fail_if(!b, "mdns_cookie_create failed!\n");
 
@@ -434,7 +437,8 @@ START_TEST(tc_mdns_cookie_tree_del_cookie)
 {
     struct pico_mdns_cookie *a = NULL, *b = NULL;
     pico_dns_question_vector qvector_a = {0}, qvector_b = {0};
-    pico_mdns_record_vector rvector = {0};
+	pico_mdns_record_vector rvector = {0};
+	pico_mdns_record_vector arvector = {0};
     struct pico_dns_question *question1 = NULL;
     struct pico_dns_question *question2 = NULL;
     struct pico_dns_question *question3 = NULL;
@@ -478,10 +482,10 @@ START_TEST(tc_mdns_cookie_tree_del_cookie)
     pico_dns_question_vector_add(&qvector_b, question2);
     pico_dns_question_vector_add(&qvector_b, question5);
 
-    a = pico_mdns_cookie_create(qvector_a, rvector, 1,
+	a = pico_mdns_cookie_create(qvector_a, rvector, arvector, 1,
                                 PICO_MDNS_COOKIE_TYPE_QUERY, NULL, NULL);
     fail_if(!a, "mdns_cookie_create failed!\n");
-    b = pico_mdns_cookie_create(qvector_b, rvector, 1,
+    b = pico_mdns_cookie_create(qvector_b, rvector, arvector, 1,
                                 PICO_MDNS_COOKIE_TYPE_QUERY, NULL, NULL);
     fail_if(!b, "mdns_cookie_create failed!\n");
 
@@ -510,7 +514,8 @@ START_TEST(tc_mdns_cookie_tree_add_cookie)
 {
     struct pico_mdns_cookie *a = NULL, *b = NULL;
     pico_dns_question_vector qvector_a = {0}, qvector_b = {0};
-    pico_mdns_record_vector rvector = {0};
+	pico_mdns_record_vector rvector = {0};
+	pico_mdns_record_vector arvector = {0};
     struct pico_dns_question *question1 = NULL;
     struct pico_dns_question *question2 = NULL;
     struct pico_dns_question *question3 = NULL;
@@ -554,10 +559,10 @@ START_TEST(tc_mdns_cookie_tree_add_cookie)
     pico_dns_question_vector_add(&qvector_b, question2);
     pico_dns_question_vector_add(&qvector_b, question5);
 
-    a = pico_mdns_cookie_create(qvector_a, rvector, 1,
+    a = pico_mdns_cookie_create(qvector_a, rvector, arvector, 1,
                                 PICO_MDNS_COOKIE_TYPE_QUERY, NULL, NULL);
     fail_if(!a, "mdns_cookie_create failed!\n");
-    b = pico_mdns_cookie_create(qvector_b, rvector, 1,
+    b = pico_mdns_cookie_create(qvector_b, rvector, arvector, 1,
                                 PICO_MDNS_COOKIE_TYPE_QUERY, NULL, NULL);
     fail_if(!b, "mdns_cookie_create failed!\n");
 
@@ -576,7 +581,8 @@ END_TEST
 START_TEST(tc_mdns_cookie_find_record)
 {
     pico_mdns_record_vector rvector = {0};
-    pico_dns_question_vector qvector = {0};
+	pico_dns_question_vector qvector = {0};
+	pico_mdns_record_vector arvector = {0};
     struct pico_mdns_cookie *cookie = NULL;
     struct pico_mdns_record *record = NULL, *record1 = NULL, *record2 = NULL;
     struct pico_ip4 rdata = {long_be(0x00FFFFFF)};
@@ -602,7 +608,7 @@ START_TEST(tc_mdns_cookie_find_record)
     pico_mdns_record_vector_add(&rvector, record1);
     pico_mdns_record_vector_add(&rvector, record2);
 
-    cookie = pico_mdns_cookie_create(qvector, rvector, 2,
+    cookie = pico_mdns_cookie_create(qvector, rvector, arvector, 2,
                                      PICO_MDNS_COOKIE_TYPE_PROBE,
                                      NULL, NULL);
     fail_if(!cookie, "Cookie could not be created!\n");
@@ -800,7 +806,8 @@ END_TEST
 START_TEST(tc_mdns_cookie_resolve_conflict)
 {
     struct pico_mdns_cookie *a = NULL;
-    pico_mdns_record_vector rvector = {0};
+	pico_mdns_record_vector rvector = {0};
+	pico_mdns_record_vector arvector = {0};
     pico_dns_question_vector qvector = {0};
     struct pico_dns_question *question = NULL;
     struct pico_mdns_record *record = NULL;
@@ -824,7 +831,7 @@ START_TEST(tc_mdns_cookie_resolve_conflict)
     pico_dns_question_vector_add(&qvector, question);
 
     /* Make it a probe cookie otherwise it will just return -1 */
-    a = pico_mdns_cookie_create(qvector, rvector, 1,
+    a = pico_mdns_cookie_create(qvector, rvector, arvector, 1,
                                 PICO_MDNS_COOKIE_TYPE_PROBE,
                                 callback, NULL);
 
@@ -1737,8 +1744,7 @@ START_TEST(tc_mdns_my_records_add)
     pico_mdns_record_vector_add(&vector, record2);
     pico_mdns_record_vector_add(&vector, record3);
 
-    vector = pico_mdns_my_records_add(vector, 0);
-    fail_unless(3 == vector.count, "mdns_my_records_add failed!\n");
+    pico_mdns_my_records_add(vector, 0);
 
     printf("*********************** ending %s * \n", __func__);
 }
@@ -2323,6 +2329,7 @@ START_TEST(tc_mdns_send_announcement_packet)
     struct pico_mdns_cookie *cookie = NULL;
     pico_dns_question_vector qvector = {0};
     pico_mdns_record_vector rvector = {0};
+	pico_mdns_record_vector arvector = {0};
     struct pico_mdns_record *record = NULL, *record1 = NULL;
     const char *url = "foo.local";
     const char *url2 = "bar.local";
@@ -2337,7 +2344,7 @@ START_TEST(tc_mdns_send_announcement_packet)
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
 
-    cookie = pico_mdns_cookie_create(qvector, rvector, 2,
+    cookie = pico_mdns_cookie_create(qvector, rvector, arvector, 2,
                                      PICO_MDNS_COOKIE_TYPE_ANNOUNCEMENT,
                                      callback, NULL);
 
@@ -2367,6 +2374,7 @@ START_TEST(tc_mdns_send_probe_packet)
     struct pico_mdns_cookie *cookie = NULL;
     pico_dns_question_vector qvector = {0};
     pico_mdns_record_vector rvector = {0};
+	pico_mdns_record_vector arvector = {0};
     struct pico_mdns_record *record = NULL, *record1 = NULL;
     const char *url = "foo.local";
     const char *url2 = "bar.local";
@@ -2381,7 +2389,7 @@ START_TEST(tc_mdns_send_probe_packet)
                                       PICO_MDNS_RECORD_UNIQUE);
     fail_if(!record1, "Record could not be created!\n");
 
-    cookie = pico_mdns_cookie_create(qvector, rvector, 2,
+    cookie = pico_mdns_cookie_create(qvector, rvector, arvector, 2,
                                      PICO_MDNS_COOKIE_TYPE_ANNOUNCEMENT,
                                      callback, NULL);
 

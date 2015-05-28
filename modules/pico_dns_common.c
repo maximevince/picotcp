@@ -1527,6 +1527,8 @@ pico_dns_qname_to_url( const char *qname )
         pico_err = PICO_ERR_EINVAL;
         return NULL;
     }
+	if (strlen(qname) > 255)
+		return NULL;
 
     /* Provide space for the url */
     url = PICO_ZALLOC(strlen(qname));
@@ -1535,10 +1537,10 @@ pico_dns_qname_to_url( const char *qname )
         return NULL;
     }
 
-    /* Convert qname to an URL*/
-    strcpy(temp, qname);
+    /* Convert qname to an URL */
+    memcpy(temp, qname, strlen(qname));
     pico_dns_notation_to_name(temp, (uint16_t)(strlen(qname) + 2u));
-    strcpy(url, (char *)(temp + 1));
+    memcpy((void *)url, (void *)(temp + 1), strlen(qname));
 
     return url;
 }

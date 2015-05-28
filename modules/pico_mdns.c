@@ -152,44 +152,6 @@ pico_mdns_reclaim( pico_mdns_record_vector record_vector,
 // MARK: TREES & GLOBAL VARIABLES
 
 /* ****************************************************************************
- *  Compares two data buffers
- * ****************************************************************************/
-static int
-pico_mdns_rdata_cmp( uint8_t *a, uint8_t *b,
-                     uint16_t rdlength_a, uint16_t rdlength_b )
-{
-    uint16_t i = 0;
-    uint16_t longest_rdlength = 0;
-
-    /* Check params */
-    if (!a || !b) {
-        pico_err = PICO_ERR_EINVAL;
-        return -1;
-    }
-
-    if (rdlength_a >= rdlength_b)
-        longest_rdlength = rdlength_a;
-    else
-        longest_rdlength = rdlength_b;
-
-    for (i = 0; i < longest_rdlength; i++) {
-        if (i < rdlength_a && i < rdlength_b) {
-            if ((uint8_t)a[i] == (uint8_t)b[i])
-                continue;
-            else
-                return (((uint8_t)a[i] < (uint8_t)b[i]) ? -1 : 1);
-        } else if (rdlength_a == rdlength_b)
-            return 0;
-        else if (rdlength_a == longest_rdlength)
-            return 1;
-        else
-            return -1;
-    }
-
-    return 0;
-}
-
-/* ****************************************************************************
  *  Compares two mDNS record by name and type
  * ****************************************************************************/
 static int
@@ -226,7 +188,7 @@ pico_mdns_cmp_name_type( struct pico_mdns_record *a,
         return 1;
 
     /* Then, compare the rrnames */
-    return pico_mdns_rdata_cmp((uint8_t *)a->record->rname,
+    return pico_dns_rdata_cmp((uint8_t *)a->record->rname,
                                (uint8_t *)b->record->rname,
                                (uint16_t)strlen(a->record->rname),
                                (uint16_t)strlen(b->record->rname));
@@ -249,7 +211,7 @@ pico_mdns_cmp( void *ka, void *kb )
     if (ret) return ret;
 
     /* Finally compare rdata for unique comparising */
-    return pico_mdns_rdata_cmp((uint8_t *)a->record->rdata,
+    return pico_dns_rdata_cmp((uint8_t *)a->record->rdata,
                                (uint8_t *)b->record->rdata,
                                short_be(a->record->rsuffix->rdlength),
                                short_be(b->record->rsuffix->rdlength));
@@ -266,41 +228,22 @@ pico_mdns_cookie_cmp( void *ka, void *kb )
 
     /* To compare questions */
     struct pico_dns_question *qa = NULL;
-    struct pico_dns_question *qb = NULL;
-
-    /* To compare records */
-    struct pico_mdns_record *ra = NULL;
-    struct pico_mdns_record *rb = NULL;
-    int ret = 0;
-    uint16_t i = 0, j = 0, a_type = 0, b_type = 0;
+	struct pico_dns_question *qb = NULL;
+	uint16_t i = 0, j = 0;
+	int ret = 0;
 
     /* Parse in the cookies */
     a = (struct pico_mdns_cookie *)ka;
     b = (struct pico_mdns_cookie *)kb;
 
     /* Start comparing the questions */
-
     for (i = 0, j = 0; ((i < a->qvector.count) && (j < b->qvector.count));
          i++, j++) {
         /* Get questions at current index */
         qa = pico_dns_question_vector_get(&(a->qvector), i);
         qb = pico_dns_question_vector_get(&(b->qvector), j);
-
-        a_type = short_be(qa->qsuffix->qtype);
-        b_type = short_be(qb->qsuffix->qtype);
-
-        /* First, compare the qtypes */
-        if(a_type < b_type)
-            return -1;
-        if(b_type < a_type)
-            return 1;
-
-        /* Then compare qnames */
-        ret = pico_mdns_rdata_cmp((uint8_t *)qa->qname,
-                                  (uint8_t *)qb->qname,
-                                  (uint16_t)strlen(qa->qname),
-                                  (uint16_t)strlen(qb->qname));
-
+		/* Compare them */
+		ret = pico_dns_question_cmp(qa, qb);
         if (ret)
             return ret;
     }
@@ -312,29 +255,7 @@ pico_mdns_cookie_cmp( void *ka, void *kb )
     if (b->qvector.count < a->qvector.count)
         return 1;
 
-    for (i = 0, j = 0;
-         ((i < a->rvector.count) && (j < b->rvector.count));
-         i++, j++) {
-        /* Get records at current index */
-        ra = pico_mdns_record_vector_get(&(a->rvector), i);
-        rb = pico_mdns_record_vector_get(&(b->rvector), j);
-
-        /* Compare records */
-        ret = pico_mdns_cmp((void *)ra, (void *)rb);
-
-        /* If records differ, return return-value */
-        if (ret)
-            return ret;
-    }
-
-    /* All the records currently compared are the same. Check Which has the most
-     records, if they have the same amount, move on */
-    if (a->rvector.count < b->rvector.count)
-        return -1;
-    if (b->rvector.count < a->rvector.count)
-        return 1;
-
-    /* Cookies contain exactly the same questions and records */
+	/* Cookies contain exactly the same questions */
     return 0;
 }
 
@@ -593,7 +514,7 @@ pico_mdns_cookie_apply_spt( struct pico_mdns_cookie *cookie,
     } else {
         pico_timer_cancel(cookie->send_timer);
         cookie->timeout = 10u;
-        cookie->count = 3;
+        cookie->count = PICO_MDNS_PROBE_COUNT;
         cookie->send_timer = pico_timer_add(1000, pico_mdns_send_probe_packet,
                                             (void *)cookie);
         mdns_dbg("Probing postponed with 1s because of S.P.T.\n");
@@ -997,7 +918,7 @@ pico_mdns_record_am_i_lexi_later( struct pico_mdns_record *my_record,
         return 1;
 
     /* At last, check rdata */
-    return pico_mdns_rdata_cmp(my_record->record->rdata,
+    return pico_dns_rdata_cmp(my_record->record->rdata,
                                peer_record->record->rdata,
                                short_be(my_record->record->rsuffix->rdlength),
                                short_be(peer_record->record->rsuffix->rdlength));
@@ -1821,8 +1742,16 @@ pico_mdns_my_records_claimed( pico_mdns_record_vector rvector,
                 url = pico_dns_qname_to_url(found->record->rname);
                 PICO_FREE(hostname);
                 hostname = url;
-                pico_mdns_record_vector_delete(&hostnamevector, 0);
-                pico_mdns_record_vector_add(&hostnamevector, found);
+				if (short_be(found->record->rsuffix->rtype) == PICO_DNS_TYPE_A){
+					pico_mdns_record_vector_delete(&hostnamevector, 0);
+					pico_mdns_record_vector_add(&hostnamevector, found);
+				}
+#ifdef PICO_SUPPORT_IPV6
+				else {
+					pico_mdns_record_vector_delete(&hostnamevector, 1);
+					pico_mdns_record_vector_add(&hostnamevector, found);
+				}
+#endif
             }
         }
     }
@@ -3018,6 +2947,109 @@ pico_mdns_getrecord( const char *url, uint16_t type,
 
 // MARK: PROBING & ANNOUNCING
 
+/* ****************************************************************************
+ *  Creates an NSEC record for a specific name. Looks in MyRecords for
+ * ****************************************************************************/
+struct pico_mdns_record *
+pico_mdns_generate_nsec_record( char *name )
+{
+	struct pico_mdns_record *record = NULL;
+	pico_mdns_record_vector vector = {0};
+	uint16_t highest_type = 0, i = 0, type = 0, rdlen = 0;
+	uint8_t bitmap_len = 0;
+
+	char *url = NULL;
+	uint8_t *rdata = NULL, *ptr = NULL;
+
+	/* Check params */
+	if (!name) {
+		pico_err = PICO_ERR_EINVAL;
+		return NULL;
+	}
+
+	/* Find all records with this name */
+	vector = pico_mdns_record_tree_find_name(name, &MyRecords);
+	for (i = 0; i < vector.count; i++) {
+		record = pico_mdns_record_vector_get(&vector, i);
+		if (record) {
+			/* Only unique records with this name */
+			if ((record->flags & PICO_MDNS_RECORD_SHARED)) {
+				pico_mdns_record_vector_remove(&vector, i);
+				continue;
+			}
+			/* Determine the highest type */
+			type = short_be(record->record->rsuffix->rtype);
+			if (type > highest_type)
+				highest_type = type;
+		}
+	}
+
+	/* Determine the bimap_len */
+	bitmap_len = (uint8_t)(highest_type / 8);
+	if (highest_type % 8) bitmap_len++;
+
+	/* Provide rdata */
+	rdlen = (uint16_t)(strlen(name) + 3u + bitmap_len);
+	rdata = PICO_ZALLOC(rdlen);
+	if (!rdata) {
+		pico_err = PICO_ERR_ENOMEM;
+		return NULL;
+	}
+
+	/* Set the next domain name */
+	strcpy((char *)rdata, name);
+	/* Set the bitmap length */
+	ptr = (uint8_t *)(rdata + strlen(name) + 2);
+	*ptr = bitmap_len;
+	/* Generate the bitmap */
+	for (i = 0; i < vector.count; i++) {
+		record = pico_mdns_record_vector_get(&vector, i);
+		if (record) {
+			type = short_be(record->record->rsuffix->rtype);
+			*(ptr + 1 + (type / 8)) = (uint8_t)(0x80 >> (type % 8));
+		}
+	}
+	record = NULL;
+	url = pico_dns_qname_to_url(name);
+	if (!url)
+		return NULL;
+	/* Generate the actual NSEC record */
+	record = pico_mdns_record_create(url, (void *)rdata, rdlen,
+									 PICO_DNS_TYPE_NSEC, PICO_MDNS_SERVICE_TTL,
+									 PICO_MDNS_RECORD_UNIQUE);
+	PICO_FREE(rdata);
+	PICO_FREE(url);
+	return record;
+}
+
+int pico_mdns_additionals_add_nsec( pico_mdns_record_vector *arvector,
+								    char *name )
+{
+	struct pico_mdns_record *record = NULL;
+	uint16_t i = 0, type = 0;
+
+	/* Check params */
+	if (!arvector || !name) {
+		pico_err = PICO_ERR_EINVAL;
+		return -1;
+	}
+
+	/* Check if there is a NSEC already for this name */
+	for (i = 0; i < arvector->count; i++) {
+		record = pico_mdns_record_vector_get(arvector, i);
+		if (record) {
+			type = short_be(record->record->rsuffix->rtype);
+			if (PICO_DNS_TYPE_NSEC == type) {
+				if (strcmp(record->record->rname, name) == 0)
+					return 0;
+			}
+		}
+	}
+
+	return pico_mdns_record_vector_add(arvector,
+									   pico_mdns_generate_nsec_record(name));
+}
+
 int
 pico_mdns_gather_service_records ( pico_mdns_record_vector *vector,
 								   pico_mdns_record_vector *addvector,
@@ -3027,6 +3059,9 @@ pico_mdns_gather_service_records ( pico_mdns_record_vector *vector,
 	struct pico_mdns_record *ptr_record = NULL;
 	struct pico_mdns_record *reg_record = NULL;
 	struct pico_mdns_record *host_record = NULL;
+#ifdef PICO_SUPPORT_IPV6
+	struct pico_mdns_record *host_record_AAAA = NULL;
+#endif
 	char *sin = NULL;
 	char *service = NULL;
 	uint32_t ttl = 0;
@@ -3041,6 +3076,12 @@ pico_mdns_gather_service_records ( pico_mdns_record_vector *vector,
 	if (pico_mdns_record_vector_add(addvector, host_record) < 0) {
 		mdns_dbg("Could not add hostname-record to additional records!\n");
 	}
+#ifdef PICO_SUPPORT_IPV6
+	host_record_AAAA = pico_mdns_record_copy(hostnamevector.records[1]);
+	if (pico_mdns_record_vector_add(addvector, host_record_AAAA) < 0) {
+		mdns_dbg("Could not add AAAA hostname-record to additional records!\n");
+	}
+#endif
 
 	sin = pico_dns_qname_to_url(srv_record->record->rname);
 	service = sin + pico_dns_first_label_length(sin) + 1u;
@@ -3054,7 +3095,7 @@ pico_mdns_gather_service_records ( pico_mdns_record_vector *vector,
 	if (!ptr_record)
 		return -1;
 
-	/* Bonjour record */
+	/* Meta record */
 	reg_record = pico_mdns_record_create("_services._dns-sd._udp.local",
 										 (void *)service,
 										 (uint16_t)strlen(service),
@@ -3067,8 +3108,8 @@ pico_mdns_gather_service_records ( pico_mdns_record_vector *vector,
 	}
 
 	/* Add them to the answer vector */
-	pico_mdns_record_vector_add(vector, pico_mdns_record_copy(ptr_record));
 	pico_mdns_record_vector_add(vector, pico_mdns_record_copy(reg_record));
+	pico_mdns_record_vector_add(vector, pico_mdns_record_copy(ptr_record));
 	pico_mdns_record_vector_add(&_vector, ptr_record);
 	pico_mdns_record_vector_add(&_vector, reg_record);
 	pico_mdns_my_records_add(_vector, 1); /* Want the same claim ID as SRV */
@@ -3097,6 +3138,7 @@ pico_mdns_check_for_dns_sd( pico_mdns_record_vector *vector,
 			ret = pico_mdns_gather_service_records(vector, addvector, record);
 			if (ret)
 				return ret;
+			break;
 		}
 	}
 	return 0;
@@ -3131,19 +3173,30 @@ pico_mdns_send_announcement_packet( pico_time now, void *arg )
     								   &(cookie->addvector));
 
         cookie->status = PICO_MDNS_COOKIE_STATUS_ACTIVE;
-        /* Iterate over records in cookie */
-        for (i = 0; i < cookie->rvector.count; i++) {
-            record = pico_mdns_record_vector_get(&(cookie->rvector), i);
-            /* Add DNS records to announcement records */
-            if (pico_dns_record_vector_add(&anvector, record->record) < 0)
-                mdns_dbg("Could not append DNS resource record to list\n");
-        }
 
+		/* Iterate over records in cookie */
+		for (i = 0; i < cookie->rvector.count; i++) {
+			record = pico_mdns_record_vector_get(&(cookie->rvector), i);
+			if (!(record->flags & PICO_MDNS_RECORD_SHARED)) {
+				pico_mdns_additionals_add_nsec(&(cookie->addvector),
+											   record->record->rname);
+			}
+			/* Add DNS records to announcement records */
+			if (pico_dns_record_vector_add(&anvector, record->record) < 0)
+				mdns_dbg("Could not append DNS resource record to list\n");
+		}
+
+		/* Iterate over additional records */
         for (i = 0; i < cookie->addvector.count; i++) {
         	record = pico_mdns_record_vector_get(&(cookie->addvector), i);
-        	if (pico_dns_record_vector_add(&addvector, record->record) < 0)
-        		mdns_dbg("Could not append DNS record to additionals!\n");
+			if (!(record->flags & PICO_MDNS_RECORD_SHARED)) {
+				pico_mdns_additionals_add_nsec(&(cookie->addvector),
+											   record->record->rname);
+			}
+			if (pico_dns_record_vector_add(&addvector, record->record) < 0)
+				mdns_dbg("Could not append DNS record to additionals!\n");
         }
+
 
         /* Create an mDNS answer */
         packet = pico_mdns_answer_create(&anvector, NULL, &addvector, &len);
@@ -3304,7 +3357,7 @@ pico_mdns_send_probe_packet( pico_time now, void *arg )
         }
 
         /* Start announcing the records */
-        cookie->count = 2;
+        cookie->count = PICO_MDNS_ANNOUNCEMENT_COUNT;
         cookie->type = PICO_MDNS_COOKIE_TYPE_ANNOUNCEMENT;
         pico_mdns_send_announcement_packet(0, (void*) cookie);
     }
@@ -3493,6 +3546,11 @@ pico_mdns_set_hostname( const char *url, void *arg )
 {
     pico_mdns_record_vector vector = { 0 };
     struct pico_mdns_record *record = NULL;
+#ifdef PICO_SUPPORT_IPV6
+	struct pico_device *dev = NULL;
+	struct pico_ipv6_link *link6 = NULL;
+	struct pico_mdns_record *ipv6record = NULL;
+#endif
 
     /* Check params */
     if (!url) {
@@ -3518,16 +3576,47 @@ pico_mdns_set_hostname( const char *url, void *arg )
     }
     strcpy(hostname, url);
 
+
+
     /* Create an A record for hostname */
     record = pico_mdns_record_create(hostname,
                                 (void*)&(mdns_sock_ipv4->local_addr.ip4.addr),
-                                     4, PICO_DNS_TYPE_A, PICO_MDNS_DEFAULT_TTL,
+                                     PICO_SIZE_IP4, PICO_DNS_TYPE_A,
+									 PICO_MDNS_DEFAULT_TTL,
                                      (PICO_MDNS_RECORD_UNIQUE |
                                       PICO_MDNS_RECORD_HOSTNAME));
     if (!record) {
         mdns_dbg("Could not create A record for hostname!\n");
         return -1;
     }
+
+#ifdef PICO_SUPPORT_IPV6
+	dev = pico_ipv4_link_find(&(mdns_sock_ipv4->local_addr.ip4));
+	if (dev) {
+		mdns_dbg("Found device!\n");
+		link6 = pico_ipv6_link_by_dev(dev);
+		if (link6) {
+			mdns_dbg("Found IPv6 Link!\n");
+			ipv6record = pico_mdns_record_create(hostname,
+												 (void *)&(link6->address.addr),
+												 PICO_SIZE_IP6,
+												 PICO_DNS_TYPE_AAAA,
+												 PICO_MDNS_DEFAULT_TTL,
+												 (PICO_MDNS_RECORD_UNIQUE |
+												  PICO_MDNS_RECORD_HOSTNAME));
+			if (!ipv6record) {
+				mdns_dbg("Could not create AAAA record for hostname!\n");
+				return -1;
+			}
+
+			if (pico_mdns_record_vector_add(&vector, ipv6record) < 0) {
+				mdns_dbg("Could not add AAAA hostname record to vector!\n");
+				pico_mdns_record_delete(&ipv6record);
+				return -1;
+			}
+		}
+	}
+#endif
 
     /* TODO: Create a reverse resolution record */
 

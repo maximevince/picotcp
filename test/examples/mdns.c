@@ -23,18 +23,14 @@ void mdns_getrecord_callback( pico_mdns_record_vector *vector,
     }
 }
 
-void mdns_claimed_callback( pico_mdns_record_vector *vector,
-                            char *str,
-                            void *arg )
-{
-    printf("Claimed records\n");
-}
-
 void mdns_init_callback( pico_mdns_record_vector *vector,
                          char *str,
                          void *arg )
 {
+	pico_mdns_record_vector _vector = {0};
     struct pico_mdns_record *hostname_record = NULL;
+	struct pico_mdns_record *srv_record = NULL;
+	struct pico_mdns_record *txt_record = NULL;
     char *hostname = NULL;
 
     /* Get the first record in the vector */
@@ -50,7 +46,6 @@ void app_mdns(char *arg, struct pico_ip4 address)
 {
     char *hostname, *peername;
     char *nxt = arg;
-    struct pico_ip6 ipaddr6 = {{0}};
     
     if (!nxt)
         exit(255);
@@ -71,7 +66,7 @@ void app_mdns(char *arg, struct pico_ip4 address)
     }
     
     printf("\nStarting mDNS module...\n");
-    if (pico_mdns_init(hostname, address, 0, &mdns_init_callback, peername) != 0) {
+    if (pico_mdns_init(hostname, address, 0, &mdns_init_callback, NULL) != 0) {
         printf("Initialisation returned with Error!\n");
         exit(255);
     }

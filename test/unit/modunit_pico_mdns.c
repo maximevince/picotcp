@@ -66,45 +66,6 @@ START_TEST(tc_mdns_init)
 }
 END_TEST
 /* MARK: Comparing functions */
-START_TEST(tc_mdns_rdata_cmp)
-{
-    uint8_t rdata1[10] = { 1,2,3,4,5,6,7,8,9,10 };
-    uint8_t rdata2[10] = { 1,2,3,3,5,6,7,8,9,10 };
-    uint8_t rdata3[1] = { 2 };
-    uint8_t rdata4[1] = { 1 };
-    uint8_t rdata5[11] = { 1,2,3,4,5,6,7,8,9,10,9 };
-    uint8_t rdata6[12] = { 1,2,3,4,5,6,7,8,9,10,11 };
-    int ret = 0;
-
-    printf("*********************** starting %s * \n", __func__);
-
-    /* Check equal data and size */
-    ret = pico_mdns_rdata_cmp(rdata1, rdata1, 10, 10);
-    fail_unless(0 == ret, "mdns_rdata_cmp failed with equal data and size!\n");
-
-    /* Check smaller data and equal size */
-    ret = pico_mdns_rdata_cmp(rdata1, rdata2, 10, 10);
-    fail_unless(1 == ret, "mdns_rdata_cmp failed with smaller data and equal size!\n");
-
-    /* Check larger data and smaller size */
-    ret = pico_mdns_rdata_cmp(rdata1, rdata3, 10, 1);
-    fail_unless(-1 == ret, "mdns_rdata_cmp failed with larger data and smaller size!\n");
-
-    /* Check equal data and smaller size */
-    ret = pico_mdns_rdata_cmp(rdata1, rdata4, 10, 1);
-    fail_unless(1 == ret, "mdns_rdata_cmp failed with equal data and smaller size!\n");
-
-    /* Check smaller data and larger size */
-    ret = pico_mdns_rdata_cmp(rdata1, rdata5, 10, 11);
-    fail_unless(-1 == ret, "mdns_rdata_cmp failed with smaller data and larger size!\n");
-
-    /* Check larger data and larger size */
-    ret = pico_mdns_rdata_cmp(rdata1, rdata6, 10, 11);
-    fail_unless(-1 == ret, "mdns_rdata_cmp failed with larger data and larger size!\n");
-
-    printf("*********************** ending %s * \n", __func__);
-}
-END_TEST
 START_TEST(tc_mdns_cmp)
 {
     struct pico_mdns_record a = {0};
@@ -297,15 +258,10 @@ START_TEST(tc_mdns_cookie_cmp)
     ret = pico_mdns_cookie_cmp((void *) &a, (void *) &b);
     fail_unless(0 == ret, "mdns_cookie_cmp failed with equal cookies!\n");
 
-    /* Try to compare the same cookies but with A more records than B */
-    pico_mdns_record_vector_remove(&(b.rvector), 3);
-    ret = pico_mdns_cookie_cmp((void *) &a, (void *) &b);
-    fail_unless(1 == ret, "mdns_cookie_cmp failed with different N records!\n");
-
     /* Try to compare cookies but B a larger question than A*/
     pico_dns_question_vector_remove(&(a.qvector), 1);
     ret = pico_mdns_cookie_cmp((void *) &a, (void *) &b);
-    fail_unless(-1 == ret, "mdns_cookie_cmp failed with larger question B!\n");
+    fail_unless(1 == ret, "mdns_cookie_cmp failed with smaller question B!\n");
 
     /* Insert more possibilities here.. */
 
@@ -1892,21 +1848,21 @@ START_TEST(tc_mdns_query_create)
     pico_dns_question_vector qvector = { 0 };
     const char *qurl = "picotcp.com";
     const char *qurl2 = "google.com";
-    uint8_t buf[42] = { 0x00u, 0x00u,
-        0x00u, 0x00u,
-        0x00u, 0x02u,
-        0x00u, 0x00u,
-        0x00u, 0x00u,
-        0x00u, 0x00u,
-        0x07u, 'p','i','c','o','t','c','p',
-        0x03u, 'c','o','m',
-        0x00u,
-        0x00u, 0x01u,
-        0x00u, 0x01u,
-        0x06u, 'g','o','o','g','l','e',
-        0xc0u, 0x14u,
-        0x00u, 0x01u,
-        0x00u, 0x01u };
+	uint8_t buf[42] = { 0x00u, 0x00u,
+		0x00u, 0x00u,
+		0x00u, 0x02u,
+		0x00u, 0x00u,
+		0x00u, 0x00u,
+		0x00u, 0x00u,
+		0x06u, 'g','o','o','g','l','e',
+		0x03u, 'c','o','m',
+		0x00u,
+		0x00u, 0x01u,
+		0x00u, 0x01u,
+		0x07u, 'p','i','c','o','t','c','p',
+		0xc0u, 0x13u,
+		0x00u, 0x01u,
+		0x00u, 0x01u };
     uint16_t len = 0;
     int ret = 0;
     struct pico_dns_question *a = NULL, *b = NULL;
@@ -2507,7 +2463,6 @@ Suite *pico_suite(void)
     TCase *TCase_mdns_init = tcase_create("Unit test for mdns_init");
 
     /* Comparing functions */
-    TCase *TCase_mdns_rdata_cmp = tcase_create("Unit test for mdns_rdata_cmp");
     TCase *TCase_mdns_cmp = tcase_create("Unit test for mdns_cmp");
     TCase *TCase_mdns_cmp_name_type = tcase_create("Unit test for mdns_cmp_name_type");
     TCase *TCase_mdns_cookie_cmp = tcase_create("Unit test for mdns_cookie_cmp");
@@ -2607,8 +2562,6 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_mdns_init);
 
     /* Comparing functions */
-    tcase_add_test(TCase_mdns_rdata_cmp, tc_mdns_rdata_cmp);
-    suite_add_tcase(s, TCase_mdns_rdata_cmp);
     tcase_add_test(TCase_mdns_cmp, tc_mdns_cmp);
     suite_add_tcase(s, TCase_mdns_cmp);
     tcase_add_test(TCase_mdns_cmp_name_type, tc_mdns_cmp_name_type);

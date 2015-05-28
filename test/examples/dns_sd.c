@@ -14,31 +14,9 @@ void dns_sd_claimed_callback( pico_mdns_record_vector *vector,
                               char *str,
                               void *arg )
 {
-    struct pico_mdns_record *record = NULL;
-    char *service_url = NULL;
-    char *service_name = NULL;
-
+	IGNORE_PARAMETER(vector);
     IGNORE_PARAMETER(str);
     IGNORE_PARAMETER(arg);
-
-    /* Get the registered service name from the first claimed record */
-    record = pico_mdns_record_vector_get(vector, 0);
-    service_name= (char*)(record->record->rdata);
-
-    /* Provide some space for the service instance name */
-    service_url = PICO_ZALLOC((size_t)(*service_name + 1));
-    if (!service_url) {
-        pico_err = PICO_ERR_ENOMEM;
-        return;
-    }
-
-    /* Copy the service instance name */
-    memcpy(service_url, service_name + 1, (size_t) *service_name);
-
-    /* Append zero byte */
-    service_url[(int)*service_name] = '\0';
-
-    printf("Service registered: %s\n", service_url);
 }
 
 void dns_sd_init_callback( pico_mdns_record_vector *vector,
@@ -52,10 +30,6 @@ void dns_sd_init_callback( pico_mdns_record_vector *vector,
     IGNORE_PARAMETER(vector);
 
     printf("DONE - Initialising DNS Service Discovery module.\n");
-
-    pico_dns_sd_kv_vector_add(&key_value_pair_vector, "textvers", "1");
-    pico_dns_sd_kv_vector_add(&key_value_pair_vector, "auth", NULL);
-    pico_dns_sd_kv_vector_add(&key_value_pair_vector, "pass", "");
 
     if (pico_dns_sd_register_service(service_name,
                                      "_http._tcp", 80,

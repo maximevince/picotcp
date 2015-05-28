@@ -424,7 +424,7 @@ pico_dns_sd_register_service( const char *name,
         return -1;
     }
 
-    printf("Target: %s\n", hostname);
+    dns_sd_dbg("\n>>>>>>>>>> Target: %s <<<<<<<<<<\n\n", hostname);
 
     /* Create the SRV record */
     srv_record = pico_dns_sd_srv_record_create(url, 0, 0, port, hostname,
@@ -433,6 +433,7 @@ pico_dns_sd_register_service( const char *name,
 		PICO_FREE(url);
 		return -1;
 	}
+
     /* Create the TXT record */
     txt_record = pico_dns_sd_txt_record_create(url, *txt_data, ttl,
                                                PICO_MDNS_RECORD_UNIQUE);
@@ -447,8 +448,8 @@ pico_dns_sd_register_service( const char *name,
         return -1;
     }
 
-    pico_mdns_record_vector_add(&rvector, srv_record);
     pico_mdns_record_vector_add(&rvector, txt_record);
+    pico_mdns_record_vector_add(&rvector, srv_record);
 
     /* Provide space for argument struct */
     arguments = PICO_ZALLOC(sizeof(struct register_argument));

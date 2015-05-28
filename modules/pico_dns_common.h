@@ -20,6 +20,7 @@
 #define PICO_DNS_TYPE_TXT 16
 #define PICO_DNS_TYPE_AAAA 28
 #define PICO_DNS_TYPE_SRV 33
+#define PICO_DNS_TYPE_NSEC 47
 #define PICO_DNS_TYPE_ANY 255
 
 /* QCLASS values */
@@ -129,6 +130,22 @@ typedef struct
     struct pico_dns_record **records;
     uint16_t count;
 } pico_dns_record_vector;
+
+// MARK: COMPARING
+
+/* ****************************************************************************
+ *  Compares two data buffers
+ * ****************************************************************************/
+int
+pico_dns_rdata_cmp( uint8_t *a, uint8_t *b,
+				   uint16_t rdlength_a, uint16_t rdlength_b );
+
+/* ****************************************************************************
+ *  Compares two DNS questions
+ * ****************************************************************************/
+int
+pico_dns_question_cmp( struct pico_dns_question *qa,
+					   struct pico_dns_question *qb );
 
 // MARK: DNS PACKET FUNCTIONS
 

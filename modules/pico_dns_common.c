@@ -26,6 +26,69 @@ pico_dns_record_copy_flat( struct pico_dns_record *record,
 static char *
 pico_dns_url_to_reverse_qname( const char *url, uint8_t proto );
 
+// MARK: COMPARING
+
+/* ****************************************************************************
+ *  Compares two data buffers
+ * ****************************************************************************/
+int
+pico_dns_rdata_cmp( uint8_t *a, uint8_t *b,
+				    uint16_t rdlength_a, uint16_t rdlength_b )
+{
+	uint16_t i = 0;
+	uint16_t longest_rdlength = 0;
+
+	/* Check params */
+	if (!a || !b) {
+		pico_err = PICO_ERR_EINVAL;
+		return -1;
+	}
+
+	if (rdlength_a >= rdlength_b)
+		longest_rdlength = rdlength_a;
+	else
+		longest_rdlength = rdlength_b;
+
+	for (i = 0; i < longest_rdlength; i++) {
+		if (i < rdlength_a && i < rdlength_b) {
+			if ((uint8_t)a[i] == (uint8_t)b[i])
+				continue;
+			else
+				return (((uint8_t)a[i] < (uint8_t)b[i]) ? -1 : 1);
+		} else if (rdlength_a == rdlength_b)
+			return 0;
+		else if (rdlength_a == longest_rdlength)
+			return 1;
+		else
+			return -1;
+	}
+
+	return 0;
+}
+
+/* ****************************************************************************
+ *  Compares two DNS questions
+ * ****************************************************************************/
+int
+pico_dns_question_cmp( struct pico_dns_question *qa,
+					   struct pico_dns_question *qb )
+{
+	uint16_t a_type = short_be(qa->qsuffix->qtype);
+	uint16_t b_type = short_be(qb->qsuffix->qtype);
+
+	/* First, compare the qtypes */
+	if(a_type < b_type)
+		return -1;
+	if(b_type < a_type)
+		return 1;
+
+	/* Then compare qnames */
+	return pico_dns_rdata_cmp((uint8_t *)qa->qname,
+							  (uint8_t *)qb->qname,
+							  (uint16_t)strlen(qa->qname),
+							  (uint16_t)strlen(qb->qname));
+}
+
 // MARK: DNS PACKET FUNCTIONS
 
 /* ****************************************************************************
@@ -538,10 +601,20 @@ pico_dns_question_vector_add( pico_dns_question_vector *vector,
         return -1;
     
     /* Copy all the record-pointers from the previous array to the new one */
-    for (i = 0; i < vector->count; i++)
-        new_questions[i] = vector->questions[i];
-    new_questions[i] = question;
-    
+	for (i = 0; i < vector->count; i++) {
+		if (pico_dns_question_cmp(question, vector->questions[i]) < 0) {
+			new_questions[i] = question;
+			for (i = (uint16_t)(i + 1); i < (vector->count + 1); i++) {
+				new_questions[i] = vector->questions[i - 1];
+			}
+			break;
+		} else {
+			new_questions[i] = vector->questions[i];
+		}
+	}
+	if (i == vector->count)
+		new_questions[i] = question;
+
     /* Free the previous array */
     if (vector->questions)
         PICO_FREE(vector->questions);
@@ -1028,10 +1101,6 @@ pico_dns_record_create( const char *url,
     
     /* Get length + 2 for .-prefix en trailing zero-byte */
     slen = (uint16_t)(strlen(url) + 2u);
-
-    /* We want DNS notation with PTR records */
-    if (rtype == PICO_DNS_TYPE_PTR)
-        datalen = (uint16_t)(datalen + 2u);
 
     /* Allocate space for the record and subfields */
     record = PICO_ZALLOC(sizeof(struct pico_dns_record));

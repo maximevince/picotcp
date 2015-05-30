@@ -536,7 +536,7 @@ static int pico_dns_create_message(struct pico_dns_header **header, struct pico_
 
     if(arpa == PICO_DNS_ARPA4) {
         strcpy(inaddr_arpa, ".in-addr.arpa");
-        strlen = pico_dns_client_strlen(url);
+        strlen = pico_dns_strlen(url);
     }
 
 #ifdef PICO_SUPPORT_IPV6
@@ -547,10 +547,10 @@ static int pico_dns_create_message(struct pico_dns_header **header, struct pico_
 #endif
     else {
         strcpy(inaddr_arpa, "");
-        strlen = pico_dns_client_strlen(url);
+        strlen = pico_dns_strlen(url);
     }
 
-    arpalen = pico_dns_client_strlen(inaddr_arpa);
+    arpalen = pico_dns_strlen(inaddr_arpa);
     *urlen = (uint16_t)(PICO_DNS_LABEL_INITIAL + strlen + arpalen + PICO_DNS_LABEL_ROOT);
     *hdrlen = (uint16_t)(sizeof(struct pico_dns_header) + *urlen + sizeof(struct pico_dns_question_suffix));
     *header = PICO_ZALLOC(*hdrlen);
@@ -642,10 +642,10 @@ static int pico_dns_client_getaddr_init(const char *url, uint16_t proto, void (*
 
 #ifdef PICO_SUPPORT_IPV6
     if (proto == PICO_PROTO_IPV6) {
-        pico_dns_question_fill_qsuffix(qsuffix, PICO_DNS_TYPE_AAAA, PICO_DNS_CLASS_IN);
+        pico_dns_question_fill_suffix(qsuffix, PICO_DNS_TYPE_AAAA, PICO_DNS_CLASS_IN);
     } else
 #endif
-        pico_dns_question_fill_qsuffix(qsuffix, PICO_DNS_TYPE_A, PICO_DNS_CLASS_IN);
+        pico_dns_question_fill_suffix(qsuffix, PICO_DNS_TYPE_A, PICO_DNS_CLASS_IN);
 
     q = pico_dns_client_add_query(header, len, qsuffix, callback, arg);
     if (!q) {
@@ -686,7 +686,7 @@ static int pico_dns_getname_univ(const char *ip, void (*callback)(char *, void *
     if(pico_dns_create_message(&header, &qsuffix, arpa, ip, &lblen, &len) != 0)
         return -1;
 
-    pico_dns_question_fill_qsuffix(qsuffix, PICO_DNS_TYPE_PTR, PICO_DNS_CLASS_IN);
+    pico_dns_question_fill_suffix(qsuffix, PICO_DNS_TYPE_PTR, PICO_DNS_CLASS_IN);
     q = pico_dns_client_add_query(header, len, qsuffix, callback, arg);
     if (!q) {
         PICO_FREE(header);

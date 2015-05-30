@@ -169,14 +169,16 @@ pico_dns_record_cmp( void *ra,
 /* ****************************************************************************
  *  Definition of DNS question tree
  * ****************************************************************************/
+typedef struct pico_tree pico_dns_qtree;
 #define PICO_DNS_QTREE_DECLARE(name) \
-		PICO_TREE_DECLARE(name, &pico_dns_question_cmp);
+		pico_dns_qtree (name) = {&LEAF, pico_dns_question_cmp}
 
 /* ****************************************************************************
  *  Definition of DNS record tree
  * ****************************************************************************/
+typedef struct pico_tree pico_dns_rtree;
 #define PICO_DNS_RTREE_DECLARE(name) \
-		PICO_TREE_DECLARE(name, &pico_dns_record_cmp);
+		struct pico_tree (name) = {&LEAF, pico_dns_record_cmp}
 
 /* ****************************************************************************
  *  Erases a pico_tree entirely.

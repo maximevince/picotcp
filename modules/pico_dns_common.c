@@ -202,7 +202,10 @@ pico_tree_destroy( struct pico_tree *tree, int (* node_delete)(void **) )
  *  up. And gets the amount of items in the tree as well.
  *
  *  @param tree      Pointer to pico_tree-instance
- *  @param size      Will get fill with the size of all the nodes summed up.
+ *  @param size      Will get filled with the size of all the nodes summed up.
+ *					 Make sure you clear out (set to 0) this param before you 
+ *					 call this function because it doesn't happen inside and
+ *					 each size will be added to the initial value.
  *  @param node_size Helper-function for type-specific size-determination
  *  @return Amount of items in the tree.
  * ****************************************************************************/
@@ -220,7 +223,6 @@ pico_tree_size( struct pico_tree *tree,
 		pico_err = PICO_ERR_EINVAL;
 		return 0;
 	}
-	*size = 0;
 
 	/* Add up the node sizes */
 	pico_tree_foreach(node, tree) {
@@ -680,7 +682,6 @@ pico_dns_packet_len( struct pico_tree *qtree,
 					 uint8_t *nscount, uint8_t *arcount )
 {
 	uint16_t len = (uint16_t) sizeof(pico_dns_packet);
-	uint16_t temp = 0;
 
 	/* Check params */
 	if (!qtree || !antree || !nstree || !artree) {
@@ -688,14 +689,10 @@ pico_dns_packet_len( struct pico_tree *qtree,
 		return 0;
 	}
 
-	*qdcount = (uint8_t)pico_tree_size(qtree, &temp, &pico_dns_question_size);
-	len = (uint16_t)(len + temp);
-	*ancount = (uint8_t)pico_tree_size(antree, &temp, &pico_dns_record_size);
-	len = (uint16_t)(len + temp);
-	*nscount = (uint8_t)pico_tree_size(nstree, &temp, &pico_dns_record_size);
-	len = (uint16_t)(len + temp);
-	*arcount = (uint8_t)pico_tree_size(artree, &temp, &pico_dns_record_size);
-	len = (uint16_t)(len + temp);
+	*qdcount = (uint8_t)pico_tree_size(qtree, &len, &pico_dns_question_size);
+	*ancount = (uint8_t)pico_tree_size(antree, &len, &pico_dns_record_size);
+	*nscount = (uint8_t)pico_tree_size(nstree, &len, &pico_dns_record_size);
+	*arcount = (uint8_t)pico_tree_size(artree, &len, &pico_dns_record_size);
 	return len;
 }
 
@@ -719,9 +716,12 @@ pico_dns_packet_create( struct pico_tree *qtree,
 					    struct pico_tree *artree,
 					    uint16_t *len )
 {
+	PICO_DNS_QTREE_DECLARE(_qtree);
+	PICO_DNS_RTREE_DECLARE(_antree);
+	PICO_DNS_RTREE_DECLARE(_nstree);
+	PICO_DNS_RTREE_DECLARE(_artree);
 	pico_dns_packet *packet = NULL;
 	uint8_t qdcount = 0, ancount = 0, nscount = 0, arcount = 0;
-	struct pico_tree _qtree = {0}, _antree = {0}, _nstree = {0}, _artree = {0};
 
 	/* Set default vector, if arguments are NULL-pointers */
 	_qtree = (qtree) ? (*qtree) : (_qtree);
@@ -830,12 +830,10 @@ pico_dns_question_size( void *question )
 {
 	uint16_t size = 0;
 	struct pico_dns_question *q = (struct pico_dns_question *)question;
-
 	if (!q)
 		return 0;
-
 	size = q->qname_length;
-	size = (uint16_t)(size + sizeof(struct pico_dns_record_suffix));
+	size = (uint16_t)(size + sizeof(struct pico_dns_question_suffix));
 	return size;
 }
 
@@ -1100,7 +1098,7 @@ pico_dns_record_size( void *record )
 
 	size = rr->rname_length;
 	size = (uint16_t)(size + sizeof(struct pico_dns_record_suffix));
-	size = (uint16_t)(size + rr->rsuffix->rdlength);
+	size = (uint16_t)(size + short_be(rr->rsuffix->rdlength));
 	return size;
 }
 

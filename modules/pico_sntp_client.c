@@ -340,7 +340,7 @@ int pico_sntp_sync(const char *sntp_server, void (*cb_synced)(pico_err_t status)
     ck6->sock = NULL;
     ck6->cb_synced = cb_synced;
     sntp_dbg("Resolving AAAA %s\n", ck6->hostname);
-    retval6 = pico_dns_client_getaddr6(sntp_server, &dnsCallback, ck6);
+    retval6 = pico_dns_client_getaddr6(sntp_server, dnsCallback, ck6);
     if (retval6 != 0) {
         PICO_FREE(ck6->hostname);
         PICO_FREE(ck6);
@@ -349,7 +349,7 @@ int pico_sntp_sync(const char *sntp_server, void (*cb_synced)(pico_err_t status)
 
 #endif
     sntp_dbg("Resolving A %s\n", ck->hostname);
-    retval = pico_dns_client_getaddr(sntp_server, &dnsCallback, ck);
+    retval = pico_dns_client_getaddr(sntp_server, dnsCallback, ck);
     if (retval != 0) {
         PICO_FREE(ck->hostname);
         PICO_FREE(ck);

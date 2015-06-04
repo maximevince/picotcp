@@ -1,45 +1,18 @@
 #include "utils.h"
-#include <pico_dns_common.h>
-#include <pico_mdns.h>
-#include <pico_ipv4.h>
-#include <pico_addressing.h>
+#include "pico_dns_common.h"
+#include "pico_mdns.h"
+#include "pico_ipv4.h"
+#include "pico_addressing.h"
 
 /*** START MDNS ***/
 
 #ifdef PICO_SUPPORT_MDNS
 
-void mdns_getrecord_callback( pico_mdns_record_vector *vector,
-                              char *str,
-                              void *arg )
-{
-    if (!vector) {
-        printf("Returned NULL-ptr!\n");
-        return;
-    }
-    if (pico_mdns_record_vector_count(vector) > 0) {
-        printf("Get record succeeded!\n");
-    } else {
-        printf("No records found!\n");
-    }
-}
-
-void mdns_init_callback( pico_mdns_record_vector *vector,
+void mdns_init_callback( pico_mdns_rtree *rtree,
                          char *str,
                          void *arg )
 {
-	pico_mdns_record_vector _vector = {0};
-    struct pico_mdns_record *hostname_record = NULL;
-	struct pico_mdns_record *srv_record = NULL;
-	struct pico_mdns_record *txt_record = NULL;
-    char *hostname = NULL;
-
-    /* Get the first record in the vector */
-    hostname_record = pico_mdns_record_vector_get(vector, 0);
-
-    /* Convert the rname to an URL */
-    hostname = pico_dns_qname_to_url(hostname_record->record->rname);
-    printf("Initialised with hostname: %s\n", hostname);
-    PICO_FREE(hostname);
+    printf("Initialised with hostname: %s\n", str);
 }
 
 void app_mdns(char *arg, struct pico_ip4 address)
@@ -66,7 +39,7 @@ void app_mdns(char *arg, struct pico_ip4 address)
     }
     
     printf("\nStarting mDNS module...\n");
-    if (pico_mdns_init(hostname, address, 0, &mdns_init_callback, NULL) != 0) {
+    if (pico_mdns_init(hostname, address, &mdns_init_callback, NULL)) {
         printf("Initialisation returned with Error!\n");
         exit(255);
     }

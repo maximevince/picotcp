@@ -2765,7 +2765,6 @@ pico_mdns_send_announcement_packet( pico_time now, void *arg )
 			/* Try to delete the cookie */
 			pico_tree_delete(&Cookies, cookie);
 			pico_mdns_cookie_delete(&cookie);
-			mdns_dbg("DONE - Announcing.\n");
 		}
 		else /* Announcement should be sent with a delay of 1s in between. */
             pico_timer_add(1000, pico_mdns_send_announcement_packet, cookie);

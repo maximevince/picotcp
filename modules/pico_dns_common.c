@@ -644,13 +644,9 @@ pico_dns_question_create( const char *url,
 		return NULL;
 	}
 
-	/* Try to provide space and convert the URL to a correct FQDN */
-	if (reverse && qtype == PICO_DNS_TYPE_PTR)
-		question->qname = pico_dns_url_to_reverse_qname(url, proto);
-	else {
-		question->qname = pico_dns_url_to_qname(url);
-	}
-	slen = (uint16_t)(pico_dns_strlen(question->qname) + 1u);
+	/* Fill name field */
+	slen = pico_dns_question_fill_name(&(question->qname), url,
+									   qtype, proto, reverse);
 	question->qname_length = (uint8_t)(slen);
 	question->proto = proto;
 
@@ -963,24 +959,9 @@ pico_dns_record_create( const char *url,
 	record->rname = pico_dns_url_to_qname(url);
 	record->rname_length = slen;
 
-	if (rtype == PICO_DNS_TYPE_PTR) {
-		datalen = (uint16_t)(datalen + 2u);
-		if (!(record->rdata = (uint8_t *)pico_dns_url_to_qname(_rdata))) {
-			pico_err = PICO_ERR_ENOMEM;
-			return 0;
-		}
-	} else {
-		/* Otherwise just copy in the databuffer */
-		if (!(record->rdata = PICO_ZALLOC((size_t)datalen))) {
-			pico_err = PICO_ERR_ENOMEM;
-			return 0;
-		}
-		memcpy((void *)record->rdata, (void *)_rdata, datalen);
-	}
-
 	/* Provide space & fill in the rdata field */
-//	datalen = pico_dns_record_fill_rdata(&(record->rdata), _rdata, datalen,
-//										 rtype);
+	datalen = pico_dns_record_fill_rdata(&(record->rdata), _rdata,
+										 datalen, rtype);
 
 	/* Provide space & fill in the rsuffix */
 	ret = pico_dns_record_fill_suffix(&(record->rsuffix), rtype, rclass, rttl,
@@ -1553,7 +1534,7 @@ pico_dns_packet_compress_name( uint8_t *name,
 			/* Move up left over data */
 			difference = (uint16_t)(ptr_after_str - offset);
 			last_byte = packet + *len;
-			for (i = ptr_after_str; i <= last_byte; i++)
+			for (i = ptr_after_str; i < last_byte; i++)
 				*((uint8_t *)(i - difference)) = *i;
 
 			/* Update length */

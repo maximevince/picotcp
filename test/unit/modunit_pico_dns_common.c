@@ -639,7 +639,7 @@ START_TEST(tc_pico_dns_question_create) /* MARK: dns_quesiton_create */
     /* Reverse PTR record for IPv4 address */
     a = pico_dns_question_create(qurl2, &len, PICO_PROTO_IPV4,
                                  PICO_DNS_TYPE_PTR, PICO_DNS_CLASS_IN, 1);
-    fail_unless(strcmp(a->qname, buf2) == 0, "url2 not converted correctly!\n");
+    fail_unless(strcmp(a->qname, buf2) == 0, "url2 not converted correctly! %s\n", a->qname);
     fail_unless(short_be(a->qsuffix->qtype) == PICO_DNS_TYPE_PTR,
                 "qtype2 not properly set!\n");
     fail_unless(short_be(a->qsuffix->qclass) == PICO_DNS_CLASS_IN,

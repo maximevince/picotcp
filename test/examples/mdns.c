@@ -12,7 +12,7 @@ void mdns_init_callback( pico_mdns_rtree *rtree,
                          char *str,
                          void *arg )
 {
-    printf("Initialised with hostname: %s\n", str);
+    printf("\nInitialised with hostname: %s\n\n", str);
 }
 
 void app_mdns(char *arg, struct pico_ip4 address)

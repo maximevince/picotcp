@@ -900,8 +900,11 @@ void add_records( void ) /* MARK: helper to add records to MyRecords s*/
 
     /* Create an A record with URL */
     record = pico_mdns_record_create(url, &rdata, 4, PICO_DNS_TYPE_A, 0,
-                                     (PICO_MDNS_RECORD_UNIQUE | PICO_MDNS_RECORD_PROBED));
+                                     (PICO_MDNS_RECORD_UNIQUE |
+									  PICO_MDNS_RECORD_PROBED |
+									  PICO_MDNS_RECORD_HOSTNAME));
     fail_if(!record, "Record could not be created!\n");
+	printf("Is hostname record: %d\n", IS_HOSTNAME_RECORD(record));
 
     /* Create 2 PTR records to URL */
     record1 = pico_mdns_record_create(url, url, strlen(url),
@@ -1145,7 +1148,8 @@ START_TEST(tc_mdns_my_records_find_probed) /* MARK: mdns_my_records_find_probed 
 
     hits = pico_mdns_my_records_find_probed();
     fail_unless(2 == pico_tree_count(&hits),
-                "mdns_my_records_find_probed failed!\n");
+                "mdns_my_records_find_probed failed %d!\n",
+				pico_tree_count(&hits));
 
 
     printf("*********************** ending %s * \n", __func__);
@@ -1500,6 +1504,52 @@ START_TEST(tc_mdns_sort_unicast_multicast) /* MARK: sort_unicast_multicast */
     printf("*********************** ending %s * \n", __func__);
 }
 END_TEST
+START_TEST(tc_mdns_gather_additionals) /* MARK: gather_additionals */
+{
+	PICO_MDNS_RTREE_DECLARE(antree);
+	PICO_MDNS_RTREE_DECLARE(artree);
+	struct pico_mdns_record *srv_record = NULL, *record = NULL;
+	struct pico_tree_node *node = NULL;
+	int ret = 0;
+
+	printf("*********************** starting %s * \n", __func__);
+
+	add_records();
+
+	srv_record = pico_mdns_record_create("test._http._tcp.local",
+										 "\0\0\0\0\0\x50\4host\5local", 17,
+										 PICO_DNS_TYPE_SRV, 120,
+										 PICO_MDNS_RECORD_UNIQUE);
+	fail_if(!srv_record, "Could not create SRV record!\n");
+	pico_tree_insert(&antree, srv_record);
+
+	ret = pico_mdns_gather_additionals(&antree, &artree);
+	fail_if(ret, "Gather Additionals returned error!\n");
+	fail_unless(pico_tree_count(&antree) == 3, "ANtree should contain 3: %d",
+				pico_tree_count(&antree));
+
+	printf("Answers: \n");
+	pico_tree_foreach(node, &antree) {
+		if ((record = node->keyValue)) {
+			printf("%d - %s\n", short_be(record->record->rsuffix->rtype),
+				   record->record->rname);
+		}
+	}
+
+	printf("Additionals: \n");
+	pico_tree_foreach(node, &artree) {
+		if ((record = node->keyValue)) {
+			printf("%d - %s\n", short_be(record->record->rsuffix->rtype),
+				   record->record->rname);
+		}
+	}
+
+	fail_unless(pico_tree_count(&artree) == 3, "ARtree should contine 3: %d",
+				pico_tree_count(&artree));
+
+	printf("*********************** ending %s * \n", __func__);
+}
+END_TEST
 START_TEST(tc_mdns_apply_known_answer_suppression) /* MARK: apply_k_a_s */
 {
     pico_dns_packet *packet = NULL;
@@ -1815,6 +1865,7 @@ Suite *pico_suite(void)
 
     /* Handling query packets */
     TCase *TCase_mdns_sort_unicast_multicast = tcase_create("Unit test for mdns_sort_unicast_multicast");
+	TCase *TCase_mdns_gather_additionals = tcase_create("Unit test for mdns_gather_additionals");
     TCase *TCase_mdns_apply_known_answer_suppression = tcase_create("Unit test for mdns_apply_known_answer_suppression");
 
     /* Address resolving functions */
@@ -1929,6 +1980,8 @@ Suite *pico_suite(void)
     /* Handling query packets */
     tcase_add_test(TCase_mdns_sort_unicast_multicast, tc_mdns_sort_unicast_multicast);
     suite_add_tcase(s, TCase_mdns_sort_unicast_multicast);
+	tcase_add_test(TCase_mdns_gather_additionals, tc_mdns_gather_additionals);
+	suite_add_tcase(s, TCase_mdns_gather_additionals);
     tcase_add_test(TCase_mdns_apply_known_answer_suppression, tc_mdns_apply_known_answer_suppression);
     suite_add_tcase(s, TCase_mdns_apply_known_answer_suppression);
 

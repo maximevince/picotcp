@@ -16,8 +16,8 @@
 #ifdef PICO_SUPPORT_MDNS
 
 /* --- Debugging --- */
-//#define mdns_dbg(...) do {} while(0)
-#define mdns_dbg dbg
+#define mdns_dbg(...) do {} while(0)
+//#define mdns_dbg dbg
 
 #define PICO_MDNS_QUERY_TIMEOUT (10000) /* Ten seconds */
 #define PICO_MDNS_RR_TTL_TICK (1000)    /* One second */
@@ -50,11 +50,11 @@
 (((x) & PICO_MDNS_QUESTION_FLAG_UNICAST_RES) ? 0 : 1 )
 
 /* Resource Record flags */
-#define PICO_MDNS_RECORD_HOSTNAME 0x02u
 #define PICO_MDNS_RECORD_ADDITIONAL 0x08u
 #define PICO_MDNS_RECORD_SEND_UNICAST 0x10u
 #define PICO_MDNS_RECORD_CURRENTLY_PROBING 0x20u
 #define PICO_MDNS_RECORD_PROBED 0x40u
+#define PICO_MDNS_RECORD_CLAIMED 0x80u
 
 #define IS_SHARED_RECORD(x) \
 		(((x)->flags & PICO_MDNS_RECORD_SHARED) ? 1 : 0)
@@ -62,10 +62,12 @@
 		(((x)->flags & PICO_MDNS_RECORD_SHARED) ? 0 : 1)
 #define IS_RECORD_PROBING(x) \
 		(((x)->flags & PICO_MDNS_RECORD_CURRENTLY_PROBING) ? 1 : 0)
-#define IS_RECORD_VERIFIED(x) \
-		(((x)->flags & PICO_MDNS_RECORD_PROBED) ? 1 : 0)
 #define IS_UNICAST_REQUESTED(x) \
 		(((x)->flags & PICO_MDNS_RECORD_SEND_UNICAST) ? 1 : 0)
+#define IS_RECORD_VERIFIED(x) \
+		(((x)->flags & PICO_MDNS_RECORD_PROBED) ? 1 : 0)
+#define IS_RECORD_CLAIMED(x) \
+		(((x)->flags & PICO_MDNS_RECORD_CLAIMED) ? 1 : 0)
 
 /* Set and clear flags */
 #define PICO_MDNS_SET_FLAG(x, b) (x = ((x) | (uint8_t)(b)))
@@ -1185,7 +1187,8 @@ pico_mdns_my_records_find_probed( void )
 	/* Iterate over MyRecords */
     pico_tree_foreach(node, &MyRecords) {
         record = node->keyValue;
-        if (record && IS_RECORD_VERIFIED(record)) {
+        if (record && IS_RECORD_VERIFIED(record) &&
+			!IS_RECORD_CLAIMED(record)) {
             if ((copy = pico_mdns_record_copy(record)))
 				pico_tree_insert(&probed, copy);
         }
@@ -1266,16 +1269,18 @@ pico_mdns_my_records_claimed( pico_mdns_rtree rtree,
                               void *arg )
 {
 	PICO_MDNS_RTREE_DECLARE(claimed_records);
-	struct pico_mdns_record *record = NULL;
+	struct pico_mdns_record *record = NULL, *myrecord = NULL;
 	struct pico_tree_node *node = NULL;
     uint8_t claim_id = 0;
 
     /* Iterate over records and set the PROBED flag */
 	pico_tree_foreach(node, &rtree) {
-		if ((record = node->keyValue) && !claim_id) {
-			claim_id = record->claim_id;
-			break;
+		if ((record = node->keyValue)) {
+			if (!claim_id)
+				claim_id = record->claim_id;
 		}
+		if ((myrecord = pico_tree_findKey(&MyRecords, record)))
+			PICO_MDNS_SET_FLAG(myrecord->flags, PICO_MDNS_RECORD_CLAIMED);
 	}
 
     /* If all_claimed is still true */
@@ -2151,7 +2156,7 @@ pico_mdns_additionals_add_nsec( pico_mdns_rtree *artree,
 
 	/* Check if there is a NSEC already for this name */
 	pico_tree_foreach(node, artree) {
-		if ((record = node->keyValue)) {
+		if (node != &LEAF && (record = node->keyValue)) {
 			type = short_be(record->record->rsuffix->rtype);
 			if (PICO_DNS_TYPE_NSEC == type) {
 				if (strcmp(record->record->rname, name) == 0)
@@ -2181,7 +2186,7 @@ pico_mdns_additionals_add_host( pico_mdns_rtree *artree )
 	pico_tree_foreach(node, &MyRecords) {
 		if ((record = node->keyValue) &&
 			IS_HOSTNAME_RECORD(record) && IS_RECORD_VERIFIED(record)) {
-			pico_tree_insert(artree, record);
+			pico_tree_insert(artree, pico_mdns_record_copy(record));
 		}
 	}
 
@@ -2226,6 +2231,7 @@ pico_mdns_gather_service_meta( pico_mdns_rtree *antree,
 										 PICO_DNS_TYPE_PTR,
 										 ttl, PICO_MDNS_RECORD_SHARED);
 	if (!ptr_record) {
+		mdns_dbg("Could not generate PTR record!\n");
 		PICO_FREE(sin);
 		return -1;
 	}
@@ -2238,6 +2244,7 @@ pico_mdns_gather_service_meta( pico_mdns_rtree *antree,
 										 ttl, PICO_MDNS_RECORD_SHARED);
 	PICO_FREE(sin);
 	if (!meta_record) {
+		mdns_dbg("Could not generate META record!\n");
 		pico_mdns_record_delete((void **)&ptr_record);
 		return -1;
 	}
@@ -2316,18 +2323,17 @@ pico_mdns_reply( pico_mdns_rtree *antree, struct pico_ip4 peer )
 	PICO_DNS_RTREE_DECLARE(artree_dummy);
 	PICO_DNS_RTREE_DECLARE(artree_dns);
 
-	/* Sort the records in 2 two vectors by unicast or multicast */
-	if (pico_mdns_sort_unicast_multicast(antree, &antree_u, &antree_m)) {
-		mdns_dbg("Could not sort answers into unicast/multicast vector!\n");
-		return -1;
-	}
-
 	/* Try to gather additionals for the to send response */
 	if (pico_mdns_gather_additionals(antree, &artree)) {
 		mdns_dbg("Could not gather additionals properly!\n");
 		return -1;
 	}
-	/* Use sort-function to convert mDNS record tree to DNS record tree */
+
+	/* Sort the answers into multicast and unicast answers */
+	pico_mdns_sort_unicast_multicast(antree, &antree_u, &antree_m);
+
+	/* Convert the mDNS additional tree to a DNS additional tree to send with
+	 * the the unicast AND the multicast response */
 	pico_mdns_sort_unicast_multicast(&artree, &artree_dummy, &artree_dns);
 
 	/* Send response via unicast */

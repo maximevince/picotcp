@@ -391,7 +391,7 @@ pico_dns_mirror_addr( char *ip )
 					  (uint32_t)((addr & (uint32_t)0xFFu) << 24));
 
 	return pico_ipv4_to_string(ip, addr);
-}a
+}
 
 #ifdef PICO_SUPPORT_IPV6
 /* ****************************************************************************

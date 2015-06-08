@@ -459,44 +459,47 @@ START_TEST(tc_mdns_is_suffix_present) /* MARK: mdns_is_suffix_present */
     char name2[17] = {9,'v','l','e','e','s',' ','(','2',')',5,'l','o','c','a','l','\0'};
     char name6[17] = {12,'v','l','e','e','s',' ','(','a',')','(','2',')',5,'l','o','c','a','l','\0'};
     char name7[18] = {10,'v','l','e','e','s',' ','(','9','a',')',5,'l','o','c','a','l','\0'};
+	char name8[16] = {8,'v','l','e','e','s',' ',' ',')',5,'l','o','c','a','l','\0'};
+	char name9[17] = {8,'v','l','e','e','s',' ','(','0',')',5,'l','o','c','a','l','\0'};
     char *o_index = NULL;
     char *c_index = NULL;
-    char suffix[5] = {0};
     char new_suffix[5] = {0};
     uint8_t present = 0;
 
     printf("*********************** starting %s * \n", __func__);
-    present = pico_mdns_is_suffix_present(name1, &o_index, &c_index, &suffix);
-    fail_unless(0 == present,
+    present = pico_mdns_is_suffix_present(name1, &o_index, &c_index);
+    fail_unless(!present,
                 "There is no suffix present!\n");
     fail_unless(NULL == o_index && NULL == c_index,
                 "There should be no indexes!\n");
-    fail_unless(strcmp(suffix, "") == 0, "The should be no suffix!\n");
 
-    present = pico_mdns_is_suffix_present(name2, &o_index, &c_index, &suffix);
-    fail_unless(1 == present,
+    present = pico_mdns_is_suffix_present(name2, &o_index, &c_index);
+    fail_unless(present,
                 "is_suffix_present failed with suffix!\n");
     fail_unless((name2 + 7) == o_index && (name2 + 9) == c_index,
                 "is_suffix_pressent failed!\n");
-    fail_unless(strcmp(suffix, "2") == 0, "Suffix should be 2!\n");
+    fail_unless(present == 2, "Suffix should be 2!\n");
 
-    o_index = NULL;
-    c_index = NULL;
-    suffix[0] = '\0';
-
-    present = pico_mdns_is_suffix_present(name7, &o_index, &c_index, &suffix);
-    fail_unless(0 == present,
+    present = pico_mdns_is_suffix_present(name7, &o_index, &c_index);
+    fail_unless(!present,
                 "There is no suffix present!\n");
     fail_unless(NULL == o_index && NULL == c_index,
                 "There should be no indexes!\n");
-    fail_unless(strcmp(suffix, "") == 0, "The should be no suffix!\n");
 
-    present = pico_mdns_is_suffix_present(name6, &o_index, &c_index, &suffix);
-    fail_unless(1 == present,
+    present = pico_mdns_is_suffix_present(name6, &o_index, &c_index);
+    fail_unless(present,
                 "is_suffix_present failed with suffix!\n");
     fail_unless((name6 + 10) == o_index && (name6 + 12) == c_index,
                 "is_suffix_present failed!\n");
-    fail_unless(strcmp(suffix, "2") == 0, "Suffix should be 2!\n");
+    fail_unless(present == 2, "Suffix should be 2!\n");
+
+	present = pico_mdns_is_suffix_present(name8, &o_index, &c_index);
+	fail_unless(!present,
+				"is_suffix_present failed with wrong suffix!\n");
+
+	present = pico_mdns_is_suffix_present(name9, &o_index, &c_index);
+	fail_unless(!present,
+				"is_suffix_present failed with suffix 0!\n");
 
     printf("*********************** ending %s * \n", __func__);
 }
@@ -548,7 +551,7 @@ START_TEST(tc_mdns_resolve_name_conflict) /* MARK: mdns_resolve_name_conflict */
                 ret);
     PICO_FREE(ret);
     ret = pico_mdns_resolve_name_conflict(name5);
-    fail_unless(0 == strcmp(ret, "\x9vlees (2)\5local"),
+    fail_unless(0 == strcmp(ret, "\xcvlees () (2)\5local"),
                 "mdns_conflict_resolve_name failed 'vlees ().local' to %s!\n",
                 ret);
     PICO_FREE(ret);

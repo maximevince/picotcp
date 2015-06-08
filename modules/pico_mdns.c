@@ -234,6 +234,40 @@ pico_mdns_reclaim( pico_mdns_rtree record_tree,
 
 // MARK: v MDNS NAMES
 
+#define IS_NUM(c) (((c) >= '0') && ((c) <= '9'))
+/* ****************************************************************************
+ *  Tries to convert the carachters in between '(' and ')' to a numeric value.
+ *
+ *  @param opening Pointer to opening bracket index.
+ *  @param closing Pointer to closing bracket index.
+ *  @return Numeric value of suffix on success
+ * ****************************************************************************/
+static inline uint16_t
+pico_mdns_suffix_to_uint16( char *opening, char *closing)
+{
+	uint16_t n = 0;
+	char *i = 0;
+
+	/* Chek params */
+	if (!opening || !closing ||
+		((closing - opening) > 5) ||
+		((closing - opening) < 0))
+		return 0;
+
+	for (i = (char *)(opening + 1); i < closing; i++) {
+		if (!IS_NUM(*i))
+			return 0;
+		n = (uint16_t)((n * 10) + (*i - '0'));
+	}
+
+	return n;
+}
+
+#define iterate_first_label_name_reverse(iterator, name) \
+		for ((iterator) = (*name < (char)63) ? (char *)(name + *name) : name ; \
+			 (iterator) > name; \
+			 (iterator)--)
+
 /* ****************************************************************************
  *  Checks whether there is already a conflict-suffix already present in the
  *  first label of a name or not.
@@ -241,55 +275,45 @@ pico_mdns_reclaim( pico_mdns_rtree record_tree,
  *  @param name   Name in DNS name notation you want to check for a suffix.
  *  @param o_i    Pointer-pointer, will get filled with location to '('-char.
  *  @param c_i    Pointer-pointer, will get filled with location to ')'-char.
- *  @param suffix String, will get filled with suffix in txt.
- *  @return Returns 1 when suffix is present, only then o_i, c_i and suffix are
- *			valid. Returns 0 when no suffix is present or the suffix is not
- *			valid.
+ *  @return Returns value of the suffix, when it's present, 0 when no correct
+ *          suffix is present.
  * ****************************************************************************/
-#define IS_NUM(c) (((c) >= '0') && ((c) <= '9'))
-static int
+static uint16_t
 pico_mdns_is_suffix_present( char name[],
 							 char **o_i,
-							 char **c_i,
-							 char suffix[] )
+							 char **c_i )
 {
-	char temp[5] = {0}, c = '\0';
-	int suffix_is_present = 0;
-	uint8_t j = 0, i = 0;
+	char *i = NULL;
+	uint16_t n = 0;
 
 	/* Check params */
-	if (!name || !o_i || !c_i || !suffix) {
-		return -1;
+	if (!name || !o_i || !c_i) {
+		return 0;
 	}
-	*o_i = NULL; *c_i = NULL;
+	*o_i = NULL; /* Clear out indexes */
+	*c_i = NULL;
 
-	while ((++i < (*name + 1)) && i < 64u) {
-		/* Find the first opening bracket */
-		if ((c = name[(int)i]) == '(') {
-			*o_i = &name[(int)i];
-			suffix_is_present = 1;
-		}
+	iterate_first_label_name_reverse(i, name) {
+		/* Find the last closing bracket */
+		if (*i == ')')
+			*c_i = i;
 
-		/* Determine the suffix */
-		if (suffix_is_present && i > (uint16_t)(*o_i - name)) {
-			if (')' == c) {
-				*c_i = &name[(int)i];
-				break;
-			} else if (!IS_NUM(c))
-				suffix_is_present = 0;
-			else
-				suffix[j++] = c;
+		/* Find the last opening bracket */
+		if ((*c_i) && (i < *c_i) && *i == '(') {
+			*o_i = i;
+			break;
 		}
 	}
 
-	/* If something went wrong, reset everything */
-	if (!suffix_is_present || NULL == *c_i || NULL == *o_i) {
-		*o_i = NULL; *c_i = NULL;
-		memcpy(suffix, temp, 5);
-		suffix_is_present = 0;
+	/* Convert the string suffix to a number */
+	n = pico_mdns_suffix_to_uint16(*o_i, *c_i);
+
+	if (!n) {
+		*o_i = NULL;
+		*c_i = NULL;
 	}
 
-	return suffix_is_present;
+	return n;
 }
 
 /* ****************************************************************************
@@ -330,35 +354,31 @@ pico_mdns_resolve_name_conflict( char rname[] )
 	char *new_rname = NULL;
 	char suffix[5] = { 0 }, nsuffix[5] = { 0 }, copy_offset = 0;
 	char *o_i = NULL, *c_i = NULL;
-	uint16_t new_rlen = (uint16_t)(pico_dns_strlen(rname) + 1);
-	uint8_t slen = 0, nslen = 0;
+	uint16_t new_len = (uint16_t)(pico_dns_strlen(rname) + 1);
+	uint8_t nslen = 0, slen = 0, ns = 0;
 
 	/* Check params */
-	if (pico_dns_check_namelen(new_rlen)) {
+	if (pico_dns_check_namelen(new_len)) {
 		pico_err = PICO_ERR_EINVAL;
 		return NULL;
 	}
 
 	/* Check whether a conflict-suffix is already present in the name */
-	if (pico_mdns_is_suffix_present(rname, &o_i, &c_i, suffix)){
-		if (strlen(suffix) == 0) { /* If suffix is present */
-			memcpy((void *)nsuffix, "2", 1);
-			new_rlen++;
-		} else { /* If suffix is numeric, convert to number and increment */
-			pico_itoa((uint16_t)(atoi(suffix) + 1), nsuffix);
-			slen = (uint8_t)pico_dns_strlen(suffix);
-			nslen = (uint8_t)pico_dns_strlen(nsuffix);
-			new_rlen = (uint16_t)(new_rlen + nslen - slen);
-		}
+	if ((ns = (uint8_t)pico_mdns_is_suffix_present(rname, &o_i, &c_i))) {
+		pico_itoa(ns, suffix);
+		pico_itoa(++ns, nsuffix);
+		slen = (uint8_t)pico_dns_strlen(suffix);
+		nslen = (uint8_t)pico_dns_strlen(nsuffix);
+		new_len = (uint16_t)(new_len + nslen - slen);
 	} else {
-		/* If no suffix is present at all */
+		/* If no suffix is present */
 		c_i = (o_i = rname + *rname) + 1;
-		new_rlen = (uint16_t)(new_rlen + 4u);
-		memcpy((void *)nsuffix, " (2)", (size_t) 4);
+		new_len = (uint16_t)(new_len + 4u);
+		memcpy((void *)nsuffix, " (2)\0", (size_t)5);
 	}
 
 	/* Provide space for the new name */
-	if (!(new_rname = PICO_ZALLOC(new_rlen))) {
+	if (!(new_rname = PICO_ZALLOC(new_len))) {
 		pico_err = PICO_ERR_ENOMEM;
 		return NULL;
 	}
@@ -369,7 +389,7 @@ pico_mdns_resolve_name_conflict( char rname[] )
 	strcpy(new_rname + copy_offset, nsuffix);
 	strcpy(new_rname + copy_offset + pico_dns_strlen(nsuffix), c_i);
 	/* Set the first length-byte */
-	new_rname[0] = (char)(new_rname[0] + new_rlen - pico_dns_strlen(rname) - 1);
+	new_rname[0] = (char)(new_rname[0] + new_len - pico_dns_strlen(rname) - 1);
 	return new_rname;
 }
 
@@ -708,38 +728,29 @@ pico_mdns_record_resolve_conflict( struct pico_mdns_record *record,
 								   char *rname )
 {
 	PICO_MDNS_RTREE_DECLARE(new_records);
+	struct pico_mdns_record *copy = NULL;
 	char *new_name = NULL;
 
 	/* Check params */
-	if (!record || !rname) {
+	if (!record || !rname || IS_SHARED_RECORD(record)) {
 		pico_err = PICO_ERR_EINVAL;
 		return -1;
 	}
-
-	/* There is no problem if my record is a shared record */
-	if (IS_SHARED_RECORD(record))
-		return 0;
 
 	/* Step 2: Create a new name depending on current name */
 	if (!(new_name = pico_mdns_resolve_name_conflict(rname)))
 		return -1;
 
-	pico_tree_insert(&new_records, pico_mdns_record_copy_with_new_name(record,
-																	new_name));
+	copy = pico_mdns_record_copy_with_new_name(record, new_name);
 	PICO_FREE(new_name);
+	pico_tree_insert(&new_records, copy);
 
 	/* Step 3: delete conflicting record from my records */
 	pico_tree_delete(&MyRecords, record);
-	if (pico_mdns_record_delete((void **)&record))
-		mdns_dbg("Could not delete my conflicting records!\n");
+	pico_mdns_record_delete((void **)&record);
 
 	/* Step 4: Try to reclaim the newly created records */
-	if (pico_mdns_reclaim(new_records, init_callback, NULL) < 0) {
-		mdns_dbg("Could not claim new records!\n");
-		return -1;
-	}
-
-	return 0;
+	return pico_mdns_reclaim(new_records, init_callback, NULL);
 }
 
 /* ****************************************************************************
@@ -756,6 +767,7 @@ pico_mdns_record_am_i_lexi_later( struct pico_mdns_record *my_record,
 								  struct pico_mdns_record *peer_record)
 {
 	struct pico_dns_record *my = NULL, *peer = NULL;
+	uint16_t mtype = 0, ptype = 0;
 	int dif = 0;
 
 	/* Check params */
@@ -766,8 +778,9 @@ pico_mdns_record_am_i_lexi_later( struct pico_mdns_record *my_record,
 	}
 
 	/* First, compare the rrtypes */
-	if ((dif = (int)((int)short_be(my->rsuffix->rtype) -
-					 (int)short_be(peer->rsuffix->rtype))))
+	mtype = (my->rsuffix->rtype);
+	ptype = (peer->rsuffix->rtype);
+	if ((dif = (int)((int)mtype - (int)ptype)))
 		return dif;
 
 	/* Then compare rdata */
@@ -850,7 +863,8 @@ pico_mdns_record_set_class( struct pico_dns_record *record,
 						    uint8_t flags )
 {
 	uint16_t c = PICO_DNS_CLASS_IN;
-	c = short_be(PICO_MDNS_SET_MSB(c));
+	PICO_MDNS_SET_MSB(c);
+	c = short_be(c);
 
 	/* Set the MSB of the rclass field according to the mDNS format */
 	if (!((flags) & PICO_MDNS_RECORD_SHARED))
@@ -1056,7 +1070,10 @@ pico_mdns_cookie_resolve_conflict( struct pico_mdns_cookie *cookie,
                                    char *rname )
 {
 	PICO_MDNS_RTREE_DECLARE(new_records);
+	PICO_MDNS_RTREE_DECLARE(antree);
     char *new_name = NULL;
+	void (*callback)(pico_mdns_rtree *, char *, void *);
+	void *arg = NULL;
 	uint16_t qc = 0;
 
     /* Check params */
@@ -1072,32 +1089,28 @@ pico_mdns_cookie_resolve_conflict( struct pico_mdns_cookie *cookie,
 	if (pico_dns_qtree_del_name(&(cookie->qtree), rname))
 		return -1;
 
-	/* Check if there are no questions left, and cancel events if so */
-	if (!(qc = pico_tree_count(&(cookie->qtree))))
+	antree = cookie->antree;
+	callback = cookie->callback;
+	arg = cookie->arg;
+	cookie->antree.root = &LEAF;
+
+	/* Check if there are no questions left, cancel events if so and delete */
+	if (!(qc = pico_tree_count(&(cookie->qtree)))) {
 		pico_timer_cancel(cookie->send_timer);
+		cookie = pico_tree_delete(&Cookies, cookie);
+		pico_mdns_cookie_delete(&cookie);
+	}
 
     /* Step 2: Create a new name depending on current name */
     if (!(new_name = pico_mdns_resolve_name_conflict(rname)))
         return -1;
 
 	/* Step 3: Create records with new name for the records with that name */
-	new_records = pico_mdns_generate_new_records(&(cookie->antree),
-												 rname, new_name);
+	new_records = pico_mdns_generate_new_records(&antree, rname, new_name);
 	PICO_FREE(new_name);
 
-    /* Step 5: Try to reclaim the newly created records */
-    if (pico_mdns_reclaim(new_records, cookie->callback, cookie->arg) < 0)
-		return -1;
-
-	/* Step 6: If the cookie doesn't contain questions, delete it */
-	if (!qc) {
-		cookie = pico_tree_delete(&Cookies, cookie);
-		if (pico_mdns_cookie_delete(&cookie)) {
-			mdns_dbg("could not delete empty cookie!\n");
-			return -1;
-		}
-	}
-    return 0;
+    /* Step 4: Try to reclaim the newly created records */
+    return pico_mdns_reclaim(new_records, callback, arg);
 }
 
 /* ****************************************************************************
@@ -1182,16 +1195,16 @@ pico_mdns_my_records_find_probed( void )
 {
 	PICO_MDNS_RTREE_DECLARE(probed);
 	struct pico_tree_node *node = NULL;
-    struct pico_mdns_record *record = NULL, *copy = NULL;
+	struct pico_mdns_record *record = NULL, *copy = NULL;
 
 	/* Iterate over MyRecords */
     pico_tree_foreach(node, &MyRecords) {
         record = node->keyValue;
-        if (record && IS_RECORD_VERIFIED(record) &&
-			!IS_RECORD_CLAIMED(record)) {
-            if ((copy = pico_mdns_record_copy(record)))
-				pico_tree_insert(&probed, copy);
-        }
+		if (record && IS_RECORD_VERIFIED(record) && !IS_RECORD_CLAIMED(record)){
+			copy = pico_mdns_record_copy(record);
+			if (pico_tree_insert(&probed, copy))
+				pico_mdns_record_delete((void **)&copy);
+		}
     }
 
     return probed;
@@ -1208,17 +1221,20 @@ pico_mdns_my_records_find_to_probe( void )
 {
 	PICO_MDNS_RTREE_DECLARE(toprobe);
 	struct pico_tree_node *node = NULL;
-    struct pico_mdns_record *record = NULL, *copy = NULL;
+	struct pico_mdns_record *record = NULL, *copy = NULL;
 
     pico_tree_foreach(node, &MyRecords) {
         record = node->keyValue;
         /* Check if probed flag is not set of a record */
-        if (record && !IS_RECORD_VERIFIED(record) && IS_UNIQUE_RECORD(record)
-			&& !IS_RECORD_PROBING(record)) {
+		if (record &&
+			IS_UNIQUE_RECORD(record) &&
+			!IS_RECORD_VERIFIED(record) &&
+			!IS_RECORD_PROBING(record)) {
 			/* Set record to currently being probed status */
             record->flags |= PICO_MDNS_RECORD_CURRENTLY_PROBING;
-            if ((copy = pico_mdns_record_copy(record)))
-				pico_tree_insert(&toprobe, copy);
+			copy = pico_mdns_record_copy(record);
+			if (pico_tree_insert(&toprobe, copy))
+				pico_mdns_record_delete((void **)&copy);
         }
     }
     return toprobe;
@@ -1357,10 +1373,20 @@ pico_mdns_cache_update_ttl( struct pico_mdns_record *record,
 static int
 pico_mdns_cache_add( struct pico_mdns_record *record )
 {
-    struct pico_dns_record_suffix *suffix = record->record->rsuffix;
-	char *name = record->record->rname;
-	uint16_t type = short_be(suffix->rtype);
-	uint32_t rttl = long_be(suffix->rttl);
+    struct pico_dns_record_suffix *suffix = NULL;
+	char *name = NULL;
+	uint16_t type = 0;
+	uint32_t rttl = 0;
+
+	/* Check params */
+	if (!record) {
+		pico_err = PICO_ERR_EINVAL;
+		return -1;
+	}
+	suffix = record->record->rsuffix;
+	name = record->record->rname;
+	type = short_be(suffix->rtype);
+	rttl = long_be(suffix->rttl);
 
     /* Check if cache flush bit is set */
     if (PICO_MDNS_IS_MSB_SET(short_be(suffix->rclass))) {
@@ -1390,7 +1416,7 @@ pico_mdns_cache_add( struct pico_mdns_record *record )
 static int
 pico_mdns_cache_add_record( struct pico_mdns_record *record )
 {
-    struct pico_mdns_record *found = NULL;
+	struct pico_mdns_record *found = NULL, *copy = NULL;
 	uint32_t rttl = 0;
 
     /* Check params */
@@ -1404,8 +1430,13 @@ pico_mdns_cache_add_record( struct pico_mdns_record *record )
     if (found) {
 		rttl = long_be(record->record->rsuffix->rttl);
         pico_mdns_cache_update_ttl(found, rttl);
-    } else
-		return pico_mdns_cache_add(pico_mdns_record_copy(record));
+	} else {
+		copy = pico_mdns_record_copy(record);
+		if (pico_mdns_cache_add(copy)) {
+			pico_mdns_record_delete((void **)&(copy));
+			return -1;
+		}
+	}
 
     return 0;
 }
@@ -2060,6 +2091,40 @@ pico_mdns_sort_unicast_multicast( pico_mdns_rtree *answers,
     return 0;
 }
 
+static uint16_t
+pico_mdns_nsec_highest_type( pico_mdns_rtree *rtree )
+{
+	struct pico_tree_node *node = NULL, *next = NULL;
+	struct pico_mdns_record *record = NULL;
+	uint16_t highest_type = 0, type = 0;
+
+	pico_tree_foreach_safe(node, rtree, next) {
+		if ((record = node->keyValue)) {
+			if (IS_SHARED_RECORD(record))
+				pico_tree_delete(rtree, record);
+			type = short_be(record->record->rsuffix->rtype);
+			highest_type = (type > highest_type) ? (type) : (highest_type);
+		}
+	}
+
+	return highest_type;
+}
+
+static void
+pico_mdns_nsec_gen_bitmap( uint8_t *ptr, pico_mdns_rtree *rtree )
+{
+	struct pico_tree_node *node = NULL;
+	struct pico_mdns_record *record = NULL;
+	uint16_t type = 0;
+
+	pico_tree_foreach(node, rtree) {
+		if ((record = node->keyValue)) {
+			type = short_be(record->record->rsuffix->rtype);
+			*(ptr + 1 + (type / 8)) = (uint8_t)(0x80 >> (type % 8));
+		}
+	}
+}
+
 /* ****************************************************************************
  *  Generates an NSEC record for a specific name. Looks in MyRecords for unique
  *  records with given name and generates the NSEC bitmap from them.
@@ -2071,28 +2136,14 @@ struct pico_mdns_record *
 pico_mdns_gen_nsec_record( char *name )
 {
 	PICO_MDNS_RTREE_DECLARE(rtree);
-	struct pico_tree_node *node = NULL, *next = NULL;
 	struct pico_mdns_record *record = NULL;
-	uint16_t highest_type = 0, type = 0, rdlen = 0;
+	uint16_t highest_type = 0, rdlen = 0;
 	uint8_t bitmap_len = 0, *rdata = NULL, *ptr = NULL;
 	char *url = NULL;
 
-	/* Check params */
-	if (!name) {
-		pico_err = PICO_ERR_EINVAL;
-		return NULL;
-	}
-
 	/* Determine the highest type of my unique records with this name */
 	rtree = pico_mdns_rtree_find_name(&MyRecords, name);
-	pico_tree_foreach_safe(node, &rtree, next) {
-		if ((record = node->keyValue)) {
-			if (IS_SHARED_RECORD(record))
-				pico_tree_delete(&rtree, record);
-			type = short_be(record->record->rsuffix->rtype);
-			highest_type = (type > highest_type) ? (type) : (highest_type);
-		}
-	}
+	highest_type = pico_mdns_nsec_highest_type(&rtree);
 
 	/* Determine the bimap_len */
 	bitmap_len = (uint8_t)(highest_type / 8);
@@ -2110,17 +2161,13 @@ pico_mdns_gen_nsec_record( char *name )
 	/* Set the bitmap length */
 	*(ptr = (uint8_t *)(rdata + strlen(name) + 2)) = bitmap_len;
 	/* Generate the bitmap */
-	pico_tree_foreach(node, &rtree) {
-		if ((record = node->keyValue)) {
-			type = short_be(record->record->rsuffix->rtype);
-			*(ptr + 1 + (type / 8)) = (uint8_t)(0x80 >> (type % 8));
-		}
-	}
+	pico_mdns_nsec_gen_bitmap(ptr, &rtree);
 
 	/* Generate the actual mDNS NSEC record */
-	url = pico_dns_qname_to_url(name);
-	if (!url)
+	if (!(url = pico_dns_qname_to_url(name))) {
+		PICO_FREE(rdata);
 		return NULL;
+	}
 	record = pico_mdns_record_create(url, (void *)rdata, rdlen,
 									 PICO_DNS_TYPE_NSEC,
 									 PICO_MDNS_SERVICE_TTL,
@@ -2181,12 +2228,15 @@ int
 pico_mdns_additionals_add_host( pico_mdns_rtree *artree )
 {
 	struct pico_tree_node *node = NULL;
-	struct pico_mdns_record *record = NULL;
+	struct pico_mdns_record *record = NULL, *copy = NULL;
 
 	pico_tree_foreach(node, &MyRecords) {
 		if ((record = node->keyValue) &&
-			IS_HOSTNAME_RECORD(record) && IS_RECORD_VERIFIED(record)) {
-			pico_tree_insert(artree, pico_mdns_record_copy(record));
+			IS_HOSTNAME_RECORD(record) &&
+			IS_RECORD_VERIFIED(record)) {
+			copy = pico_mdns_record_copy(record);
+			if (pico_tree_insert(artree, copy))
+				pico_mdns_record_delete((void **)&copy);
 		}
 	}
 
@@ -2230,12 +2280,6 @@ pico_mdns_gather_service_meta( pico_mdns_rtree *antree,
 										 (uint16_t)strlen(sin),
 										 PICO_DNS_TYPE_PTR,
 										 ttl, PICO_MDNS_RECORD_SHARED);
-	if (!ptr_record) {
-		mdns_dbg("Could not generate PTR record!\n");
-		PICO_FREE(sin);
-		return -1;
-	}
-
 	/* Meta DNS-SD record */
 	meta_record = pico_mdns_record_create("_services._dns-sd._udp.local",
 										 (void *)service,
@@ -2243,9 +2287,10 @@ pico_mdns_gather_service_meta( pico_mdns_rtree *antree,
 										 PICO_DNS_TYPE_PTR,
 										 ttl, PICO_MDNS_RECORD_SHARED);
 	PICO_FREE(sin);
-	if (!meta_record) {
-		mdns_dbg("Could not generate META record!\n");
+	if (!meta_record || !ptr_record) {
+		mdns_dbg("Could not generate META or PTR records!\n");
 		pico_mdns_record_delete((void **)&ptr_record);
+		pico_mdns_record_delete((void **)&meta_record);
 		return -1;
 	}
 
@@ -2280,28 +2325,25 @@ pico_mdns_gather_additionals( pico_mdns_rtree *antree,
 	/* Look for SRV records in the answer tree */
 	pico_tree_foreach(node, antree) {
 		if ((record = node->keyValue) &&
-			short_be(record->record->rsuffix->rtype) == PICO_DNS_TYPE_SRV) {
-			if ((ret = pico_mdns_gather_service_meta(antree, artree, record)))
-				return ret;
-		}
+			short_be(record->record->rsuffix->rtype) == PICO_DNS_TYPE_SRV &&
+			(ret = pico_mdns_gather_service_meta(antree, artree, record)))
+			return ret;
 	}
 
 	/* Look for unique records in the answer tree to generate NSEC records */
 	pico_tree_foreach(node, antree) {
-		if ((record = node->keyValue) && IS_UNIQUE_RECORD(record)) {
-			if ((ret = pico_mdns_additionals_add_nsec(artree,
-													  record->record->rname)))
-				return ret;
-		}
+		if ((record = node->keyValue) && IS_UNIQUE_RECORD(record) &&
+			(ret = pico_mdns_additionals_add_nsec(artree,
+												  record->record->rname)))
+			return ret;
 	}
 
 	/* Look for unique records in the additional tree to generate NSEC records*/
 	pico_tree_foreach(node, artree) {
-		if ((record = node->keyValue) && IS_UNIQUE_RECORD(record)) {
-			if ((ret = pico_mdns_additionals_add_nsec(artree,
-													  record->record->rname)))
-				return ret;
-		}
+		if ((record = node->keyValue) && IS_UNIQUE_RECORD(record) &&
+			(ret = pico_mdns_additionals_add_nsec(artree,
+												  record->record->rname)))
+			return ret;
 	}
 
 	return 0;
@@ -2478,7 +2520,7 @@ pico_mdns_handle_probe_packet( pico_dns_packet *packet, struct pico_ip4 peer )
 
 	/* Try to reply with the answers */
 	if (pico_tree_count(&antree) != 0)
-		pico_mdns_reply(&antree, peer);
+		return pico_mdns_reply(&antree, peer);
     return 0;
 }
 
@@ -2641,8 +2683,7 @@ pico_mdns_send_query_packet( pico_time now, void *arg )
         mdns_dbg("DONE - Sent query.\n");
     } else {
         mdns_dbg("DONE - Duplicate query suppressed.\n");
-        if (cookie->send_timer)
-            pico_timer_cancel(cookie->send_timer);
+        pico_timer_cancel(cookie->send_timer);
 		/* Remove cookie from Cookies */
 		cookie = pico_tree_delete(&Cookies, cookie);
 		pico_mdns_cookie_delete(&cookie);
@@ -3003,11 +3044,15 @@ static int pico_mdns_probe( void (*callback)(pico_mdns_rtree *,
 	if (!cookie) {
 		mdns_dbg("Cookie_create returned NULL @ probe()!\n");
 		PICO_DNS_QTREE_DESTROY(&qtree);
+		PICO_MDNS_RTREE_DESTROY(&antree);
 		return -1;
 	}
 
 	/* Add the probe cookie to the cookie tree */
-	pico_tree_insert(&Cookies, cookie);
+	if (pico_tree_insert(&Cookies, cookie)) {
+		pico_mdns_cookie_delete(&cookie);
+		return -1;
+	}
 
 	/*  When the host is ready to send his probe query he SHOULD delay it's
 		transmission with a randomly chosen time between 0 and 250 ms. */
@@ -3132,7 +3177,7 @@ pico_mdns_set_hostname( const char *url, void *arg )
 
     /* Create an A record for hostname */
     record = pico_mdns_record_create(url,
-									&(mdns_sock_ipv4->local_addr.ip4.addr),
+									 &(mdns_sock_ipv4->local_addr.ip4.addr),
                                      PICO_SIZE_IP4, PICO_DNS_TYPE_A,
 									 PICO_MDNS_DEFAULT_TTL,
                                      (PICO_MDNS_RECORD_UNIQUE |
@@ -3143,9 +3188,14 @@ pico_mdns_set_hostname( const char *url, void *arg )
     }
 	/* TODO: Create IPv6 record */
     /* TODO: Create a reverse resolution record */
+
 	/* Try to claim the record */
-	pico_tree_insert(&rtree, record);
-    if (pico_mdns_claim(rtree, init_callback, arg) < 0) {
+	if (pico_tree_insert(&rtree, record)) {
+		pico_mdns_record_delete((void **)&record);
+		return -1;
+	}
+
+    if (pico_mdns_claim(rtree, init_callback, arg)) {
         mdns_dbg("Could not claim record for hostname %s!\n", url);
 		PICO_MDNS_RTREE_DESTROY(&rtree);
         return -1;

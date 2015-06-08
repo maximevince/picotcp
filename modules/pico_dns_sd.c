@@ -244,8 +244,11 @@ pico_dns_sd_kv_create( const char *key, const char *value )
     strcpy(kv_pair->key, key);
 
 	if (value) {
-		if (!(kv_pair->value = PICO_ZALLOC((size_t)(strlen(value) + 1))))
+		if (!(kv_pair->value = PICO_ZALLOC((size_t)(strlen(value) + 1)))) {
+			pico_err = PICO_ERR_ENOMEM;
 			pico_dns_sd_kv_delete(&kv_pair);
+			return NULL;
+		}
 		strcpy(kv_pair->value, value);
 	} else
 		kv_pair->value = NULL;
@@ -302,7 +305,7 @@ static int
 pico_dns_sd_check_instance_name_format( const char *name )
 {
     /* First of all check if the total length is larger than 63 bytes */
-    if (strlen(name) > 63)
+    if (pico_dns_strlen(name) > 63 || !pico_dns_strlen(name))
         return -1;
     return 0;
 }
@@ -320,12 +323,6 @@ pico_dns_sd_create_service_url( const char *name,
 {
     char *url = NULL;
     uint16_t len = 0, namelen = 0, typelen = 0;
-
-    /* Check params */
-    if (!name || !type) {
-        pico_err = PICO_ERR_EINVAL;
-        return NULL;
-    }
 
     if (pico_dns_sd_check_type_format(type)) {
         pico_err = PICO_ERR_EINVAL;

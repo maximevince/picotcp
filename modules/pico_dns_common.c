@@ -19,7 +19,7 @@
 // MARK: v NAME & IP FUNCTIONS
 #define dns_name_foreach_label_safe(label, name, next, maxlen) \
 for ((label) = (name), (next) = (char *)((name) + *(name) + 1); \
-	 (*(label) != '\0') && (((label) - (name)) < (maxlen)); \
+	 (*(label) != '\0') && ((uint16_t)((label) - (name)) < (maxlen)); \
 	 (label) = (next), (next) = (char *)((next) + *(next) + 1))
 
 /* ****************************************************************************
@@ -315,7 +315,7 @@ int pico_dns_name_to_dns_notation( char *url, unsigned int maxlen )
 			*lbl = (char)(i - lbl - 1);
 			lbl = i;
 		}
-		if (i - url > (uint16_t)maxlen) break;
+		if ((uint16_t)(i - url) > (uint16_t)maxlen) break;
 	}
 	*lbl = (char)(i - lbl - 1);
 
@@ -361,7 +361,8 @@ pico_dns_first_label_length( const char *url )
 	/* Count */
 	i = url;
 	while (*i != '.' && *i != '\0') {
-		++i; ++len;
+		++i;
+		++len;
 	}
 
 	return len;
@@ -384,13 +385,13 @@ pico_dns_mirror_addr( char *ip )
 		return -1;
 
 	/* Mirror the 32-bit number */
-	addr = (((addr & 0xFF000000) >> 24) |
-			((addr & 0xFF0000) >> 8) |
-			((addr & 0xFF00) << 8) |
-			((addr & 0xFF) << 24));
+	addr = (uint32_t)((uint32_t)((addr & (uint32_t)0xFF000000u) >> 24) |
+					  (uint32_t)((addr & (uint32_t)0xFF0000u) >> 8) |
+					  (uint32_t)((addr & (uint32_t)0xFF00u) << 8) |
+					  (uint32_t)((addr & (uint32_t)0xFFu) << 24));
 
 	return pico_ipv4_to_string(ip, addr);
-}
+}a
 
 #ifdef PICO_SUPPORT_IPV6
 /* ****************************************************************************
@@ -1052,6 +1053,7 @@ pico_dns_question_cmp( void *qa,
 					   void *qb )
 {
 	int dif = 0;
+	uint16_t at = 0, bt = 0;
 	struct pico_dns_question *a = (struct pico_dns_question *)qa;
 	struct pico_dns_question *b = (struct pico_dns_question *)qb;
 
@@ -1062,8 +1064,9 @@ pico_dns_question_cmp( void *qa,
 	}
 
 	/* First, compare the qtypes */
-	if ((dif = (int)((int)short_be(a->qsuffix->qtype) -
-					 (int)short_be(b->qsuffix->qtype))))
+	at = short_be(a->qsuffix->qtype);
+	bt = short_be(b->qsuffix->qtype);
+	if ((dif = (int)((int)at - (int)bt)))
 		return dif;
 
 	/* Then compare qnames */
@@ -1085,6 +1088,7 @@ pico_dns_record_cmp_name_type( void *ra,
 							   void *rb )
 {
 	int dif;
+	uint16_t at = 0, bt = 0;
 	struct pico_dns_record *a = (struct pico_dns_record *)ra;
 	struct pico_dns_record *b = (struct pico_dns_record *)rb;
 
@@ -1095,8 +1099,9 @@ pico_dns_record_cmp_name_type( void *ra,
 	}
 
 	/* First, compare the rrtypes */
-	if ((dif = (int)((int)short_be(a->rsuffix->rtype) -
-					 (int)short_be(b->rsuffix->rtype))))
+	at = short_be(a->rsuffix->rtype);
+	bt = short_be(b->rsuffix->rtype);
+	if ((dif = (int)((int)at - (int)bt)))
 		return dif;
 
 	/* Then compare names */
@@ -1558,7 +1563,7 @@ pico_dns_compress_record_sections( uint16_t qdcount, uint16_t count,
 								   uint16_t *len )
 {
 	struct pico_dns_record_suffix *rsuffix = NULL;
-	uint8_t *_iterator = *iterator;
+	uint8_t *_iterator = NULL;
 	uint16_t i = 0;
 
 	/* Check params */
@@ -1566,6 +1571,7 @@ pico_dns_compress_record_sections( uint16_t qdcount, uint16_t count,
 		pico_err = PICO_ERR_EINVAL;
 		return -1;
 	}
+	_iterator = *iterator;
 
 	for (i = 0; i < count; i++) {
 		if (qdcount || i)

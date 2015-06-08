@@ -21,56 +21,68 @@ typedef struct
     uint16_t count;
 } kv_vector;
 
+#define PICO_DNS_SD_KV_VECTOR_DECLARE(name) \
+		kv_vector (name) = {0}
+
 /* ****************************************************************************
- *  This function actually does exactly the same as pico_mdns_init();
+ *  Just calls pico_mdns_init in it's turn to initialise the mDNS-module.
+ *  See pico_mdns.h for description.
  * ****************************************************************************/
 int
 pico_dns_sd_init( const char *_hostname,
-                  struct pico_ip4 address,
-                  uint8_t flags,
-                  void (*callback)(pico_mdns_record_vector *,
-                                   char *,
-                                   void *),
-                  void *arg );
+				  struct pico_ip4 address,
+				  void (*callback)(pico_mdns_rtree *,
+								   char *,
+								   void *),
+				  void *arg );
 
 /* ****************************************************************************
- *  Register a service on in the '.local'-domain of a certain type. Port number
- *  Needs to be provided and can't be 0. The key-value pair vector passed in
- *  will be erased so you can no longer use it after registering the service.
+ *  Register a DNS-SD service via Multicast DNS on the local network.
+ *
+ *  @param name     Instance Name of the service, f.e. "Printer 2nd Floor".
+ *  @param type     ServiceType of the service, f.e. "_http._tcp".
+ *  @param port     Port number on which the service runs.
+ *  @param txt_data TXT data to create TXT record with, need kv_vector-type,
+ *                  Declare such a type with PICO_DNS_SD_KV_VECTOR_DECLARE(*) &
+ *                  add key-value pairs with pico_dns_sd_kv_vector_add().
+ *  @param ttl      TTL
+ *  @param callback Callback-function to call when the service is registered.
+ *  @return 0 when the module succesfully started registering the service,
+ *			something else on failure.
  * ****************************************************************************/
 int
 pico_dns_sd_register_service( const char *name,
-                              const char *type,
-                              uint16_t port,
-                              kv_vector *txt_data,
-                              uint16_t ttl,
-                              void (*callback)(pico_mdns_record_vector *,
-                                               char *,
-                                               void *),
-                              void *arg );
+							  const char *type,
+							  uint16_t port,
+							  kv_vector *txt_data,
+							  uint16_t ttl,
+							  void (*callback)(pico_mdns_rtree *,
+											   char *,
+											   void *),
+							  void *arg);
 
 /* ****************************************************************************
- *  Browse for a service of a certain type on the '.local' domain. Calls
- *  callback when any changes happen to found service, as in as they come and
- *  go.
+ *  Does nothing for now.
  *
- *  MARK: Probably this function will be updated in the near future.
+ *  @param type     Type to browse for.
+ *  @param callback Callback to call when something particular happens.
+ *  @return When the module succesfully staterd browsing the servicetype.
  * ****************************************************************************/
 int
 pico_dns_sd_browse_service( const char *type,
-                            void (*callback)(pico_mdns_record_vector *,
+                            void (*callback)(pico_mdns_rtree *,
                                              char *,
                                              void *),
                             void *arg );
 
 /* ****************************************************************************
- *  Initialise a key-value pair vector
- * ****************************************************************************/
-int
-pico_dns_sd_kv_vector_init( kv_vector *vector );
-
-/* ****************************************************************************
- *  Add a key-value pair to the key-value pair vector
+ *  Add a key-value pair the a key-value pair vector.
+ *
+ *  @param vector Vector to add the pair to.
+ *  @param key    Key of the pair, cannot be NULL.
+ *  @param value  Value of the pair, can be NULL, empty ("") or filled ("qkejq")
+ *  @return Returns 0 when the pair is added succesfully, something else on
+ *			failure.
  * ****************************************************************************/
 int
 pico_dns_sd_kv_vector_add( kv_vector *vector, char *key, char *value );

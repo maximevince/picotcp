@@ -1,7 +1,7 @@
 #include "utils.h"
-#include <pico_dns_sd.h>
-#include <pico_ipv4.h>
-#include <pico_addressing.h>
+#include "pico_dns_sd.h"
+#include "pico_ipv4.h"
+#include "pico_addressing.h"
 
 /*** START DNS_SD ***/
 #ifdef PICO_SUPPORT_DNS_SD
@@ -10,16 +10,16 @@
 
 static char *service_name = NULL;
 
-void dns_sd_claimed_callback( pico_mdns_record_vector *vector,
+void dns_sd_claimed_callback( pico_mdns_rtree *tree,
                               char *str,
                               void *arg )
 {
-	IGNORE_PARAMETER(vector);
+	IGNORE_PARAMETER(tree);
     IGNORE_PARAMETER(str);
     IGNORE_PARAMETER(arg);
 }
 
-void dns_sd_init_callback( pico_mdns_record_vector *vector,
+void dns_sd_init_callback( pico_mdns_rtree *tree,
                            char *str,
                            void *arg )
 {
@@ -27,7 +27,7 @@ void dns_sd_init_callback( pico_mdns_record_vector *vector,
 
     IGNORE_PARAMETER(str);
     IGNORE_PARAMETER(arg);
-    IGNORE_PARAMETER(vector);
+    IGNORE_PARAMETER(tree);
 
     printf("DONE - Initialising DNS Service Discovery module.\n");
 
@@ -41,9 +41,8 @@ void dns_sd_init_callback( pico_mdns_record_vector *vector,
 
 void app_dns_sd(char *arg, struct pico_ip4 address)
 {
-    char *hostname, *service_type, *service_port;
+    char *hostname;
     char *nxt = arg;
-    struct pico_ip6 ipaddr6 = {{0}};
 
     if (!nxt)
         exit(255);
@@ -64,7 +63,7 @@ void app_dns_sd(char *arg, struct pico_ip4 address)
     }
 
     printf("\nStarting DNS Service Discovery module...\n");
-    if (pico_dns_sd_init(hostname, address, 0, &dns_sd_init_callback, NULL) != 0) {
+    if (pico_dns_sd_init(hostname, address, &dns_sd_init_callback, NULL) != 0) {
         printf("Initialisation returned with Error!\n");
         exit(255);
     }

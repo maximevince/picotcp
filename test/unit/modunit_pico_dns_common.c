@@ -550,29 +550,6 @@ START_TEST(tc_pico_dns_question_fill_qsuffix) /* MARK: dns_question_fill_suffix 
 	printf("*********************** ending %s * \n", __func__);
 }
 END_TEST
-START_TEST(tc_pico_dns_question_copy) /* MARK: dns_question_copy */
-{
-    const char *qurl = "picotcp.com";
-	uint16_t len = 0;
-	printf("*********************** starting %s * \n", __func__);
-
-    struct pico_dns_question *a = pico_dns_question_create(qurl, &len,
-                                                           PICO_PROTO_IPV4,
-                                                           PICO_DNS_TYPE_A,
-                                                           PICO_DNS_CLASS_IN,
-                                                           0);
-    struct pico_dns_question *b = pico_dns_question_copy(a);
-
-    fail_unless(strcmp(a->qname, b->qname) == 0,
-                "qname isn't copied correctly!\n");
-    fail_unless(a->qsuffix->qtype == b->qsuffix->qtype,
-                "qtype isn't copied correctly!\n");
-    fail_unless(a->qsuffix->qclass == b->qsuffix->qclass,
-                "qclass isn't copied correctly!\n");
-    fail_if(a == b, "pointers point to same struct!\n");
-	printf("*********************** ending %s * \n", __func__);
-}
-END_TEST
 START_TEST(tc_pico_dns_question_delete) /* MARK: dns_question_delete */
 {
     const char *qurl = "picotcp.com";
@@ -1218,7 +1195,6 @@ Suite *pico_suite(void)
 
     /* DNS question functions */
     TCase *TCase_pico_dns_question_fill_qsuffix = tcase_create("Unit test for 'pico_dns_question_fill_qsuffix'");
-    TCase *TCase_pico_dns_question_copy = tcase_create("Unit test for 'pico_dns_question_copy'");
     TCase *TCase_pico_dns_question_delete = tcase_create("Unit test for 'pico_dns_question_delete'");
     TCase *TCase_pico_dns_question_create = tcase_create("Unit test for 'pico_dns_question_create'");
 
@@ -1262,7 +1238,6 @@ Suite *pico_suite(void)
     tcase_add_test(TCase_pico_dns_packet_compress_name, tc_pico_dns_packet_compress_name);
     tcase_add_test(TCase_pico_dns_packet_compress, tc_pico_dns_packet_compress);
     tcase_add_test(TCase_pico_dns_question_fill_qsuffix, tc_pico_dns_question_fill_qsuffix);
-    tcase_add_test(TCase_pico_dns_question_copy, tc_pico_dns_question_copy);
     tcase_add_test(TCase_pico_dns_question_delete, tc_pico_dns_question_delete);
     tcase_add_test(TCase_pico_dns_question_create, tc_pico_dns_question_create);
     tcase_add_test(TCase_pico_dns_query_create, tc_pico_dns_query_create);
@@ -1298,7 +1273,6 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_pico_dns_packet_compress_name);
     suite_add_tcase(s, TCase_pico_dns_packet_compress);
     suite_add_tcase(s, TCase_pico_dns_question_fill_qsuffix);
-    suite_add_tcase(s, TCase_pico_dns_question_copy);
     suite_add_tcase(s, TCase_pico_dns_question_delete);
     suite_add_tcase(s, TCase_pico_dns_question_create);
     suite_add_tcase(s, TCase_pico_dns_query_create);

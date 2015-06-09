@@ -553,6 +553,7 @@ pico_mdns_rtree_del_name( pico_mdns_rtree *tree,
  *  @param type DNS type of records you want to delete.
  *  @return 0 on succes, something else on failure.
  * ****************************************************************************/
+#if PICO_MDNS_ALLOW_CACHING == 1
 static int
 pico_mdns_rtree_del_name_type( pico_mdns_rtree *tree,
 							   char *name,
@@ -582,6 +583,7 @@ pico_mdns_rtree_del_name_type( pico_mdns_rtree *tree,
 
 	return 0;
 }
+#endif
 
 /* ****************************************************************************
  *  Just makes a hardcopy from a single mDNS resource record.
@@ -2752,8 +2754,10 @@ pico_mdns_getrecord( const char *url, uint16_t type,
                                       void *),
                      void *arg )
 {
+#if PICO_MDNS_ALLOW_CACHING == 1
 	PICO_MDNS_RTREE_DECLARE(cache_hits);
     char *name = NULL;
+#endif
 
     /* Check params */
     if (!url) {
@@ -2762,6 +2766,7 @@ pico_mdns_getrecord( const char *url, uint16_t type,
     }
 
     /* First, try to find records in the cache */
+#if PICO_MDNS_ALLOW_CACHING == 1
     name = pico_dns_url_to_qname(url);
 	cache_hits = pico_mdns_rtree_find_name_type(&Cache, name, type);
     PICO_FREE(name);
@@ -2769,9 +2774,12 @@ pico_mdns_getrecord( const char *url, uint16_t type,
         mdns_dbg("CACHE HIT! Passed cache records to callback.\n");
         callback(&cache_hits, NULL, arg);
     } else {
+#endif
         mdns_dbg("CACHE MISS! Trying to resolve URL '%s'...\n", url);
         return pico_mdns_getrecord_generic(url, type, callback, arg);
+#if PICO_MDNS_ALLOW_CACHING == 1
     }
+#endif
 
     return 0;
 }

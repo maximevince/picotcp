@@ -502,48 +502,6 @@ pico_dns_question_delete( void **question )
 }
 
 /* ****************************************************************************
- *  Just makes a harcopy from a single DNS Question
- *
- *  @param question DNS question you want to copy
- *  @return Pointer to copy of DNS question.
- * ****************************************************************************/
-struct pico_dns_question *
-pico_dns_question_copy( struct pico_dns_question *question )
-{
-	struct pico_dns_question *copy = NULL;
-
-	/* Check params */
-	if (!question || !(question->qname) || !(question->qsuffix)) {
-		pico_err = PICO_ERR_EINVAL;
-		return NULL;
-	}
-
-	/* Provide space for the copy */
-	if (!(copy = PICO_ZALLOC(sizeof(struct pico_dns_question)))) {
-		pico_err = PICO_ERR_ENOMEM;
-		return NULL;
-	}
-
-	/* Try to provide space for the subfields*/
-	copy->qname = PICO_ZALLOC((size_t)question->qname_length);
-	copy->qsuffix = PICO_ZALLOC(sizeof(struct pico_dns_question_suffix));
-	if (!(copy->qsuffix) || !(copy->qname)) {
-		pico_dns_question_delete((void **)&copy);
-		return NULL;
-	}
-
-	memcpy((void *)copy->qname, (void *)question->qname,
-		   (size_t)question->qname_length);
-	copy->qname_length = question->qname_length;
-
-	copy->qsuffix->qtype = question->qsuffix->qtype;
-	copy->qsuffix->qclass = question->qsuffix->qclass;
-	copy->proto = question->proto;
-
-	return copy;
-}
-
-/* ****************************************************************************
  *  Fills in the DNS question suffix-fields with the correct values.
  *
  *  todo: Update pico_dns_client to make the same mechanism possible like with

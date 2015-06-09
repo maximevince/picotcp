@@ -264,8 +264,9 @@ pico_mdns_suffix_to_uint16( char *opening, char *closing)
 }
 
 #define iterate_first_label_name_reverse(iterator, name) \
-		for ((iterator) = (*name < (char)63) ? (char *)(name + *name) : name ; \
-			 (iterator) > name; \
+		for ((iterator) = \
+				(*name < (char)63) ? ((char *)(name + *name)) : (name) ; \
+			 (iterator) > (name); \
 			 (iterator)--)
 
 /* ****************************************************************************
@@ -286,10 +287,6 @@ pico_mdns_is_suffix_present( char name[],
 	char *i = NULL;
 	uint16_t n = 0;
 
-	/* Check params */
-	if (!name || !o_i || !c_i) {
-		return 0;
-	}
 	*o_i = NULL; /* Clear out indexes */
 	*c_i = NULL;
 
@@ -306,9 +303,7 @@ pico_mdns_is_suffix_present( char name[],
 	}
 
 	/* Convert the string suffix to a number */
-	n = pico_mdns_suffix_to_uint16(*o_i, *c_i);
-
-	if (!n) {
+	if (!(n = pico_mdns_suffix_to_uint16(*o_i, *c_i))) {
 		*o_i = NULL;
 		*c_i = NULL;
 	}
@@ -1085,10 +1080,9 @@ pico_mdns_cookie_resolve_conflict( struct pico_mdns_cookie *cookie,
     /* Convert rname to url */
     mdns_dbg("CONFLICT for probe query with name '%s' occured!\n", rname);
 
-	/* Step 1: Remove question with that name from cookie */
-	if (pico_dns_qtree_del_name(&(cookie->qtree), rname))
-		return -1;
-
+	/* Step 1: Remove question with that name from cookie and store some
+     * usefull information */
+	pico_dns_qtree_del_name(&(cookie->qtree), rname);
 	antree = cookie->antree;
 	callback = cookie->callback;
 	arg = cookie->arg;
@@ -1398,11 +1392,10 @@ pico_mdns_cache_add( struct pico_mdns_record *record )
     }
 
     /* Add copy to cache */
-    if (rttl > 0) {
-        pico_tree_insert(&Cache, record);
-        mdns_dbg("RR cached. TICK TACK TICK TACK...\n");
+	if (rttl > 0) {
+		mdns_dbg("RR cached. TICK TACK TICK TACK...\n");
+        return (int)pico_tree_insert(&Cache, record);
     }
-
     return 0;
 }
 
@@ -1433,7 +1426,7 @@ pico_mdns_cache_add_record( struct pico_mdns_record *record )
 	} else {
 		copy = pico_mdns_record_copy(record);
 		if (pico_mdns_cache_add(copy)) {
-			pico_mdns_record_delete((void **)&(copy));
+			pico_mdns_record_delete((void **)&copy);
 			return -1;
 		}
 	}
@@ -2141,6 +2134,11 @@ pico_mdns_gen_nsec_record( char *name )
 	uint8_t bitmap_len = 0, *rdata = NULL, *ptr = NULL;
 	char *url = NULL;
 
+	if (!name) { /* Check params */
+		pico_err = PICO_ERR_EINVAL;
+		return NULL;
+	}
+
 	/* Determine the highest type of my unique records with this name */
 	rtree = pico_mdns_rtree_find_name(&MyRecords, name);
 	highest_type = pico_mdns_nsec_highest_type(&rtree);
@@ -2150,7 +2148,7 @@ pico_mdns_gen_nsec_record( char *name )
 	bitmap_len = (uint8_t)(bitmap_len + ((highest_type % 8) ? (1) : (0)));
 
 	/* Provide rdata */
-	rdlen = (uint16_t)(strlen(name) + 3u + bitmap_len);
+	rdlen = (uint16_t)(pico_dns_strlen(name) + 3u + bitmap_len);
 	if (!(rdata = PICO_ZALLOC((size_t)rdlen))) {
 		pico_err = PICO_ERR_ENOMEM;
 		return NULL;
@@ -2159,7 +2157,7 @@ pico_mdns_gen_nsec_record( char *name )
 	/* Set the next domain name */
 	strcpy((char *)rdata, name);
 	/* Set the bitmap length */
-	*(ptr = (uint8_t *)(rdata + strlen(name) + 2)) = bitmap_len;
+	*(ptr = (uint8_t *)(rdata + pico_dns_strlen(name) + 2)) = bitmap_len;
 	/* Generate the bitmap */
 	pico_mdns_nsec_gen_bitmap(ptr, &rtree);
 
@@ -2973,14 +2971,11 @@ pico_mdns_add_probe_question( pico_dns_qtree *qtree,
     struct pico_dns_question *new = NULL;
     char *url = NULL;
     uint16_t qlen = 0;
-    uint8_t flags = 0;
+    uint8_t flags = PICO_MDNS_QUESTION_FLAG_PROBE;
 
-	/* Set the flags */
-	if (PICO_MDNS_PROBE_UNICAST)
-		flags = (PICO_MDNS_QUESTION_FLAG_PROBE |
-				 PICO_MDNS_QUESTION_FLAG_UNICAST_RES);
-	else
-		flags = PICO_MDNS_QUESTION_FLAG_PROBE;
+#if PICO_MDNS_PROBE_UNICAST == 1
+	flags |= PICO_MDNS_QUESTION_FLAG_UNICAST_RES;
+#endif
 
 	/* Convert name to URL and try to create a new probe question */
 	if (!(url = pico_dns_qname_to_url(name)))
@@ -2994,9 +2989,7 @@ pico_mdns_add_probe_question( pico_dns_qtree *qtree,
 	PICO_FREE(url);
 
 	/* Try to find an existing question in the vector */
-    if (!pico_tree_findKey(qtree, new))
-		pico_tree_insert(qtree, new);
-	else
+	if (pico_tree_insert(qtree, new))
 		pico_dns_question_delete((void **)&new);
 
     return 0;
@@ -3306,16 +3299,10 @@ pico_mdns_init( const char *hostname_url,
     
     /* Set the global init callback variable */
     init_callback = callback;
-    
-    /* Set the hostname for this machine */
-    if (pico_mdns_set_hostname(hostname_url, arg) < 0) {
-        mdns_dbg("Setting hostname returned error\n");
-        return -1;
-    }
-    
-    pico_timer_add(PICO_MDNS_RR_TTL_TICK, pico_mdns_tick, NULL);
-    
-    return 0;
+	pico_timer_add(PICO_MDNS_RR_TTL_TICK, pico_mdns_tick, NULL);
+
+	/* Set the hostname eventually */
+    return pico_mdns_set_hostname(hostname_url, arg);
 }
 
 #endif /* PICO_SUPPORT_MDNS */

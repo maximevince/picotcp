@@ -246,15 +246,6 @@ int
 pico_dns_question_delete( void **question);
 
 /* ****************************************************************************
- *  Just makes a harcopy from a single DNS Question
- *
- *  @param question DNS question you want to copy
- *  @return Pointer to copy of DNS question.
- * ****************************************************************************/
-struct pico_dns_question *
-pico_dns_question_copy( struct pico_dns_question *question );
-
-/* ****************************************************************************
  *  Fills in the DNS question suffix-fields with the correct values.
  *
  *  todo: Update pico_dns_client to make the same mechanism possible as with
